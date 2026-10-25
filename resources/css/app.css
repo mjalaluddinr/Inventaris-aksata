@@ -1,0 +1,100 @@
+@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@100;200;300;400;500;600;700;800;900&display=swap');
+@import 'tailwindcss';
+
+@plugin '@tailwindcss/forms';
+@plugin '@tailwindcss/typography';
+@source '../../vendor/laravel/framework/src/Illuminate/Pagination/resources/views/*.blade.php';
+@source '../../storage/framework/views/*.php';
+
+@theme {
+    --color-sidebar-start: #00B19C;
+    --color-sidebar-end: #00385A;
+    --color-menu-active: #ffffff;
+    --color-menu-active-text: #00385A;
+    --color-sidebar-text: #ffffff;
+    --color-sidebar-text-muted: rgba(255, 255, 255, 0.7);
+
+    --font-sans: 'Poppins', 'Instrument Sans', ui-sans-serif, system-ui, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji',
+        'Segoe UI Symbol', 'Noto Color Emoji';
+}
+
+@utility bg-sidebar-gradient {
+    background: linear-gradient(180deg, #00B19C 0%, #00385A 100%);
+}
+
+@keyframes admin-page-arrive {
+    from {
+        opacity: 0;
+        transform: translate3d(0, 8px, 0);
+    }
+
+    to {
+        opacity: 1;
+        transform: translate3d(0, 0, 0);
+    }
+}
+
+@keyframes admin-nav-arrive {
+    from {
+        opacity: 0;
+        transform: translate3d(-8px, 0, 0);
+    }
+
+    to {
+        opacity: 1;
+        transform: translate3d(0, 0, 0);
+    }
+}
+
+.admin-page-enter {
+    animation: admin-page-arrive 360ms both cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.admin-nav-item {
+    animation: admin-nav-arrive 320ms both cubic-bezier(0.22, 1, 0.36, 1);
+    animation-delay: calc(var(--nav-index, 0) * 35ms);
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .admin-page-enter,
+    .admin-nav-item {
+        animation: none;
+    }
+}
+
+* {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+}
+
+*::-webkit-scrollbar {
+    display: none;
+    width: 0;
+    height: 0;
+}
+
+.theme-scrollbar {
+    scrollbar-color: #00b19c #e2e8f0;
+    scrollbar-width: thin;
+}
+
+.theme-scrollbar::-webkit-scrollbar {
+    display: block;
+    width: 8px;
+    height: 8px;
+}
+
+.theme-scrollbar::-webkit-scrollbar-track {
+    border-radius: 9999px;
+    background: #e2e8f0;
+}
+
+.theme-scrollbar::-webkit-scrollbar-thumb {
+    border: 2px solid #e2e8f0;
+    border-radius: 9999px;
+    background: #00b19c;
+}
+
+.theme-scrollbar::-webkit-scrollbar-thumb:hover {
+    background: #009a87;
+}
