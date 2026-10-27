@@ -66,6 +66,12 @@
     </div>
 
     <div class="flex shrink-0 items-center gap-3">
+      <button type="button" @click="$dispatch('admin-sidebar-toggle')"
+        :aria-expanded="mobileSidebarOpen.toString()" aria-controls="admin-sidebar"
+        aria-label="Buka navigasi" title="Menu navigasi"
+        class="flex h-11 w-11 items-center justify-center rounded-full border border-[#C6DAD5] bg-[#F7FAF9] text-[#087F70] transition hover:bg-[#E8F4F1] focus:outline-none focus:ring-2 focus:ring-[#00A995] focus:ring-offset-2 lg:hidden">
+        <iconify-icon :icon="mobileSidebarOpen ? 'mdi:close' : 'mdi:menu'" width="22" aria-hidden="true"></iconify-icon>
+      </button>
       <a href="{{ $notificationUrl }}" aria-label="Notifikasi" title="Notifikasi"
         class="flex h-11 w-11 items-center justify-center rounded-full border border-[#C6DAD5] bg-[#F7FAF9] text-[#087F70] transition hover:bg-[#E8F4F1] focus:outline-none focus:ring-2 focus:ring-[#00A995] focus:ring-offset-2">
         <iconify-icon icon="mdi:bell" width="22" aria-hidden="true"></iconify-icon>

@@ -29,6 +29,12 @@ class ManageUser extends Controller
 
         $users = User::query()
             ->with('privileges')
+            ->when(
+                $request->user()->role === 'laboran',
+                fn ($query) => $query
+                    ->where('role', 'laboran')
+                    ->where('akun_id', '!=', $request->user()->getAuthIdentifier()),
+            )
             // ASVS 2.2.1, 1.2.4: each validated term is bound to the supported account fields.
             ->when($searchTerms !== [], function ($query) use ($searchTerms): void {
                 foreach ($searchTerms as $term) {
@@ -43,8 +49,10 @@ class ManageUser extends Controller
             ->paginate(10)
             ->withQueryString();
 
-        return view('pages.admin.akun', compact('users', 'filters'))
-            ->fragmentIf($request->ajax(), 'account-results');
+        /** @var View $renderedView */
+        $renderedView = view('pages.admin.akun', compact('users', 'filters'));
+
+        return $renderedView->fragmentIf($request->ajax(), 'account-results');
     }
 
     public function store(StoreRequest $request)
@@ -69,6 +77,7 @@ class ManageUser extends Controller
 
     public function update(UpdateRequest $request, User $user)
     {
+        $this->authorizeAccountManagement($user);
         $validated = $request->validated();
 
         $updateData = [
@@ -93,6 +102,7 @@ class ManageUser extends Controller
 
     public function destroy(User $user)
     {
+        $this->authorizeAccountManagement($user);
         $user->privileges()->delete();
         $user->delete();
 
@@ -102,6 +112,7 @@ class ManageUser extends Controller
     // ✅ METHOD BARU: AJAX Toggle Status
     public function toggleStatus(User $user)
     {
+        $this->authorizeAccountManagement($user);
         $user->update(['is_active' => ! $user->is_active]);
 
         return response()->json([
@@ -303,6 +314,17 @@ class ManageUser extends Controller
             if (! empty($privilegeData)) {
                 $user->privileges()->createMany($privilegeData);
             }
+        }
+    }
+
+    private function authorizeAccountManagement(User $target): void
+    {
+        $actor = request()->user();
+
+        abort_unless($actor?->canManageLaboranAccounts(), 403);
+
+        if (! $actor->canManageAllAccounts()) {
+            abort_unless($target->role === 'laboran' && $target->isNot($actor), 403);
         }
     }
 

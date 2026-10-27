@@ -16,51 +16,112 @@
       ->withQueryString();
 @endphp
 
-    <main class="mx-auto min-h-[calc(100vh-5rem)] max-w-[1600px] pb-12">
-      <section class="relative isolate overflow-hidden bg-gradient-to-r from-[#004e48] via-[#008b7a] to-[#00d5a0] px-5 py-9 text-center text-white sm:py-12">
-        <span class="pointer-events-none absolute -right-10 -top-20 -z-10 h-56 w-56 rounded-full bg-[#00e3aa]/20" aria-hidden="true"></span>
-        <h1 class="text-2xl font-bold sm:text-3xl">Katalog Barang</h1>
-        <p class="mt-2 text-sm text-white/90">Pilih barang yang kamu butuhkan, lalu masukkan ke keranjang.</p>
-      </section>
+    <main id="catalog-content" class="mx-auto min-h-[calc(100vh-5rem)] max-w-[1600px] pb-12">
+      <x-user.hero-section
+        title="Katalog Barang"
+        description="Pilih barang yang kamu butuhkan, lalu masukkan ke keranjang."
+      />
       <section class="px-4 py-5 sm:px-8 lg:px-10" aria-label="Filter katalog">
-        <form method="GET" action="{{ route('user.beranda') }}" class="flex flex-col gap-3 sm:flex-row sm:items-center">
+        <form method="GET" action="{{ route('user.beranda') }}" data-catalog-filter class="grid min-w-0 grid-cols-1 gap-4 sm:grid-cols-[minmax(0,1fr)_minmax(14rem,18rem)] sm:items-center lg:gap-[5cm]">
           <input type="hidden" name="page" value="catalog">
-          <div class="flex flex-wrap gap-2">
-            <a href="{{ route('user.beranda', ['page' => 'catalog']) }}" class="rounded-full border px-4 py-2 text-xs font-semibold {{ $selectedCategory === '' ? 'border-[#00a88f] bg-[#00a88f] text-white' : 'border-[#00a88f] bg-white text-[#007f70]' }}">Semua</a>
-            @foreach ($categories as $category)
-              <a href="{{ route('user.beranda', ['page' => 'catalog', 'category' => $category->kategori_id, 'q' => $search]) }}" class="rounded-full border px-4 py-2 text-xs font-semibold {{ $selectedCategory === $category->kategori_id ? 'border-[#00a88f] bg-[#00a88f] text-white' : 'border-[#00a88f] bg-white text-[#007f70]' }}">{{ $category->nama_kategori }}</a>
-            @endforeach
+          <div x-data="{ categoryOverflow: false, categoryCanScrollBackward: false, categoryCanScrollForward: false, checkCategoryOverflow() { this.$nextTick(() => { this.categoryOverflow = this.$refs.catalogCategoryStrip.scrollWidth > this.$refs.catalogCategoryStrip.clientWidth + 1; this.updateCategoryControls() }) }, updateCategoryControls() { const strip = this.$refs.catalogCategoryStrip; this.categoryCanScrollBackward = strip.scrollLeft > 1; this.categoryCanScrollForward = strip.scrollLeft + strip.clientWidth < strip.scrollWidth - 1 } }" x-init="checkCategoryOverflow()" @resize.window="checkCategoryOverflow()" class="flex min-w-0 flex-1 items-center gap-1.5">
+            <button type="button" x-cloak x-show="categoryCanScrollBackward" x-transition:enter="transition ease-out duration-200" x-transition:enter-start="opacity-0 scale-75" x-transition:enter-end="opacity-100 scale-100" x-transition:leave="transition ease-in duration-150" x-transition:leave-start="opacity-100 scale-100" x-transition:leave-end="opacity-0 scale-75" @click="$refs.catalogCategoryStrip.scrollBy({ left: -180, behavior: 'smooth' })" class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-[#00a88f] bg-white text-[#007f70] transition hover:bg-emerald-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#008b7a] focus-visible:ring-offset-2" aria-label="Tampilkan kategori sebelumnya">
+              <iconify-icon icon="mdi:chevron-left" aria-hidden="true"></iconify-icon>
+            </button>
+            <nav x-ref="catalogCategoryStrip" @scroll.passive="updateCategoryControls()" class="flex min-w-0 flex-1 items-center gap-1.5 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden" aria-label="Kategori barang">
+              <a data-catalog-ajax href="{{ route('user.beranda', ['page' => 'catalog', 'q' => $search]) }}" @if ($selectedCategory === '') aria-current="page" @endif class="shrink-0 rounded-full border px-3 py-1.5 text-xs font-semibold transition focus:outline-none focus-visible:ring-2 focus-visible:ring-[#008b7a] focus-visible:ring-offset-2 {{ $selectedCategory === '' ? 'border-[#00a88f] bg-[#00a88f] text-white shadow-sm' : 'border-[#00a88f] bg-white text-[#007f70] hover:bg-emerald-50' }}">Semua</a>
+              @foreach ($categories as $category)
+                <a data-catalog-ajax href="{{ route('user.beranda', ['page' => 'catalog', 'category' => $category->kategori_id, 'q' => $search]) }}" @if ($selectedCategory === $category->kategori_id) aria-current="page" @endif class="shrink-0 rounded-full border px-3 py-1.5 text-xs font-semibold transition focus:outline-none focus-visible:ring-2 focus-visible:ring-[#008b7a] focus-visible:ring-offset-2 {{ $selectedCategory === $category->kategori_id ? 'border-[#00a88f] bg-[#00a88f] text-white shadow-sm' : 'border-[#00a88f] bg-white text-[#007f70] hover:bg-emerald-50' }}">{{ $category->nama_kategori }}</a>
+              @endforeach
+            </nav>
+            <button type="button" x-cloak x-show="categoryCanScrollForward" x-transition:enter="transition ease-out duration-200" x-transition:enter-start="opacity-0 scale-75" x-transition:enter-end="opacity-100 scale-100" x-transition:leave="transition ease-in duration-150" x-transition:leave-start="opacity-100 scale-100" x-transition:leave-end="opacity-0 scale-75" @click="$refs.catalogCategoryStrip.scrollBy({ left: 180, behavior: 'smooth' })" class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-[#00a88f] bg-white text-[#007f70] transition hover:bg-emerald-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#008b7a] focus-visible:ring-offset-2" aria-label="Tampilkan kategori berikutnya">
+              <iconify-icon icon="mdi:chevron-right" aria-hidden="true"></iconify-icon>
+            </button>
           </div>
-          <label class="relative ml-auto block w-full sm:max-w-xs">
+          <input type="hidden" name="category" value="{{ $selectedCategory }}">
+          <label class="relative block w-full min-w-0 sm:w-auto">
             <span class="sr-only">Cari barang</span>
-            <input type="search" name="q" value="{{ $search }}" placeholder="Cari barang..." class="w-full rounded-full border border-[#92d9cd] bg-white py-2 pl-4 pr-10 text-sm outline-none focus:border-[#00a88f] focus:ring-2 focus:ring-[#00a88f]/20">
+            <input type="search" name="q" value="{{ $search }}" placeholder="Cari barang..." class="w-full rounded-full border border-[#92d9cd] bg-white py-2 pl-4 pr-10 text-xs outline-none transition focus:border-[#00a88f] focus:ring-2 focus:ring-[#00a88f]/20 sm:text-sm">
             <button type="submit" class="absolute inset-y-0 right-0 flex w-10 items-center justify-center text-slate-500" aria-label="Cari"><iconify-icon icon="mdi:magnify" aria-hidden="true"></iconify-icon></button>
           </label>
         </form>
       </section>
       <section class="px-4 sm:px-8 lg:px-10" aria-label="Daftar barang">
+        @if ($errors->any())
+          <div class="mb-4 rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm text-rose-800" role="alert">
+            @foreach ($errors->all() as $error)
+              <p>{{ $error }}</p>
+            @endforeach
+          </div>
+        @endif
         @if ($catalogItems->isNotEmpty())
-          <div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          <div class="grid min-w-0 gap-3 sm:grid-cols-2 xl:grid-cols-4">
             @foreach ($catalogItems as $item)
-              <article class="user-card-enter overflow-hidden rounded-xl border border-slate-200 border-t-[6px] border-t-[#00b19c] bg-white shadow-[0_2px_4px_rgba(20,55,48,0.2)]" style="animation-delay: {{ $loop->index * 45 }}ms">
-                <div class="p-4">
+              <article class="user-card-enter flex min-h-44 flex-col overflow-hidden rounded-xl border border-[#c7e4dc] border-t-[5px] border-t-[#00b19c] bg-white shadow-[0_2px_4px_rgba(20,55,48,0.14)]" style="animation-delay: {{ $loop->index * 45 }}ms">
+                <div class="flex flex-1 flex-col p-3.5">
                   <div class="flex items-center justify-between gap-2">
-                    <span class="max-w-[65%] truncate rounded-full bg-slate-100 px-2 py-1 text-[11px] font-medium text-slate-700">{{ $item->kategori?->nama_kategori ?? 'Tanpa kategori' }}</span>
-                    <span class="rounded-full bg-[#d5f7ec] px-2.5 py-1 text-[11px] font-semibold text-[#16745e]">Tersedia</span>
+                    <span class="max-w-[65%] truncate rounded-full bg-slate-100 px-2 py-1 text-[10px] font-medium text-slate-700">{{ $item->kategori?->nama_kategori ?? 'Tanpa kategori' }}</span>
+                    <span class="rounded-full bg-[#d5f7ec] px-2.5 py-1 text-[10px] font-semibold text-[#16745e]">Tersedia</span>
                   </div>
-                  <h2 class="mt-2 truncate font-semibold text-slate-900" title="{{ $item->nama_barang }}">{{ $item->nama_barang }}</h2>
-                  <p class="mt-2 truncate text-xs text-slate-500">{{ $item->kode_barang }} · {{ $item->satuan }}</p>
-                  <p class="mt-2 text-sm"><strong>{{ number_format($item->stok_tersedia) }}</strong><span class="text-slate-500"> / {{ number_format($item->stok_total) }} {{ $item->satuan }} tersedia</span></p>
-                  <div class="mt-2 h-2 overflow-hidden rounded-full bg-slate-100"><span class="block h-full rounded-full bg-[#00b19c]" style="width: {{ min(100, (int) round($item->stok_tersedia / max($item->stok_total, 1) * 100)) }}%"></span></div>
-                  <div class="mt-3 flex items-center justify-between gap-2">
-                    <span class="text-[11px] text-slate-500">{{ number_format($item->detail_peminjamans_count) }} kali dipinjam</span>
-                    <button type="button" @click="addToCart({ id: @js($item->barang_id), name: @js($item->nama_barang), code: @js($item->kode_barang), unit: @js($item->satuan), stock: {{ (int) $item->stok_tersedia }}, category: @js($item->kategori?->nama_kategori ?? 'Tanpa kategori') })" class="rounded-lg bg-[#00d69f] px-3 py-2 text-xs font-semibold text-[#003f38] transition hover:bg-[#36e9b3]">+ Keranjang</button>
+                  <h2 class="mt-2 truncate text-sm font-bold text-slate-900" title="{{ $item->nama_barang }}">{{ $item->nama_barang }}</h2>
+                  <p class="mt-1 truncate text-[10px] text-slate-500">{{ $item->kode_barang }} · {{ $item->satuan }}</p>
+                  <p class="mt-2 text-xs"><strong>{{ number_format($item->stok_tersedia) }}</strong><span class="text-slate-500"> / {{ number_format($item->stok_total) }} tersedia</span></p>
+                  <div class="mt-1.5 h-1.5 overflow-hidden rounded-full bg-slate-100" role="progressbar" aria-label="Stok tersedia {{ $item->nama_barang }}" aria-valuenow="{{ $item->stok_tersedia }}" aria-valuemin="0" aria-valuemax="{{ max($item->stok_total, 1) }}"><span class="block h-full rounded-full bg-[#00b19c]" style="width: {{ min(100, (int) round($item->stok_tersedia / max($item->stok_total, 1) * 100)) }}%"></span></div>
+                  <div class="mt-auto flex items-center justify-between gap-2 pt-3">
+                    <button type="button" @click="addToCart({ id: @js($item->barang_id), name: @js($item->nama_barang), code: @js($item->kode_barang), unit: @js($item->satuan), stock: {{ (int) $item->stok_tersedia }}, category: @js($item->kategori?->nama_kategori ?? 'Tanpa kategori') })" class="rounded-full bg-[#00d69f] px-3 py-1.5 text-[10px] font-bold text-[#003f38] transition hover:bg-[#36e9b3] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#008b7a] focus-visible:ring-offset-2">+ Keranjang</button>
+                    <button type="button" @click="openLoanModal({ id: @js($item->barang_id), name: @js($item->nama_barang), code: @js($item->kode_barang), unit: @js($item->satuan), stock: {{ (int) $item->stok_tersedia }}, category: @js($item->kategori?->nama_kategori ?? 'Tanpa kategori') })" class="rounded-full border border-slate-300 px-3 py-1.5 text-[10px] font-semibold text-slate-800 transition hover:border-[#00a88f] hover:text-[#007f70] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#008b7a] focus-visible:ring-offset-2">Pinjam Sekarang</button>
                   </div>
                 </div>
               </article>
             @endforeach
           </div>
-          <div class="mt-6">{{ $catalogItems->links() }}</div>
+          @if ($catalogItems->hasPages())
+            <nav class="mt-6 flex justify-center" aria-label="Navigasi halaman katalog">
+              <div class="flex items-center gap-1.5">
+                @if ($catalogItems->onFirstPage())
+                  <span class="flex h-9 w-9 items-center justify-center rounded-lg border border-[#b8ddd4] bg-white/70 text-slate-400" aria-disabled="true">
+                    <iconify-icon icon="mdi:chevron-left" aria-hidden="true"></iconify-icon>
+                  </span>
+                @else
+                  <a data-catalog-ajax href="{{ $catalogItems->previousPageUrl() }}" rel="prev" class="flex h-9 w-9 items-center justify-center rounded-lg border border-[#92d9cd] bg-white text-[#007f70] transition hover:bg-emerald-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#008b7a] focus-visible:ring-offset-2" aria-label="Halaman sebelumnya">
+                    <iconify-icon icon="mdi:chevron-left" aria-hidden="true"></iconify-icon>
+                  </a>
+                @endif
+
+                @if ($catalogItems->currentPage() > 2)
+                  <a data-catalog-ajax href="{{ $catalogItems->url(1) }}" class="flex h-9 min-w-9 items-center justify-center rounded-lg border border-[#92d9cd] bg-white px-2 text-sm font-semibold text-[#007f70] transition hover:bg-emerald-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#008b7a] focus-visible:ring-offset-2">1</a>
+                  @if ($catalogItems->currentPage() > 3)
+                    <span class="px-1 text-sm text-slate-500" aria-hidden="true">…</span>
+                  @endif
+                @endif
+
+                @foreach ($catalogItems->getUrlRange(max(1, $catalogItems->currentPage() - 1), min($catalogItems->lastPage(), $catalogItems->currentPage() + 1)) as $page => $url)
+                  @if ($page === $catalogItems->currentPage())
+                    <span class="flex h-9 min-w-9 items-center justify-center rounded-lg border border-[#00a88f] bg-[#00c99c] px-2 text-sm font-bold text-[#004e48] shadow-sm" aria-current="page">{{ $page }}</span>
+                  @else
+                    <a data-catalog-ajax href="{{ $url }}" class="flex h-9 min-w-9 items-center justify-center rounded-lg border border-[#92d9cd] bg-white px-2 text-sm font-semibold text-[#007f70] transition hover:bg-emerald-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#008b7a] focus-visible:ring-offset-2">{{ $page }}</a>
+                  @endif
+                @endforeach
+
+                @if ($catalogItems->currentPage() < $catalogItems->lastPage() - 1)
+                  @if ($catalogItems->currentPage() < $catalogItems->lastPage() - 2)
+                    <span class="px-1 text-sm text-slate-500" aria-hidden="true">…</span>
+                  @endif
+                  <a data-catalog-ajax href="{{ $catalogItems->url($catalogItems->lastPage()) }}" class="flex h-9 min-w-9 items-center justify-center rounded-lg border border-[#92d9cd] bg-white px-2 text-sm font-semibold text-[#007f70] transition hover:bg-emerald-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#008b7a] focus-visible:ring-offset-2">{{ $catalogItems->lastPage() }}</a>
+                @endif
+
+                @if ($catalogItems->hasMorePages())
+                  <a data-catalog-ajax href="{{ $catalogItems->nextPageUrl() }}" rel="next" class="flex h-9 w-9 items-center justify-center rounded-lg border border-[#92d9cd] bg-white text-[#007f70] transition hover:bg-emerald-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#008b7a] focus-visible:ring-offset-2" aria-label="Halaman berikutnya">
+                    <iconify-icon icon="mdi:chevron-right" aria-hidden="true"></iconify-icon>
+                  </a>
+                @else
+                  <span class="flex h-9 w-9 items-center justify-center rounded-lg border border-[#b8ddd4] bg-white/70 text-slate-400" aria-disabled="true">
+                    <iconify-icon icon="mdi:chevron-right" aria-hidden="true"></iconify-icon>
+                  </span>
+                @endif
+              </div>
+            </nav>
+          @endif
         @else
           <p class="rounded-xl bg-white p-6 text-center text-sm text-slate-500">Tidak ada barang tersedia yang cocok dengan pencarian ini.</p>
         @endif

@@ -364,14 +364,14 @@
         data-ruangan-success="{{ session('success') }}" data-ruangan-error="{{ session('error') }}"></div>
 
       <div class="ruangan-toolbar mb-5 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        @can('manage-inventory')
+        @if(auth()->user()?->canManageInventory())
         <div class="flex flex-wrap gap-2">
           <button type="button" @click="createRuangan()"
             class="ruangan-primary-button inline-flex items-center gap-2 rounded-lg border border-[#009F91] bg-sidebar-start px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-[#009a87] focus:outline-none focus:ring-2 focus:ring-sidebar-start focus:ring-offset-2">
             <iconify-icon icon="mdi:plus" width="18"></iconify-icon> Tambah Ruangan
           </button>
         </div>
-        @endcan
+        @endif
         <label class="ruangan-search relative block w-full sm:w-72">
           <span class="pointer-events-none absolute inset-y-0 left-3 flex items-center"><iconify-icon icon="mdi:magnify"
               width="17" class="block text-slate-400"></iconify-icon></span>
@@ -415,7 +415,7 @@
               <p class="mt-3 text-xs text-slate-500 line-clamp-2">{{ $ruangan->keterangan }}</p>
             @endif
 
-            @can('manage-inventory')
+            @if(auth()->user()?->canManageInventory())
             <div class="mt-4 flex justify-end gap-2 pt-3 border-t border-slate-100">
               <button type="button"
                 data-ruangan="{{ json_encode([
@@ -436,7 +436,7 @@
                 </button>
               </form>
             </div>
-            @endcan
+            @endif
           </div>
         @empty
           <div class="col-span-full flex flex-col items-center justify-center py-12 text-center">
@@ -500,7 +500,7 @@
       </div>
     </div>
 
-    @can('manage-inventory')
+    @if(auth()->user()?->canManageInventory())
     <template x-teleport="body">
     {{-- MODAL: Tambah / Edit Ruangan --}}
     <div x-show="openModal" x-transition.opacity style="display: none; z-index: 80;"
@@ -608,7 +608,7 @@
       </div>
     </div>
     </template>
-    @endcan
+    @endif
 
     {{-- TOAST: Feedback --}}
     <div x-cloak x-show="feedbackOpen" x-transition:enter="transition ease-out duration-200"

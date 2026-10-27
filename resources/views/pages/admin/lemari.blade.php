@@ -320,14 +320,14 @@
         data-lemari-success="{{ session('success') }}" data-lemari-error="{{ session('error') }}"></div>
 
       <div class="rak-toolbar mb-5 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        @can('manage-inventory')
+        @if(auth()->user()?->canManageInventory())
         <div class="flex flex-wrap gap-2">
           <button type="button" @click="createLemari()"
             class="rak-primary-button inline-flex items-center gap-2 rounded-lg border border-[#009F91] bg-sidebar-start px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-[#009a87] focus:outline-none focus:ring-2 focus:ring-sidebar-start focus:ring-offset-2">
             <iconify-icon icon="mdi:plus" width="18"></iconify-icon> Tambah Lemari
           </button>
         </div>
-        @endcan
+        @endif
         <div class="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-center">
           <select x-model="filterRuangan" @change="filterLemari()"
             class="w-fit max-w-full min-w-0 rounded-lg border border-slate-300 bg-white py-2 pl-3 pr-8 text-sm text-slate-800 shadow-sm focus:border-[#08A9D6] focus:outline-none focus:ring-2 focus:ring-[#08A9D6]/20 sm:shrink-0">
@@ -364,9 +364,9 @@
                 <th class="px-4 py-3 text-left text-xs font-semibold text-slate-600">Ruangan</th>
                 <th class="px-4 py-3 text-left text-xs font-semibold text-slate-600">Jumlah Barang</th>
                 <th class="px-4 py-3 text-left text-xs font-semibold text-slate-600">Keterangan</th>
-                @can('manage-inventory')
+                @if(auth()->user()?->canManageInventory())
                   <th class="px-4 py-3 text-right text-xs font-semibold text-slate-600">Aksi</th>
-                @endcan
+                @endif
               </tr>
             </thead>
             <tbody class="divide-y divide-[#E7EFED] bg-white">
@@ -381,7 +381,7 @@
                   <td class="whitespace-nowrap px-4 py-3 text-sm text-slate-600">{{ $lemari->lokasi_barangs_count }} Barang
                   </td>
                   <td class="whitespace-nowrap px-4 py-3 text-sm text-slate-600">{{ $lemari->keterangan ?? '-' }}</td>
-                  @can('manage-inventory')
+                  @if(auth()->user()?->canManageInventory())
                   <td class="whitespace-nowrap px-4 py-3 text-right">
                     <div class="flex justify-end gap-2">
                       {{-- ASVS 1.2.1, 1.2.3: Encode row data for its HTML attribute and JSON contexts. --}}
@@ -406,7 +406,7 @@
                       </form>
                     </div>
                   </td>
-                  @endcan
+                  @endif
                 </tr>
               @empty
                 <tr>
@@ -481,7 +481,7 @@
         @endfragment
     </div>
 
-    @can('manage-inventory')
+    @if(auth()->user()?->canManageInventory())
     <template x-teleport="body">
     {{-- MODAL: Tambah / Edit Lemari --}}
     <div x-show="openModal" x-transition.opacity style="display: none; z-index: 80;"
@@ -596,7 +596,7 @@
       </div>
     </div>
     </template>
-    @endcan
+    @endif
 
     {{-- TOAST: Feedback --}}
     <template x-teleport="body">

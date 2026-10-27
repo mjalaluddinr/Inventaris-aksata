@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Middleware\EnsureUserHasPermission;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
@@ -12,6 +13,10 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
+        $middleware->alias([
+            'permission' => EnsureUserHasPermission::class,
+        ]);
+
         // ASVS 4.1.3: Trust only the forwarded protocol header from the local tunnel proxy.
         $middleware->trustProxies(
             at: ['127.0.0.1', '::1'],

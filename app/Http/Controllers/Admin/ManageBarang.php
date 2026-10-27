@@ -12,6 +12,7 @@ use App\Models\Lemari;
 use App\Models\LogInput;
 use App\Models\LokasiBarang;
 use App\Models\Ruangan;
+use Illuminate\Database\Eloquent\Collection as EloquentCollection;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Http\JsonResponse;
@@ -110,8 +111,10 @@ class ManageBarang extends Controller
         $ruangans = Ruangan::query()->orderBy('nama_ruangan')->get(['ruangan_id', 'nama_ruangan']);
         $lemaris = Lemari::query()->orderBy('nama_lemari')->get(['lemari_id', 'ruangan_id', 'nama_lemari']);
 
-        return view('pages.admin.barang', compact('barangs', 'kategoris', 'ruangans', 'lemaris', 'filters'))
-            ->fragmentIf($request->ajax(), 'barang-results');
+        /** @var View $renderedView */
+        $renderedView = view('pages.admin.barang', compact('barangs', 'kategoris', 'ruangans', 'lemaris', 'filters'));
+
+        return $renderedView->fragmentIf($request->ajax(), 'barang-results');
     }
 
     public function import(ImportRequest $request): JsonResponse
@@ -228,23 +231,25 @@ class ManageBarang extends Controller
             );
         }
 
-        $kategoriByName = $this->referenceIndex(
-            Kategori::withTrashed()->get(['kategori_id', 'nama_kategori', 'deleted_at']),
-            'nama_kategori',
-        );
-        $ruanganByName = $this->referenceIndex(
-            Ruangan::withTrashed()->get(['ruangan_id', 'nama_ruangan', 'deleted_at']),
-            'nama_ruangan',
-        );
+        /** @var EloquentCollection<int, Kategori> $kategoriRecords */
+        $kategoriRecords = Kategori::withTrashed()->get(['kategori_id', 'nama_kategori', 'deleted_at']);
+        $kategoriByName = $this->referenceIndex($kategoriRecords, 'nama_kategori');
+
+        /** @var EloquentCollection<int, Ruangan> $ruanganRecords */
+        $ruanganRecords = Ruangan::withTrashed()->get(['ruangan_id', 'nama_ruangan', 'deleted_at']);
+        $ruanganByName = $this->referenceIndex($ruanganRecords, 'nama_ruangan');
+
+        /** @var EloquentCollection<int, Lemari> $lemariRecords */
+        $lemariRecords = Lemari::withTrashed()->get(['lemari_id', 'ruangan_id', 'nama_lemari', 'deleted_at']);
         $lemariByRoomAndName = [];
-        foreach (Lemari::withTrashed()->get(['lemari_id', 'ruangan_id', 'nama_lemari', 'deleted_at']) as $lemari) {
-            $key = $lemari->ruangan_id.'|'.Str::lower(trim($lemari->nama_lemari));
+        foreach ($lemariRecords as $lemari) {
+            $key = (string) $lemari->getAttribute('ruangan_id').'|'.Str::lower(trim((string) $lemari->getAttribute('nama_lemari')));
             if (! array_key_exists($key, $lemariByRoomAndName)) {
                 $lemariByRoomAndName[$key] = $lemari;
             } elseif ($lemariByRoomAndName[$key] instanceof Lemari) {
-                if ($lemariByRoomAndName[$key]->trashed() && ! $lemari->trashed()) {
+                if ($lemariByRoomAndName[$key]->getAttribute('deleted_at') !== null && $lemari->getAttribute('deleted_at') === null) {
                     $lemariByRoomAndName[$key] = $lemari;
-                } elseif ($lemariByRoomAndName[$key]->trashed() === $lemari->trashed()) {
+                } elseif (($lemariByRoomAndName[$key]->getAttribute('deleted_at') !== null) === ($lemari->getAttribute('deleted_at') !== null)) {
                     $lemariByRoomAndName[$key] = null;
                 }
             }
@@ -350,8 +355,9 @@ class ManageBarang extends Controller
                 ? $ruanganByName[$roomKey]
                 : null;
             $cabinetName = $mappedRow['lemari'] ?? null;
-            $cabinetKey = $room instanceof Ruangan && filled($cabinetName)
-                ? $room->ruangan_id.'|'.Str::lower(trim($cabinetName))
+            $roomId = $room instanceof Ruangan ? (string) $room->getAttribute('ruangan_id') : null;
+            $cabinetKey = $roomId !== null && filled($cabinetName)
+                ? $roomId.'|'.Str::lower(trim($cabinetName))
                 : null;
             $cabinet = $cabinetKey !== null && ($lemariByRoomAndName[$cabinetKey] ?? null) instanceof Lemari
                 ? $lemariByRoomAndName[$cabinetKey]
@@ -455,7 +461,7 @@ class ManageBarang extends Controller
                     $validator->errors()->add('kode_ruangan', 'Kode ruangan sudah digunakan.');
                 }
 
-                $roomId = $room?->ruangan_id;
+                $roomId = $room instanceof Ruangan ? (string) $room->getAttribute('ruangan_id') : null;
                 $cabinetKey = $roomId !== null && filled($data['lemari'])
                     ? $roomId.'|'.Str::lower(trim($data['lemari']))
                     : null;
@@ -464,7 +470,7 @@ class ManageBarang extends Controller
                 }
 
                 if ($room !== null && $cabinet === null && filled($data['kode_lemari']) && Lemari::withTrashed()
-                    ->where('ruangan_id', $room->ruangan_id)
+                    ->where('ruangan_id', $roomId)
                     ->where('kode_lemari', $data['kode_lemari'])
                     ->exists()) {
                     $validator->errors()->add('kode_lemari', 'Kode lemari sudah digunakan di ruangan tersebut.');
@@ -793,7 +799,7 @@ class ManageBarang extends Controller
     }
 
     /**
-     * @param  iterable<Model>  $records
+     * @param  iterable<int|string, Model>  $records
      * @return array<string, Model|null>
      */
     private function referenceIndex(iterable $records, string $nameField): array
@@ -805,9 +811,9 @@ class ManageBarang extends Controller
             if (! array_key_exists($key, $index)) {
                 $index[$key] = $record;
             } elseif ($index[$key] instanceof Model) {
-                if ($index[$key]->trashed() && ! $record->trashed()) {
+                if ($index[$key]->getAttribute('deleted_at') !== null && $record->getAttribute('deleted_at') === null) {
                     $index[$key] = $record;
-                } elseif ($index[$key]->trashed() === $record->trashed()) {
+                } elseif (($index[$key]->getAttribute('deleted_at') !== null) === ($record->getAttribute('deleted_at') !== null)) {
                     $index[$key] = null;
                 }
             }

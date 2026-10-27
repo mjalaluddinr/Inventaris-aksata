@@ -30,8 +30,10 @@ class ManageKategori extends Controller
             ->paginate(10)
             ->withQueryString();
 
-        return view('pages.admin.kategori', compact('kategoris', 'filters'))
-            ->fragmentIf($request->ajax(), 'kategori-results');
+        /** @var View $renderedView */
+        $renderedView = view('pages.admin.kategori', compact('kategoris', 'filters'));
+
+        return $renderedView->fragmentIf($request->ajax(), 'kategori-results');
     }
 
     public function store(StoreRequest $request): RedirectResponse

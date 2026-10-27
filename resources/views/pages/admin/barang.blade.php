@@ -1,6 +1,12 @@
 <x-layout.admin title="Data Barang - InvenTrack" header-title="Data Barang"
   header-description="Inventaris barang dan informasi stok.">
   <div x-data="{
+      searchQuery: @js($filters['search'] ?? ''),
+      barangResultsUrl: @js(route('admin.barang')),
+      filterRequest: null,
+      filterError: '',
+      filterLoading: false,
+      searchTimer: null,
       createUrl: @js(route('admin.barang.store')),
       updateUrlTemplate: @js(route('admin.barang.update', ['barang' => '__BARANG__'])),
       importUrl: @js(route('admin.barang.import')),
@@ -55,6 +61,64 @@
       },
       itemUpdateUrl(id) {
           return this.updateUrlTemplate.replace('__BARANG__', encodeURIComponent(id));
+      },
+      matchesBarang(searchableText) {
+          const searchable = searchableText.toLocaleLowerCase();
+          const searchTerms = this.searchQuery.trim().toLocaleLowerCase().split(/\s+/).filter(Boolean);
+          return searchTerms.every(term => searchable.includes(term));
+      },
+      async filterBarang(url = null) {
+          window.clearTimeout(this.searchTimer);
+          this.searchTimer = null;
+          if (this.filterRequest) this.filterRequest.abort();
+
+          const request = new AbortController();
+          this.filterRequest = request;
+          this.filterLoading = true;
+          this.filterError = '';
+          const requestUrl = new URL(url || this.barangResultsUrl, window.location.href);
+
+          if (!url) {
+              const params = new URLSearchParams();
+              for (const [key, value] of new FormData(this.$refs.barangFilterForm)) {
+                  if (typeof value === 'string' && value.trim() !== '') params.set(key, value.trim());
+              }
+              requestUrl.search = params.toString();
+          }
+
+          try {
+              const response = await fetch(requestUrl, {
+                  headers: { 'X-Requested-With': 'XMLHttpRequest', 'Accept': 'text/html' },
+                  signal: request.signal,
+              });
+              if (!response.ok || response.redirected) throw new Error('Daftar barang tidak dapat dimuat.');
+
+              this.$refs.barangResults.innerHTML = await response.text();
+              window.history.replaceState({}, '', requestUrl);
+          } catch (error) {
+              if (error.name !== 'AbortError') {
+                  this.filterError = error.message || 'Daftar barang tidak dapat dimuat.';
+                  this.$refs.barangResults.querySelectorAll('[data-barang-row]').forEach(row => row.hidden = false);
+              }
+          } finally {
+              if (this.filterRequest === request) {
+                  this.filterLoading = false;
+                  this.filterRequest = null;
+              }
+          }
+      },
+      scheduleBarangSearch() {
+          const rows = Array.from(this.$refs.barangResults.querySelectorAll('[data-barang-row]'));
+          rows.forEach(row => row.hidden = !this.matchesBarang(row.dataset.searchable || ''));
+          window.clearTimeout(this.searchTimer);
+          this.searchTimer = window.setTimeout(() => this.filterBarang(), 100);
+      },
+      handleBarangPagination(event) {
+          const target = event.target instanceof Element ? event.target : null;
+          const link = target?.closest('a');
+          if (!link || !this.$refs.barangResults.contains(link)) return;
+          event.preventDefault();
+          this.filterBarang(link.href);
       },
       async toggleBarangStatus(event) {
           const form = event.currentTarget;
@@ -275,9 +339,10 @@
         </div>
       </div>
 
-      <form method="GET" action="{{ route('admin.barang') }}" x-ref="barangFilterForm" class="space-y-3">
+      <form method="GET" action="{{ route('admin.barang') }}" x-ref="barangFilterForm"
+        @submit.prevent="filterBarang()" class="space-y-3">
         <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          @can('manage-inventory')
+          @if(auth()->user()?->canManageInventory())
           <div class="flex flex-wrap gap-2">
             <button type="button" @click="createItem()"
               class="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-[#009F91] bg-[#00B19C] px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-[#009A87] focus:outline-none focus:ring-2 focus:ring-[#00B19C] focus:ring-offset-2">
@@ -291,14 +356,14 @@
               Import Excel
             </button>
           </div>
-          @endcan
+          @endif
           <label class="relative block w-full sm:max-w-xs">
             <span class="sr-only">Cari barang</span>
             <span class="pointer-events-none absolute inset-y-0 left-3 flex items-center text-slate-400">
               <iconify-icon icon="mdi:magnify" width="17" aria-hidden="true"></iconify-icon>
             </span>
-            <input type="search" name="search" value="{{ $filters['search'] ?? '' }}"
-              @input.debounce.350ms="$refs.barangFilterForm.requestSubmit()" placeholder="Cari barang..."
+            <input type="search" name="search" x-model="searchQuery"
+              @input="scheduleBarangSearch()" @keydown.enter.prevent="filterBarang()" placeholder="Cari barang..."
               class="w-full rounded-lg border border-slate-300 bg-white py-2 pl-9 pr-3 text-sm text-slate-800 placeholder:text-slate-400 focus:border-[#08A9D6] focus:outline-none focus:ring-2 focus:ring-[#08A9D6]/20">
           </label>
         </div>
@@ -306,7 +371,7 @@
         <div class="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-6">
           <label>
             <span class="sr-only">Filter kategori</span>
-            <select name="kategori_id" @change="$refs.barangFilterForm.requestSubmit()"
+            <select name="kategori_id" @change="filterBarang()"
               class="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 focus:border-[#08A9D6] focus:outline-none focus:ring-2 focus:ring-[#08A9D6]/20">
               <option value="">Semua kategori</option>
               @foreach ($kategoris as $kategori)
@@ -318,7 +383,7 @@
           </label>
           <label>
             <span class="sr-only">Filter kelayakan</span>
-            <select name="kelayakan" @change="$refs.barangFilterForm.requestSubmit()"
+            <select name="kelayakan" @change="filterBarang()"
               class="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 focus:border-[#08A9D6] focus:outline-none focus:ring-2 focus:ring-[#08A9D6]/20">
               <option value="">Semua kelayakan</option>
               <option value="layak" @selected(($filters['kelayakan'] ?? '') === 'layak')>Layak</option>
@@ -327,7 +392,7 @@
           </label>
           <label>
             <span class="sr-only">Filter ruangan</span>
-            <select name="ruangan_id" @change="$refs.barangFilterForm.requestSubmit()"
+            <select name="ruangan_id" @change="filterBarang()"
               class="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 focus:border-[#08A9D6] focus:outline-none focus:ring-2 focus:ring-[#08A9D6]/20">
               <option value="">Semua ruangan</option>
               @foreach ($ruangans as $ruangan)
@@ -339,7 +404,7 @@
           </label>
           <label>
             <span class="sr-only">Filter lemari</span>
-            <select name="lemari_id" @change="$refs.barangFilterForm.requestSubmit()"
+            <select name="lemari_id" @change="filterBarang()"
               class="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 focus:border-[#08A9D6] focus:outline-none focus:ring-2 focus:ring-[#08A9D6]/20">
               <option value="">Semua lemari</option>
               @foreach ($lemaris as $lemari)
@@ -351,7 +416,7 @@
           </label>
           <label>
             <span class="sr-only">Filter kondisi</span>
-            <select name="kondisi" @change="$refs.barangFilterForm.requestSubmit()"
+            <select name="kondisi" @change="filterBarang()"
               class="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 focus:border-[#08A9D6] focus:outline-none focus:ring-2 focus:ring-[#08A9D6]/20">
               <option value="">Semua kondisi</option>
               <option value="baru" @selected(($filters['kondisi'] ?? '') === 'baru')>Baru</option>
@@ -361,7 +426,14 @@
         </div>
       </form>
 
-      <div>
+      <div x-cloak x-show="filterError" class="flex items-center justify-between rounded-lg border border-rose-200 bg-white px-4 py-3 text-sm text-rose-800" role="alert">
+        <span x-text="filterError"></span>
+        <button type="button" @click="filterBarang()" class="font-semibold underline focus:outline-none focus:ring-2 focus:ring-rose-400">
+          Coba lagi
+        </button>
+      </div>
+      <div x-ref="barangResults" @click="handleBarangPagination($event)" :aria-busy="filterLoading.toString()">
+        @fragment('barang-results')
         <section class="overflow-hidden rounded-xl border border-[#D3E3DF] bg-white shadow-sm">
           <div class="theme-scrollbar overflow-x-auto">
             <table class="min-w-full w-full divide-y divide-[#DCE9E6]">
@@ -375,9 +447,9 @@
                   <th scope="col" class="px-4 py-3 text-left text-xs font-semibold text-slate-700">Kondisi</th>
                   <th scope="col" class="px-4 py-3 text-left text-xs font-semibold text-slate-700">Kelayakan</th>
                   <th scope="col" class="px-4 py-3 text-left text-xs font-semibold text-slate-700">Lokasi</th>
-                  @can('manage-inventory')
+                  @if(auth()->user()?->canManageInventory())
                     <th scope="col" class="px-4 py-3 text-right text-xs font-semibold text-slate-700">Aksi</th>
-                  @endcan
+                  @endif
                 </tr>
               </thead>
               <tbody class="divide-y divide-[#E7EFED] bg-white">
@@ -386,7 +458,11 @@
                     $barangCondition = strtolower(trim((string) $barang->kondisi));
                     $barangEligibility = str_replace([' ', '-'], '_', strtolower(trim((string) $barang->kelayakan)));
                   @endphp
-                  <tr class="transition-colors hover:bg-[#F7FBFA]">
+                  {{-- ASVS V1.2.1: Escape searchable values in the HTML attribute context. --}}
+                  <tr data-barang-row
+                    data-searchable="{{ mb_strtolower(trim($barang->kode_barang . ' ' . $barang->nama_barang . ' ' . ($barang->spesifikasi ?? ''))) }}"
+                    x-show="matchesBarang($el.dataset.searchable)"
+                    class="transition-colors hover:bg-[#F7FBFA]">
                     <td class="max-w-56 px-4 py-3">
                       <p class="truncate text-sm font-semibold text-slate-800">{{ $barang->nama_barang }}</p>
                       <p class="mt-0.5 text-xs text-slate-500">{{ $barang->kode_barang }}</p>
@@ -405,7 +481,7 @@
                     </td>
                     <td class="px-4 py-3 text-sm text-slate-700">{{ $barang->kategori?->nama_kategori ?? '-' }}</td>
                     <td class="px-4 py-3">
-                      @can('manage-inventory')
+                      @if(auth()->user()?->canManageInventory())
                       <form action="{{ route('admin.barang.update', $barang->barang_id) }}" method="POST"
                         @submit.prevent="toggleBarangStatus($event)">
                         @csrf
@@ -437,10 +513,10 @@
                         <span class="inline-flex w-24 items-center justify-center rounded-md px-2 py-1 text-xs font-medium {{ $barangCondition === 'baru' ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800' }}">
                           {{ ucfirst($barangCondition) }}
                         </span>
-                      @endcan
+                      @endif
                     </td>
                     <td class="px-4 py-3">
-                      @can('manage-inventory')
+                      @if(auth()->user()?->canManageInventory())
                       <form action="{{ route('admin.barang.update', $barang->barang_id) }}" method="POST"
                         @submit.prevent="toggleBarangStatus($event)">
                         @csrf
@@ -472,7 +548,7 @@
                         <span class="inline-flex w-24 items-center justify-center rounded-md px-2 py-1 text-xs font-medium {{ $barangEligibility === 'layak' ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800' }}">
                           {{ $barangEligibility === 'layak' ? 'Layak' : 'Tidak Layak' }}
                         </span>
-                      @endcan
+                      @endif
                     </td>
                     <td class="min-w-max whitespace-nowrap px-4 py-3 text-xs leading-5 text-slate-600">
                       @forelse ($barang->lokasiBarangs as $lokasi)
@@ -487,7 +563,7 @@
                         <span class="text-slate-400">Belum ditempatkan</span>
                       @endforelse
                     </td>
-                    @can('manage-inventory')
+                    @if(auth()->user()?->canManageInventory())
                     <td class="whitespace-nowrap px-4 py-3 text-right">
                       <div class="flex justify-end gap-2">
                         <button type="button"
@@ -531,7 +607,7 @@
                         </form>
                       </div>
                     </td>
-                    @endcan
+                    @endif
                   </tr>
                 @empty
                   <tr>
@@ -629,10 +705,11 @@
             @endif
           </div>
         </section>
+        @endfragment
       </div>
     </div>
 
-    @can('manage-inventory')
+    @if(auth()->user()?->canManageInventory())
     <template x-teleport="body">
       <div>
         <div x-cloak x-show="importOpen" x-transition.opacity
@@ -1002,6 +1079,6 @@
         </div>
       </div>
     </template>
-    @endcan
+    @endif
   </div>
 </x-layout.admin>

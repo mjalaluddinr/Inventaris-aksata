@@ -95,6 +95,10 @@ class User extends Authenticatable
 
     private function hasHakAkses(string $hak): bool
     {
+        if ($this->relationLoaded('privileges')) {
+            return $this->getRelation('privileges')->contains('hak_akses', $hak);
+        }
+
         return $this->privileges()->where('hak_akses', $hak)->exists();
     }
 
@@ -111,6 +115,39 @@ class User extends Authenticatable
     public function canMeminjamkan(): bool
     {
         return $this->hasHakAkses('meminjamkan');
+    }
+
+    public function canAccessAdminPanel(): bool
+    {
+        return $this->role === 'admin'
+            || ($this->role === 'laboran'
+                && ($this->canMelihat() || $this->canManajemen() || $this->canMeminjamkan()));
+    }
+
+    public function canViewInventory(): bool
+    {
+        return $this->role === 'admin'
+            || ($this->role === 'laboran' && ($this->canMelihat() || $this->canManajemen()));
+    }
+
+    public function canManageInventory(): bool
+    {
+        return $this->role === 'admin' || ($this->role === 'laboran' && $this->canManajemen());
+    }
+
+    public function canProcessLoans(): bool
+    {
+        return $this->role === 'admin' || ($this->role === 'laboran' && $this->canMeminjamkan());
+    }
+
+    public function canManageLaboranAccounts(): bool
+    {
+        return $this->role === 'admin' || ($this->role === 'laboran' && $this->canManajemen());
+    }
+
+    public function canManageAllAccounts(): bool
+    {
+        return $this->role === 'admin';
     }
 
     public function isLaboran(): bool

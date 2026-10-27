@@ -316,13 +316,13 @@
       </div>
 
       <div class="mb-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        @can('manage-inventory')
+        @if(auth()->user()?->canManageInventory())
         <button type="button" @click="createCategory()"
           class="inline-flex min-h-9 items-center gap-2 self-start rounded-md border border-[#009F91] bg-[#00B19C] px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition hover:bg-[#009A87] focus:outline-none focus:ring-2 focus:ring-[#00B19C] focus:ring-offset-2">
           <iconify-icon icon="mdi:plus" width="16" aria-hidden="true"></iconify-icon>
           Tambah Kategori
         </button>
-        @endcan
+        @endif
         <label class="relative block w-full sm:w-72">
           <span class="sr-only">Cari kategori</span>
           <span class="pointer-events-none absolute inset-y-0 left-3 flex items-center text-slate-400">
@@ -351,9 +351,9 @@
                 <th scope="col" class="whitespace-nowrap px-3 py-2.5 text-left text-xs font-semibold text-slate-700">Nama Kategori</th>
                 <th scope="col" class="whitespace-nowrap px-3 py-2.5 text-left text-xs font-semibold text-slate-700">Keterangan</th>
                 <th scope="col" class="whitespace-nowrap px-3 py-2.5 text-left text-xs font-semibold text-slate-700">Jumlah Barang</th>
-                @can('manage-inventory')
+                @if(auth()->user()?->canManageInventory())
                   <th scope="col" class="whitespace-nowrap px-3 py-2.5 text-right text-xs font-semibold text-slate-700">Aksi</th>
-                @endcan
+                @endif
               </tr>
             </thead>
             <tbody class="divide-y divide-[#E7EFED] bg-white">
@@ -368,7 +368,7 @@
                   <td class="whitespace-nowrap px-3 py-2.5 text-sm text-slate-700">
                     {{ $kategori->barangs_count }} barang
                   </td>
-                  @can('manage-inventory')
+                  @if(auth()->user()?->canManageInventory())
                   <td class="whitespace-nowrap px-3 py-2.5 text-right">
                     <div class="flex justify-end gap-2">
                       <button type="button"
@@ -389,7 +389,7 @@
                       </form>
                     </div>
                   </td>
-                  @endcan
+                  @endif
                 </tr>
               @empty
                 <tr>
@@ -458,7 +458,7 @@
       </div>
     </div>
 
-    @can('manage-inventory')
+    @if(auth()->user()?->canManageInventory())
     <template x-teleport="body">
     <div x-cloak x-show="modalOpen" x-transition.opacity
       class="fixed inset-0 z-[80] flex items-center justify-center overflow-y-auto overscroll-contain p-4 sm:p-6"
@@ -560,6 +560,6 @@
       </section>
     </div>
     </template>
-    @endcan
+    @endif
   </div>
 </x-layout.admin>

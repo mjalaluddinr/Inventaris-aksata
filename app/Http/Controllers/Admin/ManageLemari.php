@@ -61,8 +61,10 @@ class ManageLemari extends Controller
                 ?? Ruangan::query()->find($filters['ruangan_id']))
             : null;
 
-        return view('pages.admin.lemari', compact('lemaris', 'ruangans', 'filters', 'filteredRuangan'))
-            ->fragmentIf($request->ajax(), 'lemari-results');
+        /** @var View $renderedView */
+        $renderedView = view('pages.admin.lemari', compact('lemaris', 'ruangans', 'filters', 'filteredRuangan'));
+
+        return $renderedView->fragmentIf($request->ajax(), 'lemari-results');
     }
 
     public function store(StoreRequest $request): RedirectResponse

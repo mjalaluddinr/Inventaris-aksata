@@ -35,8 +35,10 @@ class ManageRuangan extends Controller
             ->paginate(12)
             ->withQueryString();
 
-        return view('pages.admin.ruangan', compact('ruangans', 'filters'))
-            ->fragmentIf($request->ajax(), 'ruangan-results');
+        /** @var View $renderedView */
+        $renderedView = view('pages.admin.ruangan', compact('ruangans', 'filters'));
+
+        return $renderedView->fragmentIf($request->ajax(), 'ruangan-results');
     }
 
     public function store(StoreRequest $request)

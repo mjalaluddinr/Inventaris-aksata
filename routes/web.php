@@ -3,10 +3,12 @@
 use App\Http\Controllers\Admin\ManageBarang;
 use App\Http\Controllers\Admin\ManageKategori;
 use App\Http\Controllers\Admin\ManageLemari;
+use App\Http\Controllers\Admin\ManagePeminjaman;
 use App\Http\Controllers\Admin\ManageRuangan;
 use App\Http\Controllers\Admin\ManageUser;
 use App\Http\Controllers\Auth\ChangePasswordController;
 use App\Http\Controllers\Auth\LoginController;
+use App\Http\Controllers\User\PeminjamanController;
 use App\Http\Middleware\MustChangePassword;
 use Illuminate\Support\Facades\Route;
 
@@ -21,12 +23,12 @@ Route::post('/login', [LoginController::class, 'login'])->name('login');
 Route::post('/logout', [LoginController::class, 'logout'])->name('logout');
 
 // ASVS V8.2: Enforce authentication and allowed admin roles at the server-side route boundary.
-Route::prefix('admin')->name('admin.')->middleware(['auth', 'can:access-admin-panel'])->group(function () {
+Route::prefix('admin')->name('admin.')->middleware(['auth', 'permission:admin-panel'])->group(function () {
     Route::get('/', function () {
         return view('pages.admin.dashboard');
     })->name('dashboard');
     Route::redirect('/dashboard', '/admin', 302)->name('dashboard.legacy');
-    Route::middleware('can:view-inventory')->group(function () {
+    Route::middleware('permission:inventory.view')->group(function () {
         Route::get('/barang', [ManageBarang::class, 'index'])->name('barang');
         Route::get('/kategori', [ManageKategori::class, 'index'])->name('kategori');
 
@@ -40,7 +42,7 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'can:access-admin-pa
         });
     });
 
-    Route::middleware('can:manage-inventory')->group(function () {
+    Route::middleware('permission:inventory.manage')->group(function () {
         Route::post('/barang', [ManageBarang::class, 'store'])->name('barang.store');
         Route::post('/barang/import', [ManageBarang::class, 'import'])->name('barang.import');
         Route::put('/barang/{barang}', [ManageBarang::class, 'update'])->name('barang.update');
@@ -62,34 +64,56 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'can:access-admin-pa
         });
     });
 
-    Route::get('/peminjaman', function () {
-        return view('pages.admin.peminjaman');
-    })->middleware('can:process-loans')->name('peminjaman');
+    Route::middleware('permission:loans.process')->group(function () {
+        Route::get('/peminjaman', [ManagePeminjaman::class, 'index'])->name('peminjaman');
+        Route::get('/peminjaman/export', [ManagePeminjaman::class, 'export'])->name('peminjaman.export');
+        Route::post('/peminjaman/scan', [ManagePeminjaman::class, 'scan'])
+            ->middleware('throttle:10,1')
+            ->name('peminjaman.scan');
+        Route::post('/peminjaman/{peminjaman}/confirm', [ManagePeminjaman::class, 'confirm'])
+            ->name('peminjaman.confirm');
+        Route::post('/peminjaman/{peminjaman}/reject', [ManagePeminjaman::class, 'reject'])
+            ->name('peminjaman.reject');
+        Route::post('/peminjaman/{peminjaman}/return', [ManagePeminjaman::class, 'returnItems'])
+            ->name('peminjaman.return');
+    });
 
     // ================= ROUTE AKUN (CRUD + IMPORT) =================
-    Route::prefix('akun')->name('akun.')->middleware('can:manage-accounts')->group(function () {
+    Route::prefix('akun')->name('akun.')->middleware('permission:accounts.manage')->group(function () {
         Route::get('/', [ManageUser::class, 'index'])->name('index');
         Route::post('/', [ManageUser::class, 'store'])->name('store');
         Route::put('/{user}', [ManageUser::class, 'update'])->name('update');
         Route::delete('/{user}', [ManageUser::class, 'destroy'])->name('destroy');
 
-        // Route Import
-        Route::post('/import', [ManageUser::class, 'import'])->name('import');
-        Route::get('/log/{id}/detail', [ManageUser::class, 'showLogDetail'])->name('log.detail');
-
-        // ✅ ROUTE BARU: AJAX Toggle Status
         Route::patch('/{user}/toggle-status', [ManageUser::class, 'toggleStatus'])->name('toggle-status');
+
+        Route::middleware('permission:accounts.manage-all')->group(function () {
+            Route::post('/import', [ManageUser::class, 'import'])->name('import');
+            Route::get('/log/{id}/detail', [ManageUser::class, 'showLogDetail'])->name('log.detail');
+        });
     });
 
     Route::get('/log-import', function () {
         return view('pages.admin.log_import');
-    })->middleware('can:manage-accounts')->name('log_import');
+    })->middleware('permission:accounts.manage-all')->name('log_import');
+
+    Route::get('/log-mutasi', function () {
+        return view('pages.admin.log_mutasi');
+    })->middleware('permission:accounts.manage-all')->name('log_mutasi');
 });
 
-Route::prefix('user')->name('user.')->group(function () {
+// ASVS V8.2.2/V8.3.1: protect borrower pages and actions at the server-side boundary.
+Route::prefix('user')->name('user.')->middleware(['auth', 'can:access-user-portal'])->group(function () {
     Route::get('/beranda', function () {
         return view('pages.user.beranda');
     })->name('beranda');
+
+    Route::post('/peminjaman', [PeminjamanController::class, 'store'])
+        ->middleware('throttle:10,1')
+        ->name('peminjaman.store');
+    Route::post('/peminjaman/{peminjamanId}/pembatalan', [PeminjamanController::class, 'requestCancellation'])
+        ->middleware('throttle:5,1')
+        ->name('peminjaman.cancellation.store');
 });
 
 Route::middleware(['auth', MustChangePassword::class])->group(function () {

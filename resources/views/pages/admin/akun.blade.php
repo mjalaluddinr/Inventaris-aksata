@@ -100,7 +100,7 @@
   <div x-data="{
       openModal: @js($errors->any() && in_array(old('akun_form'), ['create', 'edit'], true)),
       modalMode: @js(old('akun_form') === 'edit' ? 'edit' : 'create'),
-      createDraft: { first_name: '', last_name: '', username: '', password: '', role: 'peminjam', is_active: true, must_change_password: false, privileges: [], legacyPrivileges: [] },
+      createDraft: { first_name: '', last_name: '', username: '', password: '', role: @js(auth()->user()?->role === 'admin' ? 'peminjam' : 'laboran'), is_active: true, must_change_password: false, privileges: [], legacyPrivileges: [] },
       currentUser: {},
       privilegeOptions: ['melihat', 'meminjamkan', 'manajemen'],
       roleDialogOpen: false,
@@ -663,10 +663,12 @@
             class="akun-primary-button inline-flex items-center gap-2 rounded-lg border border-[#009F91] bg-sidebar-start px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-[#009a87] focus:outline-none focus:ring-2 focus:ring-sidebar-start focus:ring-offset-2">
             <iconify-icon icon="mdi:plus" width="18"></iconify-icon> Tambah Akun
           </button>
+          @if (auth()->user()?->canManageAllAccounts())
           <button type="button" @click="openImport = true"
             class="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm transition hover:border-emerald-400 hover:bg-emerald-50 focus:outline-none focus:ring-2 focus:ring-sidebar-start focus:ring-offset-2">
             <iconify-icon icon="mdi:file-excel" class="text-emerald-600" width="18"></iconify-icon> Import Excel
           </button>
+          @endif
         </div>
         <label class="akun-search relative block w-full sm:w-72">
           <span class="pointer-events-none absolute inset-y-0 left-3 flex items-center"><iconify-icon icon="mdi:magnify"
@@ -939,8 +941,8 @@
                 <fieldset>
                   <legend class="mb-2 block text-xs font-medium text-slate-700">Pilih Role <span
                       class="text-rose-500">*</span></legend>
-                  <div class="grid w-full grid-cols-3 gap-2">
-                    <template x-for="role in ['admin', 'laboran', 'peminjam']" :key="`create-role-${role}`">
+                  <div class="grid w-full {{ auth()->user()?->canManageAllAccounts() ? 'grid-cols-3' : 'grid-cols-1' }} gap-2">
+                    <template x-for="role in @js(auth()->user()?->canManageAllAccounts() ? ['admin', 'laboran', 'peminjam'] : ['laboran'])" :key="`create-role-${role}`">
                       <label
                         class="flex cursor-pointer w-full items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 transition hover:border-sky-300 has-[:checked]:border-sky-500 has-[:checked]:bg-sky-50 has-[:checked]:font-semibold has-[:checked]:text-sky-800">
                         <input type="radio" name="account-create-role" :value="role"
@@ -1042,25 +1044,29 @@
           <div class="space-y-4 px-5 py-4">
             <fieldset>
               <legend class="mb-2 block text-xs font-medium text-slate-700">Pilih Role</legend>
-              <div class="grid w-full grid-cols-3 gap-2">
+              <div class="grid w-full {{ auth()->user()?->canManageAllAccounts() ? 'grid-cols-3' : 'grid-cols-1' }} gap-2">
+                @if (auth()->user()?->canManageAllAccounts())
                 <label
                   class="flex cursor-pointer w-full items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 transition hover:border-sky-300 has-[:checked]:border-sky-500 has-[:checked]:bg-sky-50 has-[:checked]:font-semibold has-[:checked]:text-sky-800">
                   <input type="radio" name="account-role-choice" value="admin" x-model="roleDialogDraft.role"
                     class="border-slate-300 text-sky-600 focus:ring-sky-500">
                   <span>Admin</span>
                 </label>
+                @endif
                 <label
                   class="flex cursor-pointer w-full items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 transition hover:border-sky-300 has-[:checked]:border-sky-500 has-[:checked]:bg-sky-50 has-[:checked]:font-semibold has-[:checked]:text-sky-800">
                   <input type="radio" name="account-role-choice" value="laboran" x-model="roleDialogDraft.role"
                     class="border-slate-300 text-sky-600 focus:ring-sky-500">
                   <span>Laboran</span>
                 </label>
+                @if (auth()->user()?->canManageAllAccounts())
                 <label
                   class="flex cursor-pointer w-full items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 transition hover:border-sky-300 has-[:checked]:border-sky-500 has-[:checked]:bg-sky-50 has-[:checked]:font-semibold has-[:checked]:text-sky-800">
                   <input type="radio" name="account-role-choice" value="peminjam" x-model="roleDialogDraft.role"
                     class="border-slate-300 text-sky-600 focus:ring-sky-500">
                   <span>Peminjam</span>
                 </label>
+                @endif
               </div>
             </fieldset>
 
@@ -1115,6 +1121,7 @@
     {{-- ========================================== --}}
     {{-- MODAL: Import Excel --}}
     {{-- ========================================== --}}
+    @if (auth()->user()?->canManageAllAccounts())
     <template x-teleport="body">
       <div x-show="openImport" x-transition.opacity style="display: none; z-index: 90;"
         class="fixed inset-0 z-[90] flex items-center justify-center overflow-y-auto overscroll-contain p-4 sm:p-6"
@@ -1156,6 +1163,7 @@
                     </p>
                   </div>
                 </template>
+                @endif
                 <template x-if="importFileName">
                   <div class="flex items-center gap-3">
                     <span

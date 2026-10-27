@@ -9,7 +9,7 @@ class StoreRequest extends FormRequest
 {
     public function authorize(): bool
     {
-        return true;
+        return $this->user()?->canManageLaboranAccounts() ?? false;
     }
 
     public function rules(): array
@@ -20,7 +20,9 @@ class StoreRequest extends FormRequest
             'last_name' => 'nullable|string|max:100',
             'username' => ['required', 'string', 'max:50', Rule::unique('akun', 'username')->whereNull('deleted_at')],
             'password' => 'required|string|min:6',
-            'role' => 'required|in:admin,laboran,peminjam',
+            'role' => ['required', Rule::in($this->user()?->canManageAllAccounts()
+                ? ['admin', 'laboran', 'peminjam']
+                : ['laboran'])],
             'is_active' => 'nullable|boolean',
             'must_change_password' => 'nullable|boolean',
             'privileges' => [
@@ -33,6 +35,7 @@ class StoreRequest extends FormRequest
                     }
                 },
             ],
+            'privileges.*' => ['string', Rule::in(['melihat', 'meminjamkan', 'manajemen'])],
         ];
     }
 }

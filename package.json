@@ -19,6 +19,8 @@
     "dependencies": {
         "@tailwindcss/forms": "^0.5.11",
         "@tailwindcss/typography": "^0.5.20",
-        "alpinejs": "^3.17.4"
+        "alpinejs": "^3.17.4",
+        "jsqr": "^1.4.0",
+        "qrcode": "^1.5.4"
     }
 }
