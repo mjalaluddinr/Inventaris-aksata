@@ -20,10 +20,10 @@
             <p class="mt-4 max-w-xl text-sm leading-relaxed text-white/90 sm:text-base">Pilih barang dari katalog,
               masukkan ke keranjang, lalu ajukan. Semua status peminjamanmu bisa dipantau di satu tempat.</p>
             <div class="mt-6 flex flex-wrap gap-3">
-              <a href="#katalog"
+              <a href="{{ route('user.beranda', ['page' => 'catalog']) }}"
                 class="rounded-lg bg-[#00e39a] px-4 py-2.5 text-sm font-semibold text-[#004f46] shadow-sm transition hover:bg-[#43efb4]">Jelajahi
                 Katalog</a>
-              <a href="#riwayat"
+              <a href="{{ route('user.beranda', ['page' => 'history']) }}"
                 class="rounded-lg bg-white/15 px-4 py-2.5 text-sm font-semibold text-white ring-1 ring-white/10 transition hover:bg-white/25">Riwayat
                 Saya</a>
             </div>
@@ -114,7 +114,7 @@
                 </div>
               </div>
             @else
-              <div class="grid grid-cols-[repeat(auto-fit,minmax(min(100%,18rem),1fr))] gap-4 lg:gap-6">
+              <div class="grid grid-cols-[repeat(auto-fill,minmax(min(100%,18rem),18rem))] gap-4 lg:gap-6">
                 @foreach ($categories as $category)
                   <a href="#katalog"
                     class="user-card-enter w-[min(78vw,18rem)] rounded-2xl bg-white px-6 py-5 shadow-[0_2px_4px_rgba(20,55,48,0.2)] transition hover:-translate-y-0.5 hover:shadow-lg"

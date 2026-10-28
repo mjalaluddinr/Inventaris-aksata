@@ -552,7 +552,7 @@
 
           <div class="flex justify-end">
             <a href="{{ route('password.request') }}" id="forgotPasswordLink"
-              class="rounded text-sm font-semibold text-[#007f78] underline-offset-4 transition hover:text-[#00385a] hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#008f82]">
+              class="inline-flex rounded-lg px-2 py-1 text-sm font-semibold text-[#007f78] transition duration-200 hover:-translate-y-0.5 hover:bg-[#e6f8f3] hover:text-[#005d54] hover:shadow-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#008f82]">
               Lupa password?
             </a>
           </div>

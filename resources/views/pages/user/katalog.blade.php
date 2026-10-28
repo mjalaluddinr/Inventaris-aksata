@@ -123,7 +123,16 @@
             </nav>
           @endif
         @else
-          <p class="rounded-xl bg-white p-6 text-center text-sm text-slate-500">Tidak ada barang tersedia yang cocok dengan pencarian ini.</p>
+          <div class="flex min-h-64 flex-col items-center justify-center gap-3 px-6 py-12 text-center">
+            <iconify-icon icon="mdi:package-variant-remove" class="text-4xl text-[#008b7a]" aria-hidden="true"></iconify-icon>
+            <p class="max-w-xl text-base font-semibold leading-relaxed text-slate-700 sm:text-lg">
+              @if ($search !== '')
+                Tidak ada barang yang tersedia dengan kata kunci <strong class="font-bold text-slate-950">"{{ $search }}"</strong>.
+              @else
+                Tidak ada barang tersedia pada kategori ini.
+              @endif
+            </p>
+          </div>
         @endif
       </section>
     </main>

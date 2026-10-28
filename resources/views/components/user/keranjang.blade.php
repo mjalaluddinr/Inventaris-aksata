@@ -7,8 +7,18 @@
     </header>
     <div class="flex-1 overflow-y-auto px-5">
       <template x-if="cart.length === 0">
-        <div class="flex min-h-full flex-col items-center justify-center py-12 text-center text-sm text-slate-500">
-          <a href="{{ route('user.beranda', ['page' => 'catalog']) }}" @click="cartOpen = false" class="font-semibold text-[#008f82] underline underline-offset-4">Jelajahi katalog</a>
+        <div class="flex min-h-full flex-col items-center justify-center gap-3 py-12 text-center">
+          <span class="flex h-14 w-14 items-center justify-center rounded-full bg-[#e6f8f3] text-[#008b7a]" aria-hidden="true">
+            <iconify-icon icon="mdi:cart-outline" class="text-3xl"></iconify-icon>
+          </span>
+          <div class="flex flex-col gap-1">
+            <p class="text-base font-bold text-slate-800">Tidak ada barang di keranjang</p>
+            <p class="text-sm text-slate-500">Jelajahi katalog untuk memilih barang yang ingin dipinjam.</p>
+          </div>
+          <a href="{{ route('user.beranda', ['page' => 'catalog']) }}" @click="cartOpen = false"
+            class="mt-1 inline-flex rounded-lg bg-[#00d69f] px-4 py-2.5 text-sm font-bold text-[#004d43] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#008b7a]">
+            Jelajahi Katalog
+          </a>
         </div>
       </template>
       <template x-for="item in cart" :key="item.id">
