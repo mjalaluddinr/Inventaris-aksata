@@ -4,55 +4,99 @@ import jsQR from 'jsqr';
 
 window.Alpine = Alpine;
 
-const modalStateKeys = [
-    'modalOpen',
-    'openModal',
-    'deleteModalOpen',
-    'openImport',
-    'privilegeDialogOpen',
-    'openLogDetail',
-];
+const toastTypes = new Set(['success', 'error', 'info', 'warning']);
 
-const feedbackObserver = new MutationObserver((mutations) => {
-    for (const mutation of mutations) {
-        if (!(mutation.target instanceof Element)) {
-            continue;
+const formatToastMessage = (message, type) => {
+    if (typeof message === 'string') {
+        const importantPhrase = type === 'error'
+            ? message.match(/(?:masih digunakan oleh|digunakan oleh|masih memiliki|memiliki riwayat)\s+([^.!?]+)([.!?]?)$/i)
+            : null;
+
+        if (importantPhrase) {
+            const phraseStart = importantPhrase.index + importantPhrase[0].indexOf(importantPhrase[1]);
+            return [
+                { text: message.slice(0, phraseStart), bold: false },
+                { text: importantPhrase[1], bold: true },
+                { text: importantPhrase[2], bold: false },
+            ].filter((part) => part.text !== '');
         }
 
-        const toast = mutation.target.closest('[x-show="feedbackOpen"]');
-        if (!toast || getComputedStyle(toast).display === 'none') {
-            continue;
-        }
-
-        const state = Alpine.$data(toast);
-        const isError = state.feedbackType === 'error' || state.feedbackStatus === 'error';
-        const hasOpenModal = modalStateKeys.some((key) => state[key] === true);
-
-        if (!state.feedbackOpen || !isError || !hasOpenModal) {
-            continue;
-        }
-
-        if (state.deleteModalOpen && typeof state.cancelDelete === 'function') {
-            state.cancelDelete();
-        }
-
-        for (const key of modalStateKeys) {
-            if (key in state) {
-                state[key] = false;
-            }
-        }
+        return [{ text: message, bold: false }];
     }
-});
 
-feedbackObserver.observe(document.documentElement, {
-    attributes: true,
-    attributeFilter: ['style'],
-    subtree: true,
-});
+    return Array.isArray(message)
+        ? message.map((part) => ({
+            text: typeof part?.text === 'string' ? part.text : '',
+            bold: part?.bold === true,
+        }))
+        : [];
+};
+
+window.showToast = (message, type = 'success', duration = 2500, title = '') => {
+    const messageParts = formatToastMessage(message, type);
+    const validParts = messageParts.filter((part) => part.text !== '');
+
+    if (validParts.length === 0) {
+        console.error('A toast requires a non-empty message.');
+        return;
+    }
+
+    if (!toastTypes.has(type)) {
+        console.error(`Unsupported toast type: ${type}`);
+        type = 'info';
+    }
+
+    const durationMs = Number.isFinite(duration)
+        ? Math.min(Math.max(duration, 1000), 10000)
+        : 2500;
+
+    window.dispatchEvent(new CustomEvent('app-toast', {
+        detail: {
+            message: validParts,
+            type,
+            duration: durationMs,
+            title: typeof title === 'string' ? title.trim() : '',
+        },
+    }));
+};
+
+Alpine.data('globalToast', () => ({
+    visible: false,
+    message: '',
+    type: 'success',
+    title: 'Berhasil!',
+    timeout: null,
+    toastListener: null,
+    init() {
+        this.toastListener = (event) => {
+            this.message = event.detail.message;
+            this.type = event.detail.type;
+            this.title = event.detail.title || ({
+                error: 'Gagal!',
+                warning: 'Perhatian!',
+                info: 'Informasi',
+                success: 'Berhasil!',
+            })[this.type];
+            this.visible = true;
+            window.clearTimeout(this.timeout);
+            this.timeout = window.setTimeout(() => {
+                this.visible = false;
+            }, event.detail.duration);
+        };
+
+        window.addEventListener('app-toast', this.toastListener);
+    },
+    destroy() {
+        window.removeEventListener('app-toast', this.toastListener);
+        window.clearTimeout(this.timeout);
+    },
+    dismiss() {
+        this.visible = false;
+        window.clearTimeout(this.timeout);
+    },
+}));
 
 Alpine.data('loanQrScanner', () => ({
-    feedbackOpen: false,
-    feedbackMessage: '',
     loanListRequest: null,
     loanListLoading: false,
     loanListError: '',
@@ -70,15 +114,12 @@ Alpine.data('loanQrScanner', () => ({
     frameRequest: null,
     lastScanAt: 0,
     init() {
-        this.feedbackMessage = this.$el.dataset.feedbackMessage || '';
+        const feedbackMessage = this.$el.dataset.feedbackMessage || '';
+        if (feedbackMessage) {
+            window.showToast(feedbackMessage, 'success');
+        }
         this.scanEndpoint = this.$el.dataset.endpoint || '';
         this.csrfToken = this.$el.dataset.csrfToken || '';
-        this.feedbackOpen = Boolean(this.feedbackMessage);
-        if (this.feedbackOpen) {
-            window.setTimeout(() => {
-                this.feedbackOpen = false;
-            }, 2500);
-        }
     },
     handleLoanNavigation(event) {
         const target = event.target instanceof Element ? event.target : null;

@@ -1,4 +1,4 @@
-@props(['title' => 'InvenTrack'])
+@props(['title' => 'InvenTrack', 'notifications'])
 
 <!DOCTYPE html>
 <html lang="id">
@@ -87,7 +87,7 @@
 </head>
 
 <body x-data="userPortal()" x-init="initCart(); initCatalogAjax(); initHistoryAjax(); @if (session('cart_cleared')) clearCart() @elseif (session('cart_items_submitted')) removeSubmittedItems(@js(session('cart_items_submitted'))) @endif" class="min-h-screen bg-[#e9faf5] font-sans text-[#153c36] antialiased">
-  <x-user.navbar />
+  <x-user.navbar :notifications="$notifications" />
   {{ $slot }}
   <x-user.keranjang />
   <div

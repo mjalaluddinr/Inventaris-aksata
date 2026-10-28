@@ -4,15 +4,6 @@
     x-data="loanQrScanner" data-endpoint="{{ route('admin.peminjaman.scan', [], false) }}" data-csrf-token="{{ csrf_token() }}"
     data-feedback-message="{{ session('success', '') }}"
     @click="handleLoanNavigation($event)">
-    <div x-cloak x-show="feedbackOpen" x-transition
-      class="fixed right-4 top-4 z-[110] flex w-[min(24rem,calc(100vw-2rem))] items-start gap-3 rounded-xl border border-emerald-200 bg-white p-4 text-emerald-800 shadow-xl"
-      role="status" aria-live="polite">
-      <iconify-icon icon="mdi:check-circle" class="mt-0.5 shrink-0 text-xl text-emerald-600" aria-hidden="true"></iconify-icon>
-      <p class="min-w-0 flex-1 text-sm font-medium" x-text="feedbackMessage"></p>
-      <button type="button" @click="feedbackOpen = false" class="shrink-0 rounded-md p-1 text-slate-400 transition hover:bg-slate-100 hover:text-slate-700" aria-label="Tutup notifikasi">
-        <iconify-icon icon="mdi:close" aria-hidden="true"></iconify-icon>
-      </button>
-    </div>
     <div class="mx-auto w-full min-w-0">
       @if ($errors->any())
         <div class="mb-4 rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800" role="alert">

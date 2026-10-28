@@ -569,25 +569,6 @@
     </section>
   </main>
 
-  <div
-    class="login-modal fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-[#00385a]/65 p-5"
-    id="forgotModal" role="dialog" aria-modal="true" aria-labelledby="forgotModalTitle" aria-hidden="true">
-    <div class="login-modal-card my-auto w-full max-w-sm rounded-2xl bg-white p-7 text-center shadow-2xl sm:p-8">
-      <div class="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-[#e8f8f3] text-[#007f78]">
-        <iconify-icon icon="mdi:account-question-outline" class="text-3xl" aria-hidden="true"></iconify-icon>
-      </div>
-      <h2 id="forgotModalTitle" class="mb-2 text-xl font-bold text-[#00385a]">Lupa password?</h2>
-      <p class="mb-6 text-sm leading-relaxed text-slate-600">
-        Reset password mandiri melalui email belum tersedia. Hubungi admin agar password akun Anda diperbarui melalui
-        Manajemen Akun.
-      </p>
-      <button id="closeModalBtn" type="button"
-        class="rounded-xl bg-[#007f78] px-6 py-2.5 font-semibold text-white transition hover:bg-[#006b70] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#00385a]">
-        Mengerti
-      </button>
-    </div>
-  </div>
-
   <script>
     const togglePassword = document.getElementById('togglePassword');
     const passwordInput = document.getElementById('password');
@@ -611,45 +592,6 @@
       loginBtn.querySelector('.spinner-label').classList.remove('hidden');
     });
 
-    const forgotModal = document.getElementById('forgotModal');
-    const forgotLink = document.getElementById('forgotPasswordLink');
-    const closeModalBtn = document.getElementById('closeModalBtn');
-    let previouslyFocusedElement = null;
-
-    const setForgotModalOpen = (isOpen) => {
-      forgotModal.classList.toggle('active', isOpen);
-      forgotModal.setAttribute('aria-hidden', String(!isOpen));
-
-      if (isOpen) {
-        previouslyFocusedElement = document.activeElement;
-        closeModalBtn.focus();
-      } else if (previouslyFocusedElement instanceof HTMLElement) {
-        previouslyFocusedElement.focus();
-      }
-    };
-
-    if (@json($showForgotModal ?? false)) {
-      setForgotModalOpen(true);
-    }
-
-    forgotLink.addEventListener('click', (event) => {
-      event.preventDefault();
-      setForgotModalOpen(true);
-    });
-
-    closeModalBtn.addEventListener('click', () => setForgotModalOpen(false));
-
-    forgotModal.addEventListener('click', (event) => {
-      if (event.target === forgotModal) {
-        setForgotModalOpen(false);
-      }
-    });
-
-    document.addEventListener('keydown', (event) => {
-      if (event.key === 'Escape' && forgotModal.classList.contains('active')) {
-        setForgotModalOpen(false);
-      }
-    });
   </script>
 </body>
 

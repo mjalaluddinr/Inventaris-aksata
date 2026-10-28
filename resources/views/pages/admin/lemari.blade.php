@@ -66,7 +66,6 @@
       currentLemari: {},
       deleteModalOpen: false,
       deleteShaking: false,
-      feedbackOpen: @js(session()->has('success') || session()->has('error')),
       feedbackType: @js(session()->has('error') ? 'error' : 'success'),
       feedbackMessage: @js((string) (session('success') ?? session('error', ''))),
       feedbackLemariName: '',
@@ -103,7 +102,17 @@
                   keterangan: ''
               };
           }
-          if (this.feedbackOpen) window.setTimeout(() => this.feedbackOpen = false, 2000);
+          if (this.feedbackMessage) this.notifyFeedback();
+      },
+      notifyFeedback() {
+          const message = this.feedbackLemariName
+              ? [
+                  { text: 'Lemari ' },
+                  { text: this.feedbackLemariName, bold: true },
+                  { text: ` berhasil ${this.feedbackLemariAction}.` },
+              ]
+              : this.feedbackMessage;
+          window.showToast(message, this.feedbackType);
       },
   
       createLemari() {
@@ -170,8 +179,7 @@
                   this.openModal = false;
                   this.feedbackType = 'error';
                   this.feedbackMessage = validationMessage;
-                  this.feedbackOpen = true;
-                  window.setTimeout(() => this.feedbackOpen = false, 2000);
+                  this.notifyFeedback();
                   return false;
               }
               if (!response.ok) { throw new Error('Permintaan tidak berhasil.'); }
@@ -179,8 +187,7 @@
                   this.openModal = false;
                   this.feedbackType = 'error';
                   this.feedbackMessage = errorMessage;
-                  this.feedbackOpen = true;
-                  window.setTimeout(() => this.feedbackOpen = false, 2000);
+                  this.notifyFeedback();
                   return false;
               }
               if (!successMessage) { throw new Error('Server tidak mengirim konfirmasi penyimpanan.'); }
@@ -188,16 +195,14 @@
               this.feedbackLemariName = lemariName;
               this.feedbackLemariAction = lemariAction;
               this.feedbackMessage = this.normalizeLemariMessage(successMessage);
-              this.feedbackOpen = true;
-              window.setTimeout(() => this.feedbackOpen = false, 2000);
+              this.notifyFeedback();
               await this.filterLemari();
               return true;
           } catch (error) {
               this.openModal = false;
               this.feedbackType = 'error';
               this.feedbackMessage = error.message || 'Terjadi kesalahan saat menyimpan.';
-              this.feedbackOpen = true;
-              window.setTimeout(() => this.feedbackOpen = false, 2000);
+              this.notifyFeedback();
               return false;
           } finally { this.formBusy = false; }
       },
@@ -225,7 +230,6 @@
               return;
           }
           this.openModal = false;
-          this.feedbackOpen = false;
       },
       async submitDelete() {
           if (!this.pendingDeleteForm) return;
@@ -401,7 +405,7 @@
                         @csrf @method('DELETE')
                         <button type="submit"
                           class="inline-flex min-h-9 items-center gap-1.5 rounded-md border border-rose-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-rose-600 transition hover:border-rose-300 hover:bg-rose-50 focus:outline-none focus:ring-2 focus:ring-rose-400">
-                          <iconify-icon icon="mdi:delete-outline" width="16"></iconify-icon> Delete
+                          <iconify-icon icon="mdi:delete-outline" width="16" aria-hidden="true"></iconify-icon> Hapus
                         </button>
                       </form>
                     </div>
@@ -589,9 +593,10 @@
           <button type="button" @click="cancelDelete()" :disabled="formBusy"
             class="rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-slate-400">Batal</button>
           <button type="button" @click="submitDelete()" :disabled="formBusy" :aria-busy="formBusy.toString()"
-            class="inline-flex items-center justify-center rounded-md border border-rose-300 bg-rose-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-rose-700 focus:outline-none focus:ring-2 focus:ring-rose-500 focus:ring-offset-2 disabled:cursor-wait disabled:opacity-70">
+            class="inline-flex min-w-28 items-center justify-center gap-2 rounded-md border border-rose-300 bg-rose-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-rose-700 focus:outline-none focus:ring-2 focus:ring-rose-500 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-70">
             <iconify-icon x-show="formBusy" icon="mdi:loading" class="animate-spin" width="18"
               aria-hidden="true"></iconify-icon>
+            <iconify-icon x-show="!formBusy" icon="mdi:delete-outline" class="text-lg" aria-hidden="true"></iconify-icon>
             <span x-show="!formBusy">Ya, Hapus</span>
             <span x-show="formBusy" class="sr-only">Sedang menghapus...</span>
           </button>
@@ -600,42 +605,6 @@
     </div>
     </template>
     @endif
-
-    {{-- TOAST: Feedback --}}
-    <template x-teleport="body">
-    <div x-cloak x-show="feedbackOpen" x-transition:enter="transition ease-out duration-200"
-      x-transition:enter-start="translate-x-4 opacity-0" x-transition:enter-end="translate-x-0 opacity-100"
-      x-transition:leave="transition ease-in duration-150" x-transition:leave-start="opacity-100"
-      x-transition:leave-end="translate-x-4 opacity-0"
-      class="pointer-events-none fixed right-4 top-24 z-[120] w-[calc(100%-2rem)] max-w-md sm:right-6"
-      :role="feedbackType === 'error' ? 'alert' : 'status'" aria-live="polite" aria-atomic="true">
-      <div class="pointer-events-auto flex items-start gap-3 rounded-xl border border-l-4 bg-white p-4 shadow-[0_16px_48px_rgba(2,25,41,0.18)]"
-        :class="feedbackType === 'error' ? 'border-rose-200 border-l-rose-500' : 'border-emerald-200 border-l-emerald-500'">
-        <iconify-icon :icon="feedbackType === 'error' ? 'mdi:close-circle' : 'mdi:check-circle'"
-          class="mt-0.5 shrink-0" :class="feedbackType === 'error' ? 'text-rose-600' : 'text-emerald-600'"
-          width="22" aria-hidden="true"></iconify-icon>
-        <div class="min-w-0 flex-1">
-          <p class="font-semibold text-slate-900" x-text="feedbackType === 'error' ? 'Gagal!' : 'Berhasil!'"></p>
-          <p x-show="!feedbackLemariName" class="mt-1 break-words text-sm text-slate-600" x-text="feedbackMessage"></p>
-          <p x-show="feedbackLemariName" class="mt-1 break-words text-sm text-slate-600">
-            <template x-if="feedbackLemariAction === 'dihapus'">
-              <span><strong class="font-bold text-slate-800" x-text="feedbackLemariName"></strong> berhasil dihapus.</span>
-            </template>
-            {{-- ASVS 1.2.1: x-text renders the submitted lemari name as text, not HTML. --}}
-            <template x-if="feedbackLemariAction !== 'dihapus'">
-              <span>Lemari <strong class="font-bold text-slate-800" x-text="feedbackLemariName"></strong>
-                berhasil <span x-text="feedbackLemariAction"></span>.</span>
-            </template>
-          </p>
-        </div>
-        <button type="button" @click="feedbackOpen = false; feedbackLemariName = ''; feedbackLemariAction = ''"
-          class="-mr-1 -mt-1 shrink-0 rounded-md p-1 text-slate-400 transition hover:bg-slate-100 hover:text-slate-700 focus:outline-none focus:ring-2 focus:ring-slate-400"
-          aria-label="Tutup notifikasi">
-          <iconify-icon icon="mdi:close" width="18" aria-hidden="true"></iconify-icon>
-        </button>
-      </div>
-    </div>
-    </template>
 
   </div>
 </x-layout.admin>

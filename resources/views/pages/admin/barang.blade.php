@@ -41,9 +41,9 @@
           'nama_lemari' => $lemari->nama_lemari
       ])->values()),
       deleteModalOpen: false,
+      deleteLoading: false,
       pendingDeleteForm: null,
       pendingDeleteName: '',
-      feedbackOpen: @js(session()->has('success') || session()->has('error')),
       feedbackType: @js(session()->has('error') ? 'error' : 'success'),
       feedbackMessage: @js(session('success') ?? (session('error') ?? ($errors->any() ? $errors->first() : ''))),
       feedbackBarangName: @js(session('barang_feedback_name', '')),
@@ -51,13 +51,23 @@
       formSubmitting: false,
       init() {
           if (@js($errors->any())) {
-              this.feedbackOpen = true;
               this.feedbackType = 'error';
+              this.feedbackMessage = @js($errors->first());
           }
           this.formAction = this.modalMode === 'edit' && this.currentItem.barang_id ?
               this.itemUpdateUrl(this.currentItem.barang_id) :
               this.createUrl;
-          if (this.feedbackOpen) window.setTimeout(() => this.feedbackOpen = false, 2000);
+          if (this.feedbackMessage || this.feedbackBarangName) this.notifyFeedback();
+      },
+      notifyFeedback() {
+          const message = this.feedbackBarangName ?
+              [
+                  { text: 'Barang ' },
+                  { text: this.feedbackBarangName, bold: true },
+                  { text: ` berhasil ${this.feedbackBarangAction}.` }
+              ] :
+              this.feedbackMessage;
+          window.showToast(message, this.feedbackType);
       },
       itemUpdateUrl(id) {
           return this.updateUrlTemplate.replace('__BARANG__', encodeURIComponent(id));
@@ -156,13 +166,12 @@
               this.feedbackType = 'success';
               this.feedbackBarangName = '';
               this.feedbackMessage = 'Status barang berhasil diperbarui.';
-              this.feedbackOpen = true;
-              window.setTimeout(() => this.feedbackOpen = false, 2000);
+              this.notifyFeedback();
           } catch (error) {
               this.feedbackType = 'error';
               this.feedbackBarangName = '';
               this.feedbackMessage = error.message || 'Status barang gagal diperbarui.';
-              this.feedbackOpen = true;
+              this.notifyFeedback();
           } finally {
               button.disabled = false;
           }
@@ -199,17 +208,55 @@
           this.modalOpen = true;
       },
       requestDelete(form) {
+          if (this.deleteLoading) return;
           this.pendingDeleteForm = form;
           this.pendingDeleteName = form.dataset.itemName || '';
           this.deleteModalOpen = true;
       },
       cancelDelete() {
+          if (this.deleteLoading) return;
           this.deleteModalOpen = false;
           this.pendingDeleteForm = null;
           this.pendingDeleteName = '';
       },
-      confirmDelete() {
-          if (this.pendingDeleteForm) this.pendingDeleteForm.submit();
+      async confirmDelete() {
+          if (!this.pendingDeleteForm || this.deleteLoading) return;
+
+          this.deleteLoading = true;
+
+          try {
+              const response = await fetch(this.pendingDeleteForm.action, {
+                  method: 'POST',
+                  headers: {
+                      'Accept': 'application/json',
+                      'X-Requested-With': 'XMLHttpRequest'
+                  },
+                  body: new FormData(this.pendingDeleteForm)
+              });
+              let result;
+              try {
+                  result = await response.json();
+              } catch {
+                  throw new Error('Respons penghapusan tidak dapat dibaca.');
+              }
+
+              if (!response.ok) {
+                  window.showToast(
+                      typeof result?.message === 'string' ?
+                          result.message :
+                          'Barang gagal dihapus. Coba lagi nanti.',
+                      'error'
+                  );
+                  return;
+              }
+
+              window.location.reload();
+          } catch {
+              window.showToast('Barang gagal dihapus. Periksa koneksi lalu coba lagi.', 'error');
+          } finally {
+              this.deleteLoading = false;
+              this.cancelDelete();
+          }
       },
       closeModal() {
           this.modalOpen = false;
@@ -217,8 +264,7 @@
       handleEscape() {
           this.modalOpen = false;
           this.importOpen = false;
-          this.deleteModalOpen = false;
-          this.feedbackOpen = false;
+          this.cancelDelete();
       },
       selectImportFile(files = this.$refs.barangImportFile.files) {
           const file = files[0];
@@ -290,10 +336,9 @@
               this.importResult = result.message;
               this.importErrors = result.errors || [];
               this.importErrorsTruncated = Boolean(result.errors_truncated);
-              this.feedbackOpen = true;
               this.feedbackType = result.failed_rows > 0 ? 'error' : 'success';
               this.feedbackMessage = result.message;
-              window.setTimeout(() => this.feedbackOpen = false, 2000);
+              this.notifyFeedback();
               window.location.assign(@js(route('admin.barang')));
           } catch (error) {
               this.importError = error.message || 'File tidak dapat diimpor. Periksa koneksi lalu coba lagi.';
@@ -304,46 +349,11 @@
   }" @keydown.escape.window="handleEscape()"
     class="-mx-8 -mt-8 -mb-8 min-h-[calc(100vh-10rem)] bg-[#E8F8F4]">
     <div class="space-y-4 p-4 sm:p-8">
-      <div x-cloak x-show="feedbackOpen" x-transition:enter="transition ease-out duration-200"
-        x-transition:enter-start="translate-x-4 opacity-0" x-transition:enter-end="translate-x-0 opacity-100"
-        x-transition:leave="transition ease-in duration-150" x-transition:leave-start="opacity-100"
-        x-transition:leave-end="translate-x-4 opacity-0"
-        class="pointer-events-none fixed right-4 top-24 z-[120] w-[calc(100%-2rem)] max-w-md sm:right-6"
-        :role="feedbackType === 'error' ? 'alert' : 'status'" aria-live="polite" aria-atomic="true">
-        <div
-          class="pointer-events-auto flex items-start gap-3 rounded-xl border border-l-4 bg-white p-4 shadow-[0_16px_48px_rgba(2,25,41,0.18)]"
-          :class="feedbackType === 'error' ? 'border-rose-200 border-l-rose-500' : 'border-emerald-200 border-l-emerald-500'">
-          <iconify-icon :icon="feedbackType === 'error' ? 'mdi:close-circle' : 'mdi:check-circle'"
-            class="mt-0.5 shrink-0" :class="feedbackType === 'error' ? 'text-rose-600' : 'text-emerald-600'"
-            width="22" aria-hidden="true"></iconify-icon>
-          <div class="min-w-0 flex-1">
-            <p class="font-semibold text-slate-900" x-text="feedbackType === 'error' ? 'Gagal!' : 'Berhasil!'"></p>
-            <p x-show="!feedbackBarangName" class="mt-1 break-words text-sm text-slate-600" x-text="feedbackMessage">
-            </p>
-            <p x-show="feedbackBarangName" class="mt-1 break-words text-sm text-slate-600">
-              <template x-if="feedbackBarangAction === 'dihapus'">
-                <span>Barang <strong class="font-bold text-slate-800" x-text="feedbackBarangName"></strong>
-                  berhasil dihapus.</span>
-              </template>
-              <template x-if="feedbackBarangAction !== 'dihapus'">
-                <span>Barang <strong class="font-bold text-slate-800" x-text="feedbackBarangName"></strong>
-                  berhasil <span x-text="feedbackBarangAction"></span>.</span>
-              </template>
-            </p>
-          </div>
-          <button type="button" @click="feedbackOpen = false"
-            class="-mr-1 -mt-1 shrink-0 rounded-md p-1 text-slate-400 transition hover:bg-slate-100 hover:text-slate-700 focus:outline-none focus:ring-2 focus:ring-slate-400"
-            aria-label="Tutup notifikasi">
-            <iconify-icon icon="mdi:close" width="18" aria-hidden="true"></iconify-icon>
-          </button>
-        </div>
-      </div>
-
       <form method="GET" action="{{ route('admin.barang') }}" x-ref="barangFilterForm"
         @submit.prevent="filterBarang()" class="space-y-3">
         <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           @if(auth()->user()?->canManageInventory())
-          <div class="flex flex-wrap gap-2">
+          <div class="flex w-full flex-wrap items-center gap-2">
             <button type="button" @click="createItem()"
               class="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-[#009F91] bg-[#00B19C] px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-[#009A87] focus:outline-none focus:ring-2 focus:ring-[#00B19C] focus:ring-offset-2">
               <iconify-icon icon="mdi:plus" width="18" aria-hidden="true"></iconify-icon>
@@ -353,7 +363,7 @@
               class="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm transition hover:border-emerald-400 hover:bg-emerald-50 focus:outline-none focus:ring-2 focus:ring-[#00B19C] focus:ring-offset-2">
               <iconify-icon icon="mdi:file-excel" class="text-emerald-600" width="18"
                 aria-hidden="true"></iconify-icon>
-              Import Excel
+              Import Barang
             </button>
           </div>
           @endif
@@ -479,7 +489,7 @@
                         {{ $barang->stok_tersedia }}/{{ $barang->stok_total }} {{ $barang->satuan }}
                       </p>
                     </td>
-                    <td class="px-4 py-3 text-sm text-slate-700">{{ $barang->kategori?->nama_kategori ?? '-' }}</td>
+                    <td class="whitespace-nowrap px-4 py-3 text-sm text-slate-700">{{ $barang->kategori?->nama_kategori ?? '-' }}</td>
                     <td class="px-4 py-3">
                       @if(auth()->user()?->canManageInventory())
                       <form action="{{ route('admin.barang.update', $barang->barang_id) }}" method="POST"
@@ -534,7 +544,7 @@
                         <input type="hidden" name="kelayakan" data-next-status
                           value="{{ $barangEligibility === 'layak' ? 'tidak_layak' : 'layak' }}">
                         <button type="submit"
-                          class="inline-flex w-24 cursor-pointer items-center justify-center gap-2 whitespace-nowrap rounded-md px-2 py-1 text-xs font-medium transition-colors duration-200 hover:opacity-80 focus:outline-none focus:ring-2 focus:ring-[#08A9D6] disabled:cursor-wait disabled:opacity-60 {{ $barangEligibility === 'layak' ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800' }}">
+                          class="ml-1 inline-flex w-28 cursor-pointer items-center justify-center gap-2 whitespace-nowrap rounded-md px-3 py-1 text-xs font-medium transition-colors duration-200 hover:opacity-80 focus:outline-none focus:ring-2 focus:ring-[#08A9D6] disabled:cursor-wait disabled:opacity-60 {{ $barangEligibility === 'layak' ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800' }}">
                           <span class="relative flex h-2 w-2 shrink-0">
                             <span data-status-ping
                               class="absolute inline-flex h-full w-full animate-ping rounded-full opacity-75 {{ $barangEligibility === 'layak' ? 'bg-emerald-400' : 'bg-rose-400' }}"></span>
@@ -545,7 +555,7 @@
                         </button>
                       </form>
                       @else
-                        <span class="inline-flex w-24 items-center justify-center rounded-md px-2 py-1 text-xs font-medium {{ $barangEligibility === 'layak' ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800' }}">
+                        <span class="ml-1 inline-flex w-28 items-center justify-center rounded-md px-3 py-1 text-xs font-medium {{ $barangEligibility === 'layak' ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800' }}">
                           {{ $barangEligibility === 'layak' ? 'Layak' : 'Tidak Layak' }}
                         </span>
                       @endif
@@ -726,8 +736,7 @@
                     <iconify-icon icon="mdi:file-excel-outline" width="22" aria-hidden="true"></iconify-icon>
                   </span>
                   <div>
-                    <h2 id="barang-import-title" class="text-base font-semibold text-slate-800">Import Data Barang
-                      (Excel)</h2>
+                    <h2 id="barang-import-title" class="text-base font-semibold text-slate-800">Import Data Barang</h2>
                     <p class="mt-1 text-xs text-slate-500">Pilih file untuk menambahkan beberapa barang sekaligus.</p>
                   </div>
                 </div>
@@ -773,8 +782,7 @@
                           <iconify-icon icon="mdi:file-excel" width="26" aria-hidden="true"></iconify-icon>
                         </span>
                         <span class="min-w-0 flex-1">
-                          <span class="block truncate text-sm font-semibold text-slate-800"
-                            x-text="importFileName"></span>
+                          <span class="block text-sm font-semibold text-slate-800">File Excel dipilih</span>
                           <span class="mt-1 block text-xs text-emerald-800">
                             File siap diimpor <span class="text-emerald-700" x-text="importFileSize"></span>
                           </span>
@@ -827,7 +835,6 @@
 
               <div
                 class="flex flex-col-reverse gap-2 border-t border-slate-200 bg-slate-50 px-5 py-3 sm:flex-row sm:items-center sm:justify-between">
-                <span class="truncate text-xs text-slate-500" x-text="importFileName"></span>
                 <div class="flex justify-end gap-2">
                   <button type="button" @click="closeImport()" :disabled="importLoading"
                     class="rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-slate-400 disabled:cursor-not-allowed disabled:opacity-50">
@@ -942,21 +949,36 @@
                   @enderror
                 </div>
                 <div>
-                  <label for="lemari_id" class="mb-1 block text-xs font-medium text-slate-700">Lemari</label>
-                  <select id="lemari_id" name="lemari_id[]" x-model="currentItem.lemari_ids" multiple size="4"
-                    :disabled="!currentItem.ruangan_id"
-                    class="theme-scrollbar w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 focus:border-[#08A9D6] focus:outline-none focus:ring-2 focus:ring-[#08A9D6]/20">
+                  <span id="lemari-label" class="mb-1 block text-xs font-medium text-slate-700">Lemari</span>
+                  <div role="group" aria-labelledby="lemari-label"
+                    class="max-h-44 space-y-2 overflow-y-auto rounded-lg border border-slate-200 bg-slate-50 p-2">
                     <template x-for="lemari in lemariOptions.filter((item) => item.ruangan_id === currentItem.ruangan_id)"
                       :key="lemari.lemari_id">
-                      <option :value="lemari.lemari_id" x-text="lemari.nama_lemari"></option>
+                      <label class="flex cursor-pointer items-center gap-3 rounded-md border border-transparent bg-white px-3 py-2.5 text-sm text-slate-700 transition hover:border-[#08A9D6]/40 hover:bg-[#F0FDFA] has-[:checked]:border-[#08A9D6] has-[:checked]:bg-[#F0FDFA]">
+                        <input type="checkbox" name="lemari_id[]" :value="lemari.lemari_id"
+                          x-model="currentItem.lemari_ids" :disabled="!currentItem.ruangan_id"
+                          class="h-4 w-4 rounded border-slate-300 text-[#008f7e] focus:ring-[#08A9D6]">
+                        <span class="min-w-0 flex-1 truncate" x-text="lemari.nama_lemari"></span>
+                        <span x-show="currentItem.lemari_ids.includes(lemari.lemari_id)"
+                          class="text-xs font-semibold text-[#087F70]">Dipilih</span>
+                      </label>
                     </template>
-                  </select>
-                  <p class="mt-1 text-xs text-slate-500">Pilih satu atau beberapa lemari, atau biarkan kosong jika lokasinya hanya ruangan.</p>
+                    <p x-show="!currentItem.ruangan_id" class="px-2 py-2 text-center text-xs text-slate-500">
+                      Pilih ruangan untuk melihat lemari.
+                    </p>
+                    <p x-show="currentItem.ruangan_id && !lemariOptions.some((item) => item.ruangan_id === currentItem.ruangan_id)"
+                      class="px-2 py-2 text-xs text-slate-500">
+                      Belum ada lemari di ruangan ini.
+                    </p>
+                  </div>
+                  <p x-show="currentItem.lemari_ids.length > 0"
+                    x-text="currentItem.lemari_ids.length + ' lemari dipilih'"
+                    class="mt-1 text-xs font-medium text-[#087F70]"></p>
                   @error('lemari_id.*')
                     <p class="mt-1 text-xs text-rose-700">{{ $message }}</p>
                   @enderror
                 </div>
-                <div x-show="modalMode === 'create'">
+                <div x-show="modalMode === 'create'" class="order-3">
                   <label for="create_kondisi" class="mb-1 block text-xs font-medium text-slate-700">Kondisi
                     <span x-show="modalMode === 'create' && !currentItem.kondisi"
                       class="text-rose-500">*</span></label>
@@ -970,7 +992,7 @@
                     <p class="mt-1 text-xs text-rose-700">{{ $message }}</p>
                   @enderror
                 </div>
-                <div x-show="modalMode === 'create'">
+                <div x-show="modalMode === 'create'" class="order-4">
                   <label for="create_kelayakan" class="mb-1 block text-xs font-medium text-slate-700">Kelayakan
                     <span x-show="modalMode === 'create' && !currentItem.kelayakan"
                       class="text-rose-500">*</span></label>
@@ -984,7 +1006,7 @@
                     <p class="mt-1 text-xs text-rose-700">{{ $message }}</p>
                   @enderror
                 </div>
-                <div>
+                <div class="order-1">
                   <label for="stok_total" class="mb-1 block text-xs font-medium text-slate-700">Jumlah Total
                     <span x-show="modalMode === 'create' && String(currentItem.stok_total ?? '').trim() === ''"
                       class="text-rose-500">*</span></label>
@@ -995,7 +1017,7 @@
                     <p class="mt-1 text-xs text-rose-700">{{ $message }}</p>
                   @enderror
                 </div>
-                <div>
+                <div class="order-2">
                   <label for="stok_tersedia" class="mb-1 block text-xs font-medium text-slate-700">Stok Tersedia
                     <span x-show="modalMode === 'create' && String(currentItem.stok_tersedia ?? '').trim() === ''"
                       class="text-rose-500">*</span></label>
@@ -1006,7 +1028,7 @@
                     <p class="mt-1 text-xs text-rose-700">{{ $message }}</p>
                   @enderror
                 </div>
-                <div>
+                <div class="order-5">
                   <label for="satuan" class="mb-1 block text-xs font-medium text-slate-700">Satuan
                     <span x-show="modalMode === 'create' && !String(currentItem.satuan ?? '').trim()"
                       class="text-rose-500">*</span></label>
@@ -1019,8 +1041,7 @@
                   @enderror
                 </div>
                 <div class="sm:col-span-2">
-                  <label for="spesifikasi" class="mb-1 block text-xs font-medium text-slate-700">Spesifikasi <span
-                      class="font-normal text-slate-400">(opsional)</span></label>
+                  <label for="spesifikasi" class="mb-1 block text-xs font-medium text-slate-700">Spesifikasi</label>
                   <textarea id="spesifikasi" name="spesifikasi" maxlength="255" rows="3" x-model="currentItem.spesifikasi"
                     class="w-full resize-y rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 focus:border-[#08A9D6] focus:outline-none focus:ring-2 focus:ring-[#08A9D6]/20"
                     placeholder="Keterangan teknis barang"></textarea>
@@ -1069,12 +1090,18 @@
             </div>
             <div class="flex justify-center gap-3 border-t border-slate-200 bg-slate-50 px-6 py-4">
               <button type="button" @click="cancelDelete()"
+                :disabled="deleteLoading"
                 class="rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-slate-400">
                 Batal
               </button>
               <button type="button" @click="confirmDelete()"
-                class="rounded-md border border-rose-300 bg-rose-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-rose-700 focus:outline-none focus:ring-2 focus:ring-rose-500 focus:ring-offset-2">
-                Ya, Hapus
+                :disabled="deleteLoading" :aria-busy="deleteLoading"
+                class="inline-flex min-w-28 items-center justify-center gap-2 rounded-md border border-rose-300 bg-rose-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-rose-700 focus:outline-none focus:ring-2 focus:ring-rose-500 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-70">
+                <iconify-icon x-show="deleteLoading" icon="mdi:loading" class="animate-spin text-lg"
+                  aria-hidden="true"></iconify-icon>
+                <iconify-icon x-show="!deleteLoading" icon="mdi:delete-outline" class="text-lg"
+                  aria-hidden="true"></iconify-icon>
+                <span x-text="deleteLoading ? 'Menghapus...' : 'Ya, Hapus'"></span>
               </button>
             </div>
           </section>

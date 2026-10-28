@@ -1,39 +1,5 @@
-@php
-  $page = request()->query('page', 'home');
-  $page = in_array($page, ['home', 'catalog', 'apply', 'history'], true) ? $page : 'home';
-  $currentUser = auth()->user();
-  $userId = $currentUser?->akun_id;
-  $categories =
-      $page === 'home'
-          ? \App\Models\Kategori::query()->withCount('barangs')->orderBy('nama_kategori')->get()
-          : collect();
-  $featuredItems =
-      $page === 'home'
-          ? \App\Models\Barang::query()
-              ->with('kategori')
-              ->withCount('detailPeminjamans')
-              ->where('stok_tersedia', '>', 0)
-              ->orderByDesc('detail_peminjamans_count')
-              ->orderBy('stok_tersedia')
-              ->limit(4)
-              ->get()
-          : collect();
-  $inventoryKinds = $page === 'home' ? \App\Models\Barang::query()->count() : 0;
-  $userLoans =
-      $page === 'home' && $userId
-          ? \App\Models\DetailPeminjaman::query()
-              ->whereHas('peminjaman', fn($query) => $query->where('akun_id', $userId))
-              ->get(['status'])
-          : collect();
-  $loanCounts = [
-      'dipinjam' => $userLoans->where('status', 'dipinjam')->count(),
-      'pending' => $userLoans->where('status', 'pending')->count(),
-      'dikembalikan' => $userLoans->where('status', 'dikembalikan')->count(),
-      'closed' => $userLoans->whereIn('status', ['ditolak', 'dibatalkan'])->count(),
-  ];
-@endphp
-
 <x-layout.user
+  :notifications="$notifications"
   title="{{ match ($page) {'catalog' => 'Katalog Barang','apply' => 'Ajukan Peminjaman','history' => 'Riwayat Peminjaman',default => 'Beranda'} }} - InvenTrack">
   @if ($page === 'home')
     <x-auth.login-welcome />
@@ -95,7 +61,7 @@
         aria-label="Ringkasan peminjaman">
         @foreach ([['count' => $loanCounts['dipinjam'], 'label' => 'Sedang dipinjam', 'color' => '#0bb6a6'], ['count' => $loanCounts['pending'], 'label' => 'Menunggu konfirmasi', 'color' => '#087f65'], ['count' => $loanCounts['dikembalikan'], 'label' => 'Riwayat selesai', 'color' => '#5975d5'], ['count' => $loanCounts['closed'], 'label' => 'Ditolak / dibatalkan', 'color' => '#66716f']] as $summary)
           <article
-            class="user-card-enter flex min-h-24 flex-col justify-center rounded-2xl border-l-[7px] bg-white px-6 py-4 shadow-[0_3px_5px_rgba(20,55,48,0.18)]"
+            class="user-card-enter flex min-h-24 max-w-[22rem] flex-col justify-center rounded-2xl border-l-[7px] bg-white px-6 py-4 shadow-[0_3px_5px_rgba(20,55,48,0.18)]"
             style="border-color: {{ $summary['color'] }}; animation-delay: {{ $loop->index * 80 }}ms">
             <strong class="text-3xl font-bold leading-none">{{ number_format($summary['count']) }}</strong>
             <span class="mt-1.5 text-sm text-slate-500">{{ $summary['label'] }}</span>
@@ -151,7 +117,7 @@
               <div class="grid grid-cols-[repeat(auto-fit,minmax(min(100%,18rem),1fr))] gap-4 lg:gap-6">
                 @foreach ($categories as $category)
                   <a href="#katalog"
-                    class="user-card-enter min-h-36 rounded-2xl bg-white px-8 py-5 shadow-[0_2px_4px_rgba(20,55,48,0.2)] transition hover:-translate-y-0.5 hover:shadow-lg"
+                    class="user-card-enter w-[min(78vw,18rem)] rounded-2xl bg-white px-6 py-5 shadow-[0_2px_4px_rgba(20,55,48,0.2)] transition hover:-translate-y-0.5 hover:shadow-lg"
                     style="animation-delay: {{ $loop->index * 70 }}ms">
                     <strong
                       class="block text-4xl font-bold leading-none text-[#00866f]">{{ number_format($category->barangs_count) }}</strong>
@@ -173,37 +139,38 @@
           <h2 id="featured-heading" class="text-lg font-bold">Sering dipinjam</h2>
         </div>
         @if ($featuredItems->isNotEmpty())
-          <div class="grid grid-cols-[repeat(auto-fit,minmax(min(100%,18rem),1fr))] gap-4">
+          <div class="grid min-w-0 grid-cols-[repeat(auto-fill,minmax(min(100%,18rem),18rem))] justify-between gap-x-6 gap-y-6">
             @foreach ($featuredItems as $item)
               <article
-                class="user-card-enter overflow-hidden rounded-xl border border-slate-200 border-t-[7px] border-t-[#00b19c] bg-white shadow-[0_2px_4px_rgba(20,55,48,0.2)]"
+                class="user-card-enter flex min-h-44 flex-col overflow-hidden rounded-xl border border-[#c7e4dc] border-t-[5px] border-t-[#00b19c] bg-white shadow-[0_2px_4px_rgba(20,55,48,0.14)]"
                 style="animation-delay: {{ $loop->index * 70 }}ms">
-                <div class="p-4">
+                <div class="flex flex-1 flex-col p-3.5">
                   <div class="flex items-center justify-between gap-2">
                     <span
-                      class="max-w-[65%] truncate rounded-full bg-slate-100 px-2 py-1 text-[11px] font-medium text-slate-700">{{ $item->kategori?->nama_kategori ?? 'Tanpa kategori' }}</span>
+                      class="max-w-[65%] truncate rounded-full bg-slate-100 px-2 py-1 text-[10px] font-medium text-slate-700">{{ $item->kategori?->nama_kategori ?? 'Tanpa kategori' }}</span>
                     <span
-                      class="rounded-full bg-[#d5f7ec] px-2.5 py-1 text-[11px] font-semibold text-[#16745e]">Tersedia</span>
+                      class="rounded-full bg-[#d5f7ec] px-2.5 py-1 text-[10px] font-semibold text-[#16745e]">Tersedia</span>
                   </div>
-                  <h3 class="mt-2 truncate font-semibold text-slate-900" title="{{ $item->nama_barang }}">
+                  <h3 class="mt-2 truncate text-sm font-bold text-slate-900" title="{{ $item->nama_barang }}">
                     {{ $item->nama_barang }}</h3>
-                  <p class="mt-2 truncate text-xs text-slate-500">{{ $item->kode_barang }} · {{ $item->satuan }}</p>
-                  <p class="mt-2 text-sm"><strong>{{ number_format($item->stok_tersedia) }}</strong><span
-                      class="text-slate-500"> / {{ number_format($item->stok_total) }} {{ $item->satuan }}
-                      tersedia</span></p>
-                  <div class="mt-2 h-2 overflow-hidden rounded-full bg-slate-100" role="progressbar"
-                    aria-label="Persediaan {{ $item->nama_barang }}" aria-valuenow="{{ $item->stok_tersedia }}"
+                  <p class="mt-1 truncate text-[10px] text-slate-500">{{ $item->kode_barang }} · {{ $item->satuan }}</p>
+                  <p class="mt-2 text-xs"><strong>{{ number_format($item->stok_tersedia) }}</strong><span
+                      class="text-slate-500"> / {{ number_format($item->stok_total) }} tersedia</span></p>
+                  <div class="mt-1.5 h-1.5 overflow-hidden rounded-full bg-slate-100" role="progressbar"
+                    aria-label="Stok tersedia {{ $item->nama_barang }}" aria-valuenow="{{ $item->stok_tersedia }}"
                     aria-valuemin="0" aria-valuemax="{{ max($item->stok_total, 1) }}">
                     <span class="block h-full rounded-full bg-[#00b19c]"
                       style="width: {{ min(100, (int) round(($item->stok_tersedia / max($item->stok_total, 1)) * 100)) }}%"></span>
                   </div>
-                  <div class="mt-3 flex items-center justify-between gap-2">
-                    <span class="text-xs text-slate-500">{{ number_format($item->detail_peminjamans_count) }} kali
-                      dipinjam</span>
+                  <div class="mt-auto flex items-center justify-between gap-2 pt-3">
                     <button type="button"
                       @click="addToCart({ id: @js($item->barang_id), name: @js($item->nama_barang), code: @js($item->kode_barang), unit: @js($item->satuan), stock: {{ (int) $item->stok_tersedia }}, category: @js($item->kategori?->nama_kategori ?? 'Tanpa kategori') })"
-                      class="rounded-lg bg-[#00c99a] px-3 py-2 text-xs font-semibold text-[#003f38] transition hover:bg-[#36e9b3]">+
+                      class="rounded-full bg-[#00d69f] px-3 py-1.5 text-[10px] font-bold text-[#003f38] transition hover:bg-[#36e9b3] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#008b7a] focus-visible:ring-offset-2">+
                       Keranjang</button>
+                    <button type="button"
+                      @click="openLoanModal({ id: @js($item->barang_id), name: @js($item->nama_barang), code: @js($item->kode_barang), unit: @js($item->satuan), stock: {{ (int) $item->stok_tersedia }}, category: @js($item->kategori?->nama_kategori ?? 'Tanpa kategori') })"
+                      class="rounded-full border border-slate-300 px-3 py-1.5 text-[10px] font-semibold text-slate-800 transition hover:border-[#00a88f] hover:text-[#007f70] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#008b7a] focus-visible:ring-offset-2">Pinjam
+                      Sekarang</button>
                   </div>
                 </div>
               </article>

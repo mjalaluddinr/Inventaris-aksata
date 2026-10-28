@@ -9,6 +9,7 @@ use App\Http\Requests\ManageUser\UpdateRequest;
 use App\Models\LogInput;
 use App\Models\User;
 use Exception;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
@@ -23,9 +24,17 @@ class ManageUser extends Controller
     {
         $filters = $request->validate([
             'search' => ['nullable', 'string', 'max:100'],
+            'password_reset' => ['nullable', 'uuid'],
         ]);
         $search = trim($filters['search'] ?? '');
         $searchTerms = preg_split('/\s+/', $search, -1, PREG_SPLIT_NO_EMPTY) ?: [];
+        $passwordResetUser = null;
+
+        if (filled($filters['password_reset'] ?? null)) {
+            $passwordResetUser = User::query()->findOrFail($filters['password_reset']);
+            $this->authorizeAccountManagement($passwordResetUser);
+            abort_unless($passwordResetUser->must_change_password, 404);
+        }
 
         $users = User::query()
             ->with('privileges')
@@ -45,12 +54,13 @@ class ManageUser extends Controller
                     });
                 }
             })
+            ->orderByDesc('must_change_password')
             ->latest()
             ->paginate(10)
             ->withQueryString();
 
         /** @var View $renderedView */
-        $renderedView = view('pages.admin.akun', compact('users', 'filters'));
+        $renderedView = view('pages.admin.akun', compact('users', 'filters', 'passwordResetUser'));
 
         return $renderedView->fragmentIf($request->ajax(), 'account-results');
     }
@@ -98,6 +108,48 @@ class ManageUser extends Controller
         $this->syncPrivilege($user, $user->role, $validated['privileges'] ?? []);
 
         return redirect()->route('admin.akun.index')->with('success', 'Akun berhasil diupdate.');
+    }
+
+    public function editPassword(User $user): RedirectResponse
+    {
+        $this->authorizeAccountManagement($user);
+        abort_unless($user->must_change_password, 404);
+
+        return redirect()->route('admin.akun.index', ['password_reset' => $user->getKey()]);
+    }
+
+    public function resetPassword(Request $request, User $user): RedirectResponse
+    {
+        $this->authorizeAccountManagement($user);
+        $validator = Validator::make($request->all(), [
+            'new_password' => ['required', 'string', 'min:8', 'confirmed'],
+        ]);
+
+        if ($validator->fails()) {
+            return redirect()
+                ->route('admin.akun.index', ['password_reset' => $user->getKey()])
+                ->withErrors($validator)
+                ->withInput($request->except(['new_password', 'new_password_confirmation']));
+        }
+
+        $validated = $validator->validated();
+
+        DB::transaction(function () use ($user, $validated): void {
+            $lockedUser = User::query()
+                ->whereKey($user->getKey())
+                ->lockForUpdate()
+                ->firstOrFail();
+
+            abort_unless($lockedUser->must_change_password, 404);
+
+            $lockedUser->password_hash = $validated['new_password'];
+            $lockedUser->must_change_password = false;
+            $lockedUser->save();
+        });
+
+        return redirect()
+            ->route('admin.akun.index')
+            ->with('success', 'Password berhasil diperbarui dan permintaan reset selesai.');
     }
 
     public function destroy(User $user)

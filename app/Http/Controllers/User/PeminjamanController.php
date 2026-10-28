@@ -175,7 +175,7 @@ class PeminjamanController extends Controller
 
         return redirect()
             ->route('user.beranda', ['page' => 'history'])
-            ->with('success', 'Permintaan pembatalan dikirim ke admin. Stok tetap diamankan sampai admin mengambil keputusan.');
+            ->with('success', 'Permintaan pembatalan berhasil diajukan.');
     }
 
     /**

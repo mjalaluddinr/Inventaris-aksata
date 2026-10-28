@@ -110,17 +110,17 @@
       openImport: false,
       deleteModalOpen: false,
       deleteShaking: false,
-      feedbackOpen: @js(session()->has('success')),
+      passwordResetOpen: @js($passwordResetUser !== null),
+      passwordResetCloseUrl: @js(route('admin.akun.index', [], false)),
       feedbackMessage: @js($feedbackMessage),
       feedbackAccountName: '',
       feedbackAccountAction: '',
       feedbackStatus: @js(session('import_status') ?? 'success'),
       importLogId: @js(session('import_log_id')),
-      feedbackTimeout: null,
       pendingDeleteForm: null,
       pendingDeleteUsername: '',
       searchQuery: @js($filters['search'] ?? ''),
-      resultsUrl: @js(route('admin.akun.index')),
+      resultsUrl: @js(route('admin.akun.index', [], false)),
       searchRequest: null,
       searchTimer: null,
       searchPreviewCount: null,
@@ -154,7 +154,7 @@
               };
           } else { this.currentUser = this.createDraft; }
           this.bindAccountListEvents(this.$refs.accountResults.querySelector('[data-account-tbody]'));
-          if (this.feedbackOpen) this.scheduleFeedbackDismissal();
+          if (this.feedbackMessage) this.notifyFeedback();
       },
   
       createUser() {
@@ -304,21 +304,26 @@
               legacy: normalized.filter(privilege => !allowedPrivileges.includes(privilege)),
           };
       },
-      scheduleFeedbackDismissal() {
-          window.clearTimeout(this.feedbackTimeout);
-          this.feedbackTimeout = window.setTimeout(() => {
-              this.feedbackOpen = false;
-              this.feedbackAccountName = '';
-              this.feedbackAccountAction = '';
-              this.feedbackTimeout = null;
-          }, 2000);
-      },
-      dismissFeedback() {
-          window.clearTimeout(this.feedbackTimeout);
-          this.feedbackTimeout = null;
-          this.feedbackOpen = false;
-          this.feedbackAccountName = '';
-          this.feedbackAccountAction = '';
+      notifyFeedback() {
+          const message = this.feedbackAccountName
+              ? [
+                  { text: 'Akun ' },
+                  { text: this.feedbackAccountName, bold: true },
+                  { text: ` berhasil ${this.feedbackAccountAction}.` },
+              ]
+              : this.feedbackMessage;
+          const type = this.feedbackStatus === 'sebagian'
+              ? 'warning'
+              : ['error', 'gagal'].includes(this.feedbackStatus)
+                  ? 'error'
+                  : 'success';
+          const title = this.feedbackStatus === 'sebagian'
+              ? 'Import selesai sebagian'
+              : this.feedbackStatus === 'gagal'
+                  ? 'Import gagal'
+                  : '';
+
+          window.showToast(message, type, 2500, title);
       },
       accountFieldLabel(field) {
           if (field.startsWith('privileges')) return 'Hak akses';
@@ -436,8 +441,7 @@
               this.feedbackAccountAction = '';
               this.feedbackMessage = data.message;
               this.feedbackStatus = 'success';
-              this.feedbackOpen = true;
-              this.scheduleFeedbackDismissal();
+              this.notifyFeedback();
           } catch (error) {
               console.error('Gagal mengubah status:', error);
               this.importLogId = null;
@@ -445,8 +449,7 @@
               this.feedbackAccountAction = '';
               this.feedbackMessage = 'Gagal mengubah status akun. Silakan coba lagi.';
               this.feedbackStatus = 'error';
-              this.feedbackOpen = true;
-              this.scheduleFeedbackDismissal();
+              this.notifyFeedback();
           }
       },
   
@@ -469,8 +472,7 @@
                   ? `Data tidak valid: ${invalidFieldLabels.join(', ')}.`
                   : 'Data akun belum lengkap atau belum valid.';
               this.feedbackStatus = 'error';
-              this.feedbackOpen = true;
-              this.scheduleFeedbackDismissal();
+              this.notifyFeedback();
               return false;
           }
 
@@ -528,8 +530,7 @@
                       ? `Data tidak valid: ${invalidFieldLabels.join(', ')}.`
                       : validationMessage;
                   this.feedbackStatus = 'error';
-                  this.feedbackOpen = true;
-                  this.scheduleFeedbackDismissal();
+                  this.notifyFeedback();
                   return false;
               }
               if (!response.ok || (!successMessage && !deleteSucceeded)) {
@@ -542,14 +543,12 @@
               this.feedbackAccountAction = accountAction;
               this.feedbackMessage = successMessage || 'Akun berhasil dihapus.';
               this.feedbackStatus = 'success';
-              this.feedbackOpen = true;
-              this.scheduleFeedbackDismissal();
+              this.notifyFeedback();
               return true;
           } catch (error) {
               this.feedbackMessage = error.message || 'Terjadi kesalahan saat menyimpan akun.';
               this.feedbackStatus = 'error';
-              this.feedbackOpen = true;
-              this.scheduleFeedbackDismissal();
+              this.notifyFeedback();
               return false;
           } finally { this.accountBusy = false; }
       },
@@ -595,6 +594,11 @@
           window.setTimeout(() => this.deleteShaking = false, 460);
       },
       handleEscape(event) {
+          if (this.passwordResetOpen) {
+              event.preventDefault();
+              this.closePasswordReset();
+              return;
+          }
           if (this.roleDialogOpen) {
               event.preventDefault();
               this.roleDialogOpen = false;
@@ -608,7 +612,11 @@
           this.openModal = false;
           this.openImport = false;
           this.openLogDetail = false;
-          this.feedbackOpen = false;
+      },
+      closePasswordReset() {
+          this.passwordResetOpen = false;
+          this.$refs.passwordResetForm?.reset();
+          window.history.replaceState({}, '', this.passwordResetCloseUrl);
       },
       async submitDelete() { if (this.pendingDeleteForm && await this.sendCrudRequest(this.pendingDeleteForm)) { this.cancelDelete(); } },
   
@@ -653,7 +661,7 @@
           } catch (error) { console.error('Gagal memuat detail log:', error); } finally { this.logDetailLoading = false; }
       }
   }" @keydown.escape.window="handleEscape($event)"
-    x-effect="document.documentElement.classList.toggle('akun-modal-open', openModal || roleDialogOpen || openImport || deleteModalOpen || openLogDetail)"
+    x-effect="document.documentElement.classList.toggle('akun-modal-open', openModal || roleDialogOpen || openImport || deleteModalOpen || passwordResetOpen || openLogDetail)"
     class="akun-surface relative -mx-8 -mb-8 min-h-full bg-[#E8F8F4]">
 
     <div class="p-4 sm:p-8">
@@ -666,7 +674,7 @@
           @if (auth()->user()?->canManageAllAccounts())
           <button type="button" @click="openImport = true"
             class="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm transition hover:border-emerald-400 hover:bg-emerald-50 focus:outline-none focus:ring-2 focus:ring-sidebar-start focus:ring-offset-2">
-            <iconify-icon icon="mdi:file-excel" class="text-emerald-600" width="18"></iconify-icon> Import Excel
+            <iconify-icon icon="mdi:file-excel" class="text-emerald-600" width="18"></iconify-icon> Import Akun
           </button>
           @endif
         </div>
@@ -721,6 +729,12 @@
                     <div class="text-sm font-medium text-slate-800">{{ $user->first_name }} {{ $user->last_name }}
                     </div>
                     <div class="text-xs text-slate-500">{{ $user->username }}</div>
+                    @if ($user->must_change_password)
+                      <span class="mt-1 inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-800">
+                        <iconify-icon icon="mdi:lock-reset" width="13" aria-hidden="true"></iconify-icon>
+                        Perlu ganti password
+                      </span>
+                    @endif
                   </td>
                   <td class="whitespace-nowrap px-4 py-3 text-sm text-slate-700">
                     @php $roleColors = ['admin' => 'bg-rose-100 text-rose-800', 'laboran' => 'bg-blue-100 text-blue-800', 'peminjam' => 'bg-emerald-100 text-emerald-800']; @endphp
@@ -776,12 +790,19 @@
                         class="inline-flex items-center gap-1 rounded-md border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-700 transition hover:border-sky-400 hover:text-sky-700 focus:outline-none focus:ring-2 focus:ring-sky-400">
                         <iconify-icon icon="mdi:pencil" width="15"></iconify-icon> Edit
                       </button>
+                      @if ($user->must_change_password)
+                        <a href="{{ route('admin.akun.password.edit', $user->akun_id) }}"
+                          aria-haspopup="dialog"
+                          class="inline-flex min-h-9 items-center gap-1.5 rounded-md border border-amber-300 bg-amber-50 px-2.5 py-1.5 text-xs font-semibold text-amber-800 transition hover:border-amber-400 hover:bg-amber-100 focus:outline-none focus:ring-2 focus:ring-amber-400">
+                          <iconify-icon icon="mdi:lock-reset" width="16" aria-hidden="true"></iconify-icon> Ubah Password
+                        </a>
+                      @endif
                       <form action="{{ route('admin.akun.destroy', $user->akun_id) }}" method="POST"
                         @submit.prevent="requestDelete($el)" data-username="{{ $user->username }}">
                         @csrf @method('DELETE')
                         <button type="submit"
                           class="inline-flex min-h-9 items-center gap-1.5 rounded-md border border-rose-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-rose-600 transition hover:border-rose-300 hover:bg-rose-50 focus:outline-none focus:ring-2 focus:ring-rose-400">
-                          <iconify-icon icon="mdi:delete-outline" width="16"></iconify-icon> Delete
+                          <iconify-icon icon="mdi:delete-outline" width="16" aria-hidden="true"></iconify-icon> Hapus
                         </button>
                       </form>
                     </div>
@@ -1245,8 +1266,10 @@
             <button type="button" @click="cancelDelete()" :disabled="accountBusy"
               class="rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-slate-400">Batal</button>
             <button type="button" @click="submitDelete()" :disabled="accountBusy" :aria-busy="accountBusy.toString()"
-              class="inline-flex items-center justify-center rounded-md border border-rose-300 bg-rose-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-rose-700 focus:outline-none focus:ring-2 focus:ring-rose-500 focus:ring-offset-2 disabled:cursor-wait disabled:opacity-70">
+              class="inline-flex min-w-28 items-center justify-center gap-2 rounded-md border border-rose-300 bg-rose-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-rose-700 focus:outline-none focus:ring-2 focus:ring-rose-500 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-70">
               <iconify-icon x-show="accountBusy" icon="mdi:loading" class="animate-spin text-lg"
+                aria-hidden="true"></iconify-icon>
+              <iconify-icon x-show="!accountBusy" icon="mdi:delete-outline" class="text-lg"
                 aria-hidden="true"></iconify-icon>
               <span x-show="!accountBusy">Ya, Hapus</span>
               <span x-show="accountBusy" class="sr-only">Sedang menghapus...</span>
@@ -1255,6 +1278,124 @@
         </div>
       </div>
     </template>
+
+    @if ($passwordResetUser)
+    <template x-teleport="body">
+      <div
+        x-show="passwordResetOpen"
+        x-transition.opacity
+        style="display: none; z-index: 120;"
+        class="fixed inset-0 z-[120] flex items-center justify-center overflow-y-auto overscroll-contain bg-[#00385a]/65 p-4 backdrop-blur-sm sm:p-6"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="password-reset-title"
+        @click.self="closePasswordReset()">
+        <section
+          x-show="passwordResetOpen"
+          x-transition
+          class="my-auto w-full max-w-lg overflow-hidden rounded-2xl border border-white/70 bg-white shadow-[0_24px_80px_rgba(2,25,41,0.4)]">
+          <header class="flex items-start gap-4 bg-gradient-to-r from-[#00385a] to-[#007f78] px-5 py-5 text-white sm:px-7">
+            <span class="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-white/15 ring-1 ring-white/20">
+              <iconify-icon icon="mdi:lock-reset" class="text-2xl" aria-hidden="true"></iconify-icon>
+            </span>
+            <div class="min-w-0 flex-1">
+              <h2 id="password-reset-title" class="text-lg font-bold sm:text-xl">Ubah password akun</h2>
+              <p class="mt-1 text-sm leading-5 text-teal-50">Selesaikan permintaan reset yang masuk.</p>
+            </div>
+            <button type="button" @click="closePasswordReset()"
+              class="rounded-lg p-1.5 text-white/80 transition hover:bg-white/15 hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
+              aria-label="Tutup pop-up ubah password">
+              <iconify-icon icon="mdi:close" class="text-xl" aria-hidden="true"></iconify-icon>
+            </button>
+          </header>
+
+          <div class="space-y-5 px-5 py-5 sm:px-7 sm:py-6">
+            <div class="flex items-center gap-3 rounded-xl border border-[#dce9e6] bg-[#f7fbfa] p-4">
+              <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-white text-[#007f78] shadow-sm ring-1 ring-[#dce9e6]">
+                <iconify-icon icon="mdi:account-outline" class="text-xl" aria-hidden="true"></iconify-icon>
+              </span>
+              <div class="min-w-0">
+                <p class="truncate text-sm font-bold text-[#00385a]">{{ $passwordResetUser?->first_name }} {{ $passwordResetUser?->last_name }}</p>
+                <p class="truncate text-xs text-slate-600">Username: {{ $passwordResetUser?->username }}</p>
+              </div>
+              <span class="ml-auto inline-flex shrink-0 items-center gap-1.5 rounded-full bg-amber-100 px-2.5 py-1 text-[11px] font-semibold text-amber-800">
+                <span class="h-1.5 w-1.5 rounded-full bg-amber-500"></span>
+                Menunggu
+              </span>
+            </div>
+
+            @if ($errors->has('new_password'))
+              <div class="flex items-start gap-2 rounded-lg border border-rose-200 bg-rose-50 px-3.5 py-3 text-sm text-rose-800"
+                role="alert">
+                <iconify-icon icon="mdi:alert-circle-outline" class="mt-0.5 shrink-0 text-lg" aria-hidden="true"></iconify-icon>
+                <p>{{ $errors->first('new_password') }}</p>
+              </div>
+            @endif
+
+            <form
+              action="{{ route('admin.akun.password.update', $passwordResetUser?->akun_id) }}"
+              method="POST"
+              x-ref="passwordResetForm"
+              class="space-y-4">
+              @csrf
+              @method('PUT')
+
+              <div>
+                <label for="reset-new-password" class="mb-1.5 block text-sm font-semibold text-slate-700">Password baru</label>
+                <input
+                  type="password"
+                  id="reset-new-password"
+                  name="new_password"
+                  required
+                  minlength="8"
+                  autofocus
+                  autocomplete="new-password"
+                  aria-describedby="reset-password-help"
+                  @class([
+                      'w-full rounded-lg border bg-white px-3.5 py-2.5 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:ring-4 focus:ring-[#00b19c]/10',
+                      'border-rose-400 focus:border-rose-500' => $errors->has('new_password'),
+                      'border-slate-300 focus:border-[#007f78]' => ! $errors->has('new_password'),
+                  ])
+                  placeholder="Minimal 8 karakter">
+                <p id="reset-password-help" class="mt-1.5 text-xs leading-5 text-slate-500">Password ini akan langsung berlaku untuk akun tersebut.</p>
+              </div>
+
+              <div>
+                <label for="reset-new-password-confirmation" class="mb-1.5 block text-sm font-semibold text-slate-700">
+                  Konfirmasi password baru
+                </label>
+                <input
+                  type="password"
+                  id="reset-new-password-confirmation"
+                  name="new_password_confirmation"
+                  required
+                  minlength="8"
+                  autocomplete="new-password"
+                  class="w-full rounded-lg border border-slate-300 bg-white px-3.5 py-2.5 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-[#007f78] focus:ring-4 focus:ring-[#00b19c]/10"
+                  placeholder="Ketik ulang password baru">
+              </div>
+
+              <p class="rounded-lg border-l-4 border-amber-400 bg-amber-50 px-3.5 py-2.5 text-xs leading-5 text-amber-900">
+                Berikan password baru kepada pengguna melalui jalur yang aman.
+              </p>
+
+              <div class="flex flex-col-reverse gap-2 border-t border-slate-100 pt-4 sm:flex-row sm:justify-end">
+                <button type="button" @click="closePasswordReset()"
+                  class="inline-flex items-center justify-center rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-500">
+                  Batal
+                </button>
+                <button type="submit"
+                  class="inline-flex items-center justify-center gap-2 rounded-lg bg-[#007f78] px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-[#006b70] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#00385a]">
+                  <iconify-icon icon="mdi:content-save-lock-outline" class="text-lg" aria-hidden="true"></iconify-icon>
+                  Simpan password baru
+                </button>
+              </div>
+            </form>
+          </div>
+        </section>
+      </div>
+    </template>
+    @endif
 
     {{-- ========================================== --}}
     {{-- MODAL: Detail Log Import --}}
@@ -1335,50 +1476,6 @@
             <button type="button" @click="openLogDetail = false"
               class="rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-slate-400">Tutup</button>
           </div>
-        </div>
-      </div>
-    </template>
-
-    {{-- ASVS 1.2.1: Render notification content as text, not HTML. --}}
-    <template x-teleport="body">
-      <div x-show="feedbackOpen" x-transition:enter="transition ease-out duration-200"
-        x-transition:enter-start="translate-x-4 opacity-0" x-transition:enter-end="translate-x-0 opacity-100"
-        x-transition:leave="transition ease-in duration-150" x-transition:leave-start="opacity-100"
-        x-transition:leave-end="translate-x-4 opacity-0"
-        class="pointer-events-none fixed right-4 top-24 z-[120] w-[calc(100%-2rem)] max-w-md sm:right-6"
-        role="status" aria-live="polite" aria-atomic="true">
-        <div
-          class="pointer-events-auto flex items-start gap-3 rounded-xl border border-l-4 bg-white p-4 shadow-[0_16px_48px_rgba(2,25,41,0.18)]"
-          :class="feedbackStatus === 'success' || feedbackStatus === 'selesai' ? 'border-emerald-200 border-l-emerald-500' : (
-              feedbackStatus === 'sebagian' ? 'border-amber-200 border-l-amber-500' : 'border-rose-200 border-l-rose-500')">
-          <iconify-icon
-            :icon="feedbackStatus === 'success' || feedbackStatus === 'selesai' ? 'mdi:check-circle' : (
-                feedbackStatus === 'sebagian' ? 'mdi:alert-circle' : 'mdi:close-circle')"
-            :class="feedbackStatus === 'success' || feedbackStatus === 'selesai' ? 'text-emerald-600' : (
-                feedbackStatus === 'sebagian' ? 'text-amber-600' : 'text-rose-600')"
-            class="mt-0.5 shrink-0" width="22" aria-hidden="true"></iconify-icon>
-          <div class="min-w-0 flex-1">
-            <p class="font-semibold text-slate-900" x-text="feedbackStatus === 'error' ? 'Gagal!' : (
-                feedbackStatus === 'sebagian' ? 'Import selesai sebagian' : (
-                    feedbackStatus === 'gagal' ? 'Import gagal' : 'Berhasil!'))"></p>
-            <p x-show="!feedbackAccountName" class="mt-1 break-words text-sm text-slate-600" x-text="feedbackMessage"></p>
-            <p x-show="feedbackAccountName" class="mt-1 break-words text-sm text-slate-600">
-              <template x-if="feedbackAccountAction === 'dihapus'">
-                <span>Akun <strong class="font-bold text-slate-800" x-text="feedbackAccountName"></strong>
-                  berhasil dihapus.</span>
-              </template>
-              {{-- ASVS 1.2.1: x-text renders account names as text, not HTML. --}}
-              <template x-if="feedbackAccountAction !== 'dihapus'">
-                <span>Akun <strong class="font-bold text-slate-800" x-text="feedbackAccountName"></strong>
-                  berhasil <span x-text="feedbackAccountAction"></span>.</span>
-              </template>
-            </p>
-          </div>
-          <button type="button" @click="dismissFeedback()"
-            class="-mr-1 -mt-1 shrink-0 rounded-md p-1 text-slate-400 transition hover:bg-slate-100 hover:text-slate-700 focus:outline-none focus:ring-2 focus:ring-slate-400"
-            aria-label="Tutup notifikasi">
-            <iconify-icon icon="mdi:close" width="18" aria-hidden="true"></iconify-icon>
-          </button>
         </div>
       </div>
     </template>

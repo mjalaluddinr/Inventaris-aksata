@@ -659,32 +659,50 @@ class ManageBarang extends Controller
             ->delete();
     }
 
-    public function destroy(Barang $barang): RedirectResponse
+    public function destroy(Request $request, Barang $barang): RedirectResponse|JsonResponse
     {
         $barangName = $barang->nama_barang;
 
-        $deleted = DB::transaction(function () use ($barang): bool {
+        $errorMessage = DB::transaction(function () use ($barang): ?string {
             $lockedBarang = Barang::query()
                 ->whereKey($barang->getKey())
                 ->lockForUpdate()
                 ->firstOrFail();
-            $hasHistory = $lockedBarang->lokasiBarangs()->exists()
-                || $lockedBarang->detailPeminjamans()->exists()
-                || $lockedBarang->barangDipakais()->exists()
-                || $lockedBarang->logMutasiBarangs()->exists();
 
-            if ($hasHistory) {
-                return false;
+            if ($lockedBarang->detailPeminjamans()->exists()) {
+                return 'Barang tidak dapat dihapus karena memiliki riwayat peminjaman.';
             }
 
+            if ($lockedBarang->barangDipakais()->exists()) {
+                return 'Barang tidak dapat dihapus karena memiliki riwayat pemakaian.';
+            }
+
+            if ($lockedBarang->logMutasiBarangs()->exists()) {
+                return 'Barang tidak dapat dihapus karena memiliki riwayat mutasi.';
+            }
+
+            $lockedBarang->lokasiBarangs()->delete();
             $lockedBarang->delete();
 
-            return true;
+            return null;
         });
 
-        if (! $deleted) {
+        if ($errorMessage !== null) {
+            if ($request->expectsJson()) {
+                // ASVS 16.5.1: Return a clear domain error without exposing database or exception details.
+                return response()->json(['message' => $errorMessage], 409);
+            }
+
             return redirect()->route('admin.barang')
-                ->with('error', 'Barang tidak dapat dihapus karena memiliki riwayat lokasi atau transaksi.');
+                ->with('error', $errorMessage);
+        }
+
+        if ($request->expectsJson()) {
+            $request->session()->flash('success', 'Barang berhasil dihapus.');
+            $request->session()->flash('barang_feedback_name', $barangName);
+            $request->session()->flash('barang_feedback_action', 'dihapus');
+
+            return response()->json(['message' => 'Barang berhasil dihapus.']);
         }
 
         return redirect()->route('admin.barang')

@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Admin\DashboardController;
 use App\Http\Controllers\Admin\LogMutasiController;
 use App\Http\Controllers\Admin\ManageBarang;
 use App\Http\Controllers\Admin\ManageKategori;
@@ -9,6 +10,8 @@ use App\Http\Controllers\Admin\ManageRuangan;
 use App\Http\Controllers\Admin\ManageUser;
 use App\Http\Controllers\Auth\ChangePasswordController;
 use App\Http\Controllers\Auth\LoginController;
+use App\Http\Controllers\Auth\PasswordRecoveryController;
+use App\Http\Controllers\User\BerandaController;
 use App\Http\Controllers\User\PeminjamanController;
 use App\Http\Middleware\MustChangePassword;
 use Illuminate\Support\Facades\Route;
@@ -17,17 +20,16 @@ Route::get('/', function () {
     return view('pages.auth.login');
 });
 Route::get('/login', [LoginController::class, 'index'])->name('login.index');
-Route::get('/forgot-password', function () {
-    return view('pages.auth.login', ['showForgotModal' => true]);
-})->name('password.request');
+Route::get('/forgot-password', [PasswordRecoveryController::class, 'create'])->name('password.request');
+Route::post('/forgot-password', [PasswordRecoveryController::class, 'store'])
+    ->middleware('throttle:5,1')
+    ->name('password.request.store');
 Route::post('/login', [LoginController::class, 'login'])->name('login');
 Route::post('/logout', [LoginController::class, 'logout'])->name('logout');
 
 // ASVS V8.2: Enforce authentication and allowed admin roles at the server-side route boundary.
 Route::prefix('admin')->name('admin.')->middleware(['auth', 'permission:admin-panel'])->group(function () {
-    Route::get('/', function () {
-        return view('pages.admin.dashboard');
-    })->name('dashboard');
+    Route::get('/', DashboardController::class)->name('dashboard');
     Route::redirect('/dashboard', '/admin', 302)->name('dashboard.legacy');
     Route::middleware('permission:inventory.view')->group(function () {
         Route::get('/barang', [ManageBarang::class, 'index'])->name('barang');
@@ -85,6 +87,8 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'permission:admin-pa
         Route::post('/', [ManageUser::class, 'store'])->name('store');
         Route::put('/{user}', [ManageUser::class, 'update'])->name('update');
         Route::delete('/{user}', [ManageUser::class, 'destroy'])->name('destroy');
+        Route::get('/{user}/password', [ManageUser::class, 'editPassword'])->name('password.edit');
+        Route::put('/{user}/password', [ManageUser::class, 'resetPassword'])->name('password.update');
 
         Route::patch('/{user}/toggle-status', [ManageUser::class, 'toggleStatus'])->name('toggle-status');
 
@@ -105,9 +109,7 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'permission:admin-pa
 
 // ASVS V8.2.2/V8.3.1: protect borrower pages and actions at the server-side boundary.
 Route::prefix('user')->name('user.')->middleware(['auth', 'can:access-user-portal'])->group(function () {
-    Route::get('/beranda', function () {
-        return view('pages.user.beranda');
-    })->name('beranda');
+    Route::get('/beranda', BerandaController::class)->name('beranda');
 
     Route::post('/peminjaman', [PeminjamanController::class, 'store'])
         ->middleware('throttle:10,1')
