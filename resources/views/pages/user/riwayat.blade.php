@@ -12,7 +12,7 @@
           ->withQueryString()
       : collect();
 @endphp
-    <main class="mx-auto min-h-[calc(100vh-5rem)] max-w-[1600px] pb-12">
+    <main id="history-content" class="mx-auto min-h-[calc(100vh-5rem)] max-w-[1600px] pb-12">
       <x-user.hero-section
         title="Riwayat Peminjaman Saya"
         description="Pantau status pengajuan aktif dan transaksi yang sudah selesai."
@@ -62,7 +62,7 @@
                 };
                 $progressSteps = ['Diajukan', 'Dikonfirmasi', 'Dipinjam', 'Dikembalikan'];
               @endphp
-              <article x-data="{ qrOpen: false, cancellationOpen: false }" @keydown.escape.window="qrOpen = false; cancellationOpen = false" class="user-card-enter overflow-hidden rounded-xl border border-[#d1e6e1] bg-white shadow-[0_2px_5px_rgba(20,55,48,0.12)]" style="animation-delay: {{ $loop->index * 70 }}ms">
+              <article data-loan-state="{{ $loan->peminjaman_id }}:{{ $loanStatus }}:{{ $loan->detailPeminjamans->pluck('status')->implode(',') }}:{{ $cancellationRequested ? '1' : '0' }}:{{ $isOverdue ? '1' : '0' }}" x-data="{ qrOpen: false, cancellationOpen: false }" @keydown.escape.window="qrOpen = false; cancellationOpen = false" class="user-card-enter overflow-hidden rounded-xl border border-[#d1e6e1] bg-white shadow-[0_2px_5px_rgba(20,55,48,0.12)]" style="animation-delay: {{ $loop->index * 70 }}ms">
                 <div class="flex flex-wrap items-start justify-between gap-3 border-b border-slate-100 px-4 py-3.5 sm:px-5">
                   <div class="min-w-0">
                     <h2 class="text-sm font-bold tracking-wide text-slate-900 sm:text-base">Pesanan peminjaman</h2>

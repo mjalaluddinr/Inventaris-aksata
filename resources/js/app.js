@@ -64,11 +64,15 @@ Alpine.data('loanQrScanner', () => ({
     isScanning: false,
     isSubmitting: false,
     manualCode: '',
+    scanEndpoint: '',
+    csrfToken: '',
     stream: null,
     frameRequest: null,
     lastScanAt: 0,
     init() {
         this.feedbackMessage = this.$el.dataset.feedbackMessage || '';
+        this.scanEndpoint = this.$el.dataset.endpoint || '';
+        this.csrfToken = this.$el.dataset.csrfToken || '';
         this.feedbackOpen = Boolean(this.feedbackMessage);
         if (this.feedbackOpen) {
             window.setTimeout(() => {
@@ -256,14 +260,29 @@ Alpine.data('loanQrScanner', () => ({
         this.scannerMessage = 'Memeriksa kode dan mengonfirmasi peminjaman...';
 
         try {
+            if (!this.scanEndpoint || !this.csrfToken) {
+                this.scannerMessage = 'Alamat pemindaian tidak tersedia. Muat ulang halaman admin lalu coba lagi.';
+                return;
+            }
+
+            const scanEndpoint = new URL(this.scanEndpoint, window.location.href);
+            const scanPathname = scanEndpoint.pathname.replace(/\/+$/, '');
+            if (
+                scanEndpoint.origin !== window.location.origin
+                || !scanPathname.endsWith('/admin/peminjaman/scan')
+            ) {
+                this.scannerMessage = 'Alamat pemindaian tidak valid. Muat ulang halaman admin lalu coba lagi.';
+                return;
+            }
+
             // ASVS 2.2.2: Server-side validation remains authoritative for manually entered and scanned codes.
-            const response = await fetch(this.$el.dataset.endpoint, {
+            const response = await fetch(scanEndpoint, {
                 method: 'POST',
                 credentials: 'same-origin',
                 headers: {
                     'Accept': 'application/json',
                     'Content-Type': 'application/json',
-                    'X-CSRF-TOKEN': this.$el.dataset.csrfToken,
+                    'X-CSRF-TOKEN': this.csrfToken,
                 },
                 body: JSON.stringify({ code: normalizedCode }),
             });
@@ -282,31 +301,33 @@ Alpine.data('loanQrScanner', () => ({
             if (!response.ok) {
                 this.scannerMessage = payload.errors?.code?.[0]
                     || payload.errors?.peminjaman?.[0]
-                    || payload.message
-                    || 'QR tidak dapat diproses. Pastikan QR berasal dari pengajuan yang menunggu konfirmasi.';
+                    || (response.status === 404
+                        ? 'Layanan pemindaian tidak ditemukan. Muat ulang halaman admin lalu coba lagi.'
+                        : 'QR tidak dapat diproses. Pastikan QR berasal dari pengajuan yang menunggu konfirmasi.');
                 return;
             }
 
-            if (!payload.loan_id || typeof payload.message !== 'string') {
+            if (
+                !payload.loan_id
+                || typeof payload.message !== 'string'
+                || typeof payload.redirect_url !== 'string'
+            ) {
                 this.scannerMessage = 'Konfirmasi belum dapat dipastikan. Periksa status peminjaman sebelum memindai ulang.';
                 return;
             }
 
-            const scanEndpoint = new URL(this.$el.dataset.endpoint, window.location.origin);
-            const scanPathname = scanEndpoint.pathname.replace(/\/+$/, '');
             const destinationPathname = scanPathname.replace(/\/scan$/, '');
+            // ASVS 1.2.2: constrain server-provided redirects to the expected same-origin loan page.
+            const destination = new URL(payload.redirect_url, scanEndpoint.origin);
             if (
-                scanEndpoint.origin !== window.location.origin
-                || destinationPathname === scanPathname
-                || !destinationPathname.endsWith('/admin/peminjaman')
+                destination.origin !== scanEndpoint.origin
+                || destination.pathname !== destinationPathname
+                || destination.searchParams.get('tab') !== 'borrowed'
             ) {
                 this.scannerMessage = 'Halaman pemindaian peminjaman tidak valid. Muat ulang halaman admin.';
                 return;
             }
 
-            const destination = new URL(scanEndpoint.origin);
-            destination.pathname = destinationPathname;
-            destination.searchParams.set('tab', 'borrowed');
             this.closeScanner();
             window.setTimeout(() => window.location.assign(destination.href), 900);
         } catch (error) {
@@ -330,8 +351,8 @@ const renderLoanQr = (element) => {
 
     QRCode.toCanvas(canvas, element.dataset.loanQr, {
         errorCorrectionLevel: 'M',
-        margin: 1,
-        width: 144,
+        margin: 4,
+        width: 152,
     }).then(() => {
         element.replaceChildren(canvas);
     }).catch((error) => {

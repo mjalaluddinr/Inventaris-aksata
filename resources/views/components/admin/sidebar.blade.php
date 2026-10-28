@@ -72,12 +72,12 @@
               $menuItems = [];
           }
 
-          // Laboran managers can manage laboran accounts, but logs remain administrator-only.
+          // Account management and logs are administrator-only.
           $menuItems = array_filter(
               $menuItems,
               static fn (array $menu): bool => ! in_array(
                   $menu['route'],
-                  ['admin.log_import', 'admin.log_mutasi'],
+                  ['admin.akun.index', 'admin.log_import', 'admin.log_mutasi'],
                   true,
               ),
           );

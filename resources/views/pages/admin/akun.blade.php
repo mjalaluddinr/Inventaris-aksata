@@ -1000,13 +1000,15 @@
             <div class="akun-modal-footer flex justify-end gap-2 border-t border-slate-200 bg-slate-50 px-5 py-3">
               <button type="button" @click="closeAccountModal()"
                 class="rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-slate-400">Batal</button>
-              <button type="submit"
+              <button type="submit" :aria-busy="accountBusy.toString()"
                 :disabled="accountBusy || (currentUser.role === 'laboran' && currentUser.privileges.length + (currentUser.legacyPrivileges || []).length === 0)"
-                class="akun-primary-button rounded-md border border-[#009F91] bg-sidebar-start px-4 py-2 text-sm font-semibold text-white shadow-sm transition focus:outline-none focus:ring-2 focus:ring-sidebar-start focus:ring-offset-2 flex items-center gap-2">
-                <iconify-icon
-                  :icon="accountBusy ? 'mdi:loading' : (modalMode === 'create' ? 'mdi:content-save-plus-outline' : 'mdi:content-save-edit-outline')"
-                  :class="accountBusy ? 'animate-spin' : ''" width="18" aria-hidden="true"></iconify-icon>
-                <span x-text="accountBusy ? 'Menyimpan...' : (modalMode === 'create' ? 'Simpan Akun' : 'Simpan Perubahan')"></span>
+                class="akun-primary-button inline-flex items-center justify-center rounded-md border border-[#009F91] bg-sidebar-start px-4 py-2 text-sm font-semibold text-white shadow-sm transition focus:outline-none focus:ring-2 focus:ring-sidebar-start focus:ring-offset-2">
+                <iconify-icon x-show="accountBusy" icon="mdi:loading" class="animate-spin text-lg" aria-hidden="true"></iconify-icon>
+                <iconify-icon x-show="!accountBusy"
+                  :icon="modalMode === 'create' ? 'mdi:content-save-plus-outline' : 'mdi:content-save-edit-outline'"
+                  width="18" aria-hidden="true"></iconify-icon>
+                <span x-show="!accountBusy" class="ml-2" x-text="modalMode === 'create' ? 'Simpan Akun' : 'Simpan Perubahan'"></span>
+                <span x-show="accountBusy" class="sr-only">Sedang menyimpan...</span>
               </button>
             </div>
           </form>
@@ -1108,11 +1110,13 @@
               class="rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-slate-400">
               Batal
             </button>
-            <button type="button" @click="applyRoleDialog()"
+            <button type="button" @click="applyRoleDialog()" :aria-busy="accountBusy.toString()"
               :disabled="accountBusy || (roleDialogDraft.role === 'laboran' &&
                   roleDialogDraft.privileges.length + (currentUser.legacyPrivileges || []).length === 0)"
-              class="akun-primary-button rounded-md border border-[#009F91] bg-sidebar-start px-4 py-2 text-sm font-semibold text-white shadow-sm transition focus:outline-none focus:ring-2 focus:ring-sidebar-start focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60">
-              <span x-text="accountBusy ? 'Menyimpan...' : (roleDialogSavesAccount ? 'Simpan Role' : 'Terapkan')"></span>
+              class="akun-primary-button inline-flex items-center justify-center rounded-md border border-[#009F91] bg-sidebar-start px-4 py-2 text-sm font-semibold text-white shadow-sm transition focus:outline-none focus:ring-2 focus:ring-sidebar-start focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60">
+              <iconify-icon x-show="accountBusy" icon="mdi:loading" class="animate-spin text-lg" aria-hidden="true"></iconify-icon>
+              <span x-show="!accountBusy" x-text="roleDialogSavesAccount ? 'Simpan Role' : 'Terapkan'"></span>
+              <span x-show="accountBusy" class="sr-only">Sedang menyimpan...</span>
             </button>
           </div>
         </section>
@@ -1241,10 +1245,11 @@
             <button type="button" @click="cancelDelete()" :disabled="accountBusy"
               class="rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-slate-400">Batal</button>
             <button type="button" @click="submitDelete()" :disabled="accountBusy" :aria-busy="accountBusy.toString()"
-              class="inline-flex items-center gap-2 rounded-md border border-rose-300 bg-rose-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-rose-700 focus:outline-none focus:ring-2 focus:ring-rose-500 focus:ring-offset-2 disabled:cursor-wait disabled:opacity-70">
-              <iconify-icon x-show="accountBusy" icon="mdi:loading" class="animate-spin" width="18"
+              class="inline-flex items-center justify-center rounded-md border border-rose-300 bg-rose-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-rose-700 focus:outline-none focus:ring-2 focus:ring-rose-500 focus:ring-offset-2 disabled:cursor-wait disabled:opacity-70">
+              <iconify-icon x-show="accountBusy" icon="mdi:loading" class="animate-spin text-lg"
                 aria-hidden="true"></iconify-icon>
-              <span x-text="accountBusy ? 'Menghapus...' : 'Ya, Hapus'"></span>
+              <span x-show="!accountBusy">Ya, Hapus</span>
+              <span x-show="accountBusy" class="sr-only">Sedang menghapus...</span>
             </button>
           </div>
         </div>

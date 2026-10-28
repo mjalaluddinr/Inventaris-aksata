@@ -16,13 +16,13 @@
       ->withQueryString();
 @endphp
 
-    <main id="catalog-content" class="mx-auto min-h-[calc(100vh-5rem)] max-w-[1600px] pb-12">
+    <main id="catalog-content" class="min-h-[calc(100vh-5rem)] w-full pb-12">
       <x-user.hero-section
         title="Katalog Barang"
         description="Pilih barang yang kamu butuhkan, lalu masukkan ke keranjang."
       />
-      <section class="px-4 py-5 sm:px-8 lg:px-10" aria-label="Filter katalog">
-        <form method="GET" action="{{ route('user.beranda') }}" data-catalog-filter class="grid min-w-0 grid-cols-1 gap-4 sm:grid-cols-[minmax(0,1fr)_minmax(14rem,18rem)] sm:items-center lg:gap-[5cm]">
+      <section class="w-full px-5 pt-6 pb-8 sm:px-10 lg:px-16" aria-label="Filter katalog">
+        <form method="GET" action="{{ route('user.beranda') }}" data-catalog-filter class="flex min-w-0 flex-col gap-5 sm:flex-row sm:items-center sm:gap-8">
           <input type="hidden" name="page" value="catalog">
           <div x-data="{ categoryOverflow: false, categoryCanScrollBackward: false, categoryCanScrollForward: false, checkCategoryOverflow() { this.$nextTick(() => { this.categoryOverflow = this.$refs.catalogCategoryStrip.scrollWidth > this.$refs.catalogCategoryStrip.clientWidth + 1; this.updateCategoryControls() }) }, updateCategoryControls() { const strip = this.$refs.catalogCategoryStrip; this.categoryCanScrollBackward = strip.scrollLeft > 1; this.categoryCanScrollForward = strip.scrollLeft + strip.clientWidth < strip.scrollWidth - 1 } }" x-init="checkCategoryOverflow()" @resize.window="checkCategoryOverflow()" class="flex min-w-0 flex-1 items-center gap-1.5">
             <button type="button" x-cloak x-show="categoryCanScrollBackward" x-transition:enter="transition ease-out duration-200" x-transition:enter-start="opacity-0 scale-75" x-transition:enter-end="opacity-100 scale-100" x-transition:leave="transition ease-in duration-150" x-transition:leave-start="opacity-100 scale-100" x-transition:leave-end="opacity-0 scale-75" @click="$refs.catalogCategoryStrip.scrollBy({ left: -180, behavior: 'smooth' })" class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-[#00a88f] bg-white text-[#007f70] transition hover:bg-emerald-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#008b7a] focus-visible:ring-offset-2" aria-label="Tampilkan kategori sebelumnya">
@@ -39,14 +39,14 @@
             </button>
           </div>
           <input type="hidden" name="category" value="{{ $selectedCategory }}">
-          <label class="relative block w-full min-w-0 sm:w-auto">
+          <label class="relative block w-full min-w-0 sm:ml-auto sm:w-72 sm:shrink-0">
             <span class="sr-only">Cari barang</span>
             <input type="search" name="q" value="{{ $search }}" placeholder="Cari barang..." class="w-full rounded-full border border-[#92d9cd] bg-white py-2 pl-4 pr-10 text-xs outline-none transition focus:border-[#00a88f] focus:ring-2 focus:ring-[#00a88f]/20 sm:text-sm">
             <button type="submit" class="absolute inset-y-0 right-0 flex w-10 items-center justify-center text-slate-500" aria-label="Cari"><iconify-icon icon="mdi:magnify" aria-hidden="true"></iconify-icon></button>
           </label>
         </form>
       </section>
-      <section class="px-4 sm:px-8 lg:px-10" aria-label="Daftar barang">
+      <section class="w-full px-5 sm:px-10 lg:px-16" aria-label="Daftar barang">
         @if ($errors->any())
           <div class="mb-4 rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm text-rose-800" role="alert">
             @foreach ($errors->all() as $error)
@@ -55,9 +55,9 @@
           </div>
         @endif
         @if ($catalogItems->isNotEmpty())
-          <div class="grid min-w-0 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <div class="grid min-w-0 grid-cols-[repeat(auto-fill,minmax(min(100%,18rem),18rem))] justify-between gap-x-6 gap-y-6">
             @foreach ($catalogItems as $item)
-              <article class="user-card-enter flex min-h-44 flex-col overflow-hidden rounded-xl border border-[#c7e4dc] border-t-[5px] border-t-[#00b19c] bg-white shadow-[0_2px_4px_rgba(20,55,48,0.14)]" style="animation-delay: {{ $loop->index * 45 }}ms">
+              <article class="flex min-h-44 flex-col overflow-hidden rounded-xl border border-[#c7e4dc] border-t-[5px] border-t-[#00b19c] bg-white shadow-[0_2px_4px_rgba(20,55,48,0.14)]">
                 <div class="flex flex-1 flex-col p-3.5">
                   <div class="flex items-center justify-between gap-2">
                     <span class="max-w-[65%] truncate rounded-full bg-slate-100 px-2 py-1 text-[10px] font-medium text-slate-700">{{ $item->kategori?->nama_kategori ?? 'Tanpa kategori' }}</span>

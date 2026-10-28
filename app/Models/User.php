@@ -142,7 +142,7 @@ class User extends Authenticatable
 
     public function canManageLaboranAccounts(): bool
     {
-        return $this->role === 'admin' || ($this->role === 'laboran' && $this->canManajemen());
+        return $this->role === 'admin';
     }
 
     public function canManageAllAccounts(): bool

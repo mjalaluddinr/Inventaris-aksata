@@ -25,7 +25,8 @@
       class="fixed inset-0 z-40 bg-slate-950/45 lg:hidden"
       aria-hidden="true"></div>
     <x-admin.sidebar />
-    <main class="min-w-0 flex-1 overflow-y-auto p-8">
+    <main x-data="{ isScrolled: false }" @scroll.passive="isScrolled = $event.currentTarget.scrollTop > 10"
+      class="min-w-0 flex-1 overflow-y-auto px-8 pb-8 pt-0">
       <div class="admin-page-enter min-w-0">
         <x-admin.header :title="$headerTitle" :description="$headerDescription" />
         {{-- ASVS 16.5.1: Import feedback is handled by the sanitized account-page toast. --}}

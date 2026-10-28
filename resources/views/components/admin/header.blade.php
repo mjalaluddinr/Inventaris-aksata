@@ -6,18 +6,6 @@
 ])
 
 @php
-  $segments = request()->segments();
-  $slugLabels = [
-      'admin' => 'Admin',
-      'dashboard' => 'Dashboard',
-      'barang' => 'Data Barang',
-      'kategori' => 'Kategori',
-      'ruangan' => 'Data Ruangan',
-      'rak' => 'Rak Penyimpanan',
-      'peminjaman' => 'Peminjaman',
-      'akun' => 'Akun',
-      'log-import' => 'Log Import',
-  ];
   $routeHeaders = [
       'admin.dashboard' => ['title' => 'Dashboard', 'description' => 'Selamat datang di InvenTrack.'],
       'admin.barang' => ['title' => 'Data Barang', 'description' => 'Kelola data barang, mutasi, dan pemakaian.'],
@@ -41,10 +29,30 @@
   $profileInitial = strtoupper(substr($profileName, 0, 1));
 @endphp
 
-<header class="-mx-8 -mt-8 mb-8 border-b border-[#D8E6E2] bg-white px-5 py-5 sm:px-8">
+@php
+  $segments = request()->segments();
+  $slugLabels = [
+      'admin' => auth()->user()?->role === 'laboran' ? 'Laboran' : 'Admin',
+      'dashboard' => 'Dashboard',
+      'barang' => 'Data Barang',
+      'kategori' => 'Kategori',
+      'ruangan' => 'Data Ruangan',
+      'rak' => 'Rak Penyimpanan',
+      'peminjaman' => 'Peminjaman',
+      'akun' => 'Akun',
+      'log-import' => 'Log Import',
+  ];
+@endphp
+
+<header class="sticky top-0 z-30 -mx-8 mb-8 border-b border-[#D8E6E2] bg-white px-5 py-5 sm:px-8">
   <div class="flex items-center justify-between gap-6">
     <div class="min-w-0">
-      <nav aria-label="Breadcrumb" class="mb-1 flex flex-wrap items-center gap-2 text-sm">
+      <nav
+        :aria-hidden="isScrolled"
+        :inert="isScrolled"
+        :class="isScrolled ? 'mb-0 max-h-0 -translate-y-1 opacity-0' : 'mb-1 max-h-12 translate-y-0 opacity-100'"
+        aria-label="Breadcrumb"
+        class="flex flex-wrap items-center gap-2 overflow-hidden text-sm transition-[max-height,margin,opacity,transform] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]">
         @foreach ($segments as $index => $segment)
           @php
             $path = implode('/', array_slice($segments, 0, $index + 1));

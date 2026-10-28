@@ -357,7 +357,7 @@
             </button>
           </div>
           @endif
-          <label class="relative block w-full sm:max-w-xs">
+          <label class="relative block w-full sm:ml-auto sm:max-w-xs">
             <span class="sr-only">Cari barang</span>
             <span class="pointer-events-none absolute inset-y-0 left-3 flex items-center text-slate-400">
               <iconify-icon icon="mdi:magnify" width="17" aria-hidden="true"></iconify-icon>
@@ -833,11 +833,13 @@
                     class="rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-slate-400 disabled:cursor-not-allowed disabled:opacity-50">
                     Batal
                   </button>
-                  <button type="submit" :disabled="importLoading || !importFileName"
-                    class="inline-flex items-center gap-2 rounded-md border border-[#009F91] bg-[#00B19C] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#009A87] focus:outline-none focus:ring-2 focus:ring-[#00B19C] focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50">
-                    <iconify-icon :icon="importLoading ? 'mdi:loading' : 'mdi:upload'" width="17"
+                  <button type="submit" :disabled="importLoading || !importFileName" :aria-busy="importLoading.toString()"
+                    class="inline-flex items-center justify-center rounded-md border border-[#009F91] bg-[#00B19C] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#009A87] focus:outline-none focus:ring-2 focus:ring-[#00B19C] focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50">
+                    <iconify-icon x-show="importLoading" icon="mdi:loading" class="animate-spin text-lg"
                       aria-hidden="true"></iconify-icon>
-                    <span x-text="importLoading ? 'Mengimpor...' : 'Mulai impor'"></span>
+                    <iconify-icon x-show="!importLoading" icon="mdi:upload" width="17" aria-hidden="true"></iconify-icon>
+                    <span x-show="!importLoading" class="ml-2">Mulai impor</span>
+                    <span x-show="importLoading" class="sr-only">Sedang mengimpor...</span>
                   </button>
                 </div>
               </div>
@@ -1033,14 +1035,14 @@
                   class="rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-slate-400">
                   Batal
                 </button>
-                <button type="submit" :disabled="formSubmitting"
-                  class="inline-flex items-center gap-2 rounded-md border border-[#009F91] bg-[#00B19C] px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-[#009A87] focus:outline-none focus:ring-2 focus:ring-[#00B19C] focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-70">
-                  <iconify-icon
-                    :icon="formSubmitting ? 'mdi:loading' : (modalMode === 'create' ? 'mdi:content-save-plus-outline' :
-                        'mdi:content-save-edit-outline')"
-                    :class="formSubmitting ? 'animate-spin' : ''" width="17" aria-hidden="true"></iconify-icon>
-                  <span
-                    x-text="formSubmitting ? 'Menyimpan...' : (modalMode === 'create' ? 'Simpan Barang' : 'Simpan Perubahan')"></span>
+                <button type="submit" :disabled="formSubmitting" :aria-busy="formSubmitting.toString()"
+                  class="inline-flex items-center justify-center rounded-md border border-[#009F91] bg-[#00B19C] px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-[#009A87] focus:outline-none focus:ring-2 focus:ring-[#00B19C] focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-70">
+                  <iconify-icon x-show="formSubmitting" icon="mdi:loading" class="animate-spin text-lg" aria-hidden="true"></iconify-icon>
+                  <iconify-icon x-show="!formSubmitting"
+                    :icon="modalMode === 'create' ? 'mdi:content-save-plus-outline' : 'mdi:content-save-edit-outline'"
+                    width="17" aria-hidden="true"></iconify-icon>
+                  <span x-show="!formSubmitting" class="ml-2" x-text="modalMode === 'create' ? 'Simpan Barang' : 'Simpan Perubahan'"></span>
+                  <span x-show="formSubmitting" class="sr-only">Sedang menyimpan...</span>
                 </button>
               </div>
             </form>

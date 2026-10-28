@@ -57,6 +57,22 @@
       animation-play-state: paused;
     }
 
+    .category-marquee {
+      scroll-snap-type: x mandatory;
+      scrollbar-width: none;
+      -webkit-overflow-scrolling: touch;
+    }
+
+    .category-marquee::-webkit-scrollbar {
+      display: none;
+    }
+
+    @media (max-width: 639px) {
+      .category-marquee:active .category-track {
+        animation-play-state: paused;
+      }
+    }
+
     @media (prefers-reduced-motion: reduce) {
       *,
       *::before,
@@ -70,7 +86,7 @@
   </style>
 </head>
 
-<body x-data="userPortal()" x-init="initCart(); initCatalogAjax(); @if (session('cart_cleared')) clearCart() @elseif (session('cart_items_submitted')) removeSubmittedItems(@js(session('cart_items_submitted'))) @endif" class="min-h-screen bg-[#e9faf5] font-sans text-[#153c36] antialiased">
+<body x-data="userPortal()" x-init="initCart(); initCatalogAjax(); initHistoryAjax(); @if (session('cart_cleared')) clearCart() @elseif (session('cart_items_submitted')) removeSubmittedItems(@js(session('cart_items_submitted'))) @endif" class="min-h-screen bg-[#e9faf5] font-sans text-[#153c36] antialiased">
   <x-user.navbar />
   {{ $slot }}
   <x-user.keranjang />
@@ -187,7 +203,79 @@
         cartStorageKey: 'inventrack-user-cart-v1',
         catalogSearchTimer: null,
         catalogRequestController: null,
+        historyPollTimer: null,
+        historyRequestController: null,
         applyUrl: @js(route('user.beranda', ['page' => 'apply'])),
+        initHistoryAjax() {
+          if (!document.getElementById('history-content') || this.historyPollTimer !== null) {
+            return;
+          }
+
+          this.historyPollTimer = window.setInterval(() => {
+            if (document.visibilityState === 'visible') {
+              this.refreshHistory();
+            }
+          }, 5000);
+        },
+        async refreshHistory() {
+          const currentHistory = document.getElementById('history-content');
+          const url = new URL(window.location.href);
+          if (
+            !currentHistory
+            || this.historyRequestController
+            || url.origin !== window.location.origin
+            || url.pathname !== window.location.pathname
+            || url.searchParams.get('page') !== 'history'
+          ) {
+            return;
+          }
+
+          const controller = new AbortController();
+          this.historyRequestController = controller;
+          try {
+            // ASVS V8.2.2: refresh the authenticated borrower page so its owner-scoped query remains authoritative.
+            const response = await fetch(url, {
+              headers: { 'X-Requested-With': 'XMLHttpRequest', 'Accept': 'text/html' },
+              credentials: 'same-origin',
+              cache: 'no-store',
+              signal: controller.signal,
+            });
+            const responseUrl = new URL(response.url);
+            if (
+              !response.ok
+              || responseUrl.origin !== window.location.origin
+              || responseUrl.pathname !== window.location.pathname
+              || !response.headers.get('content-type')?.includes('text/html')
+            ) {
+              throw new Error(`History refresh failed with status ${response.status}.`);
+            }
+
+            const responseDocument = new DOMParser().parseFromString(await response.text(), 'text/html');
+            const nextHistory = responseDocument.querySelector('#history-content');
+            if (!nextHistory) {
+              throw new Error('History response did not contain the expected content.');
+            }
+
+            const loanStates = history => Array.from(history.querySelectorAll('[data-loan-state]'), loan => loan.dataset.loanState).join('|');
+            if (loanStates(currentHistory) === loanStates(nextHistory)) {
+              return;
+            }
+
+            const scrollPosition = window.scrollY;
+            const horizontalScrollPosition = window.scrollX;
+            currentHistory.replaceWith(nextHistory);
+            window.Alpine.initTree(nextHistory);
+            window.scrollTo(horizontalScrollPosition, scrollPosition);
+          } catch (error) {
+            if (error.name !== 'AbortError') {
+              console.error('Failed to refresh borrower loan history.', error);
+            }
+          } finally {
+            if (this.historyRequestController === controller) {
+              this.historyRequestController = null;
+            }
+          }
+        },
         initCatalogAjax() {
           document.addEventListener('click', event => {
             const link = event.target.closest('a[data-catalog-ajax]');
@@ -283,19 +371,27 @@
             const searchSelection = activeSearch
               ? [document.activeElement.selectionStart, document.activeElement.selectionEnd]
               : null;
+            const scrollPosition = window.scrollY;
+            const horizontalScrollPosition = window.scrollX;
+            const categoryStripScrollPosition = catalog.querySelector('[x-ref="catalogCategoryStrip"]')?.scrollLeft ?? 0;
             catalog.replaceWith(nextCatalog);
             window.Alpine.initTree(nextCatalog);
+            const nextCategoryStrip = nextCatalog.querySelector('[x-ref="catalogCategoryStrip"]');
+            if (nextCategoryStrip) {
+              nextCategoryStrip.scrollLeft = categoryStripScrollPosition;
+            }
             if (updateHistory) {
               const method = replaceHistory ? 'replaceState' : 'pushState';
               window.history[method]({ catalog: true }, '', url);
             }
             if (activeSearch) {
               const nextSearch = nextCatalog.querySelector('input[name="q"]');
-              nextSearch?.focus();
+              nextSearch?.focus({ preventScroll: true });
               if (nextSearch && searchSelection[0] !== null && searchSelection[1] !== null) {
                 nextSearch.setSelectionRange(searchSelection[0], searchSelection[1]);
               }
             }
+            window.scrollTo(horizontalScrollPosition, scrollPosition);
           } catch (error) {
             if (error.name !== 'AbortError') {
               console.error('Failed to update the catalog.', error);

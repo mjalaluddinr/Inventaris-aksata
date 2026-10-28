@@ -24,7 +24,7 @@
   :style="isScrolled ? 'background: linear-gradient(90deg, #008b7a, #00d5a0)' : 'background: transparent'"
   class="fixed inset-x-0 top-0 z-50 transition-[height,transform,background-color,border-color,box-shadow] duration-300 ease-out"
 >
-  <nav class="mx-auto flex max-w-[1600px] items-center justify-between gap-2 px-3 transition-[height] duration-300 sm:gap-5 sm:px-8 lg:px-10"
+  <nav class="flex w-full items-center justify-between gap-2 px-3 transition-[height] duration-300 sm:gap-5 sm:px-8 lg:px-10"
     :class="isScrolled ? 'h-20' : 'h-[88px]'">
     <a href="{{ route('user.beranda') }}" class="flex min-w-0 shrink items-center gap-2 sm:gap-3" aria-label="InvenTrack, Sistem Inventaris Jurusan">
       <span class="flex shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-white/75 to-[#00d8b0]/70 shadow-inner transition-[width,height] duration-300"
@@ -77,7 +77,7 @@
     </div>
   </nav>
   <div id="user-mobile-menu" x-cloak x-show="mobileMenuOpen" x-transition.origin.top class="absolute inset-x-0 top-full border-b border-slate-200 bg-white/95 px-4 pb-4 pt-2 text-[#153c36] shadow-lg backdrop-blur-md md:hidden">
-    <nav class="mx-auto flex max-w-[1600px] flex-col gap-1" aria-label="Navigasi utama">
+    <nav class="flex w-full flex-col gap-1" aria-label="Navigasi utama">
       <a href="{{ route('user.beranda') }}" @click="mobileMenuOpen = false" class="rounded-lg px-4 py-3 text-sm font-semibold transition hover:bg-[#e6f8f3]">Beranda</a>
       <a href="{{ route('user.beranda', ['page' => 'catalog']) }}" @click="mobileMenuOpen = false" class="rounded-lg px-4 py-3 text-sm font-semibold transition hover:bg-[#e6f8f3]">Katalog</a>
       <a href="{{ route('user.beranda', ['page' => 'history', 'status' => 'active']) }}" @click="mobileMenuOpen = false" class="rounded-lg px-4 py-3 text-sm font-semibold transition hover:bg-[#e6f8f3]">Riwayat Saya</a>

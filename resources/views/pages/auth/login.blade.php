@@ -54,12 +54,12 @@
     .login-brand-content {
       position: relative;
       z-index: 1;
-      gap: clamp(1.25rem, 3.5vh, 2.5rem);
+      gap: 0;
     }
 
     .login-watermark {
       position: absolute;
-      top: calc(6% + 5px);
+      top: calc(17% + 5px);
       left: calc(-0.08em + 5px);
       z-index: 0;
       width: max-content;
@@ -71,7 +71,7 @@
       -webkit-background-clip: text;
       -webkit-text-stroke: 1px rgb(255 255 255 / 27%);
       filter: drop-shadow(0 4px 8.8px rgb(0 56 90 / 22%));
-      font-size: calc(clamp(6rem, 12.5vw, 11rem) + 2px);
+      font-size: calc(clamp(7.5rem, 16vw, 14rem) + 2px);
       font-weight: 700;
       letter-spacing: -0.09em;
       line-height: calc(0.72em + 5px);
@@ -81,11 +81,20 @@
     .login-hero-copy {
       position: relative;
       z-index: 2;
-      max-width: 34rem;
+      max-width: clamp(20rem, 30vw, 26rem);
       animation: login-content-arrive 900ms 120ms both cubic-bezier(0.2, 0.7, 0.2, 1);
     }
 
-    .login-hero-icon iconify-icon {
+    .login-hero-copy h1 {
+      font-size: clamp(1.7rem, 3.4vw, 2.7rem);
+      white-space: nowrap;
+    }
+
+    .login-hero-icon img {
+      width: clamp(12rem, 24vw, 27rem);
+      max-width: 100%;
+      height: auto;
+      object-fit: contain;
       animation: login-device-float 5.5s ease-in-out infinite;
       will-change: transform;
     }
@@ -94,42 +103,133 @@
       animation: login-content-arrive 760ms 80ms both cubic-bezier(0.2, 0.7, 0.2, 1);
     }
 
+    .login-mobile-logo {
+      display: none;
+    }
+
+    .login-mobile-brand {
+      display: none;
+    }
+
+    .login-heading-mobile {
+      display: none;
+    }
+
     @media (max-width: 1023px) {
+      .login-page {
+        display: block;
+        height: 100dvh;
+        min-height: 100dvh;
+        overflow-x: hidden;
+        overflow-y: auto;
+        background: #00385a;
+      }
+
       .login-brand-panel {
-        clip-path: none;
+        position: absolute;
+        inset: 0;
+        min-height: 100%;
+        height: 100%;
+        justify-content: center;
+        border-radius: 0;
       }
 
       .login-watermark {
-        top: calc(8% + 5px);
-        font-size: calc(clamp(5rem, 14vw, 8rem) + 2px);
+        top: 5%;
+        left: 50%;
+        font-size: clamp(5.5rem, 19vw, 7.5rem);
+        opacity: 0.38;
+        transform: translateX(-50%);
       }
 
       .login-brand-content {
-        position: absolute;
-        top: clamp(1.5rem, 5dvh, 3rem);
-        left: 50%;
-        width: min(88%, 32rem);
-        transform: translateX(-50%);
-        align-items: center;
-        padding: 0;
-        text-align: center;
-      }
-
-      .login-hero-icon {
-        height: clamp(4.5rem, 13dvh, 7rem);
-        margin-bottom: 0;
-      }
-
-      .login-hero-icon iconify-icon {
-        font-size: clamp(4.5rem, 17vw, 7rem);
-      }
-
-      .login-hero-copy {
         display: none;
       }
 
-      .login-hero-icon iconify-icon {
-        font-size: clamp(4.5rem, 15vw, 7rem);
+      .login-divider {
+        display: none;
+      }
+
+      .login-form-section {
+        position: relative;
+        inset: auto;
+        z-index: 1;
+        flex-direction: column;
+        justify-content: center;
+        min-height: 100dvh;
+        align-items: center;
+        gap: clamp(1.5rem, 5dvh, 2.5rem);
+        overflow: visible;
+        padding: clamp(2rem, 7dvh, 4rem) 1rem 2rem;
+      }
+
+      .login-mobile-brand {
+        display: flex;
+        flex: 0 0 auto;
+        gap: 0.75rem;
+      }
+
+      .login-mobile-brand h1 {
+        color: #fff;
+        font-size: clamp(2.5rem, 11vw, 3.1rem);
+        font-weight: 800;
+        letter-spacing: -0.045em;
+        line-height: 1;
+        text-shadow: 0 3px 14px rgb(0 24 48 / 38%);
+      }
+
+      .login-mobile-brand-mark {
+        height: 3.25rem;
+        width: 3.25rem;
+        border: 1px solid rgb(255 255 255 / 45%);
+        border-radius: 1rem;
+        background: #00B19C;
+        box-shadow: 0 8px 22px rgb(0 24 48 / 25%);
+      }
+
+      .login-form-card {
+        max-height: none;
+        overflow: visible;
+        border-color: rgb(255 255 255 / 82%);
+        border-top: 3px solid #00B19C;
+        border-radius: 1.5rem;
+        background: rgb(255 255 255 / 98%);
+        padding: clamp(1.35rem, 6vw, 1.75rem);
+        box-shadow: 0 24px 70px rgb(0 24 48 / 30%);
+      }
+
+      .login-form-heading {
+        margin-bottom: 1.25rem;
+        border-bottom-color: #e2ece9;
+        text-align: left;
+      }
+
+      .login-form-heading h2 {
+        display: block;
+        color: #00385a;
+        font-size: 1.5rem;
+        font-weight: 750;
+        letter-spacing: -0.025em;
+      }
+
+      .login-heading-desktop {
+        display: none;
+      }
+
+      .login-heading-mobile {
+        display: inline;
+      }
+
+      .login-form-heading p {
+        display: none;
+      }
+
+      .login-mobile-logo {
+        display: none;
+      }
+
+      .login-form-fields {
+        gap: 1.1rem;
       }
     }
 
@@ -141,6 +241,7 @@
       .login-brand-content {
         padding-top: 0;
         padding-bottom: 0;
+        transform: translateX(clamp(1rem, 2.5vw, 2.5rem));
       }
 
       .login-divider {
@@ -158,7 +259,7 @@
         position: absolute;
         inset: 0;
         background: #00385a;
-        clip-path: polygon(49.7% 0, 53.3% 0, 43.8% 100%, 40.2% 100%);
+        clip-path: polygon(51.3% 0, 54.9% 0, 45.4% 100%, 41.8% 100%);
         content: "";
       }
 
@@ -166,8 +267,15 @@
         position: absolute;
         inset: 0;
         background: #0098b1;
-        clip-path: polygon(53.3% 0, 54.9% 0, 45.4% 100%, 43.8% 100%);
+        clip-path: polygon(54.9% 0, 56.5% 0, 47% 100%, 45.4% 100%);
         content: "";
+      }
+
+      .login-divider-accent {
+        position: absolute;
+        inset: 0;
+        background: #00B19C;
+        clip-path: polygon(49.7% 0, 51.3% 0, 41.8% 100%, 40.2% 100%);
       }
     }
 
@@ -224,7 +332,7 @@
 </head>
 
 <body class="h-dvh min-h-dvh overflow-hidden bg-white font-sans antialiased text-slate-900">
-  <main class="relative isolate h-dvh min-h-dvh overflow-hidden lg:grid lg:grid-cols-2">
+  <main class="login-page relative isolate h-dvh min-h-dvh overflow-hidden lg:grid lg:grid-cols-2">
     <section
       class="login-brand-panel absolute inset-0 z-0 flex h-full min-h-0 flex-col justify-between overflow-hidden px-6 py-6 text-white sm:px-12 sm:py-8 lg:relative lg:inset-auto lg:z-auto lg:h-dvh lg:px-10 lg:py-7 xl:px-14"
       aria-label="Tentang InvenTrack">
@@ -235,10 +343,10 @@
       </div>
 
       <div class="login-brand-content mx-auto flex min-h-0 w-full max-w-xl flex-1 flex-col justify-center lg:mx-0">
-        <div class="login-hero-icon flex h-[clamp(11rem,30vh,19rem)] w-full shrink-0 items-center justify-center"
+        <div class="login-hero-icon flex w-full shrink-0 items-center justify-center"
           aria-hidden="true">
-          <iconify-icon icon="bi:pc-display"
-            class="text-[clamp(9rem,15vw,19rem)] leading-none text-white drop-shadow-[0_10px_7px_rgba(0,0,0,0.18)]"></iconify-icon>
+          <img src="{{ asset('assets/icon.svg') }}" alt=""
+            class="drop-shadow-[0_10px_7px_rgba(0,0,0,0.18)]">
         </div>
         <div class="login-hero-copy">
           <h1 class="text-4xl font-semibold tracking-tight xl:text-[clamp(2.5rem,4.2vw,3.25rem)]">Halo, Pengguna...</h1>
@@ -255,16 +363,28 @@
       </footer>
     </section>
 
-    <div class="login-divider hidden lg:block" aria-hidden="true"></div>
+    <div class="login-divider hidden lg:block" aria-hidden="true">
+      <span class="login-divider-accent"></span>
+    </div>
 
     <section
-      class="absolute inset-0 z-10 flex h-full items-center justify-center overflow-y-auto px-4 py-4 sm:px-8 lg:relative lg:inset-auto lg:z-10 lg:h-dvh lg:px-8 lg:py-6 xl:px-12"
+      class="login-form-section absolute inset-0 z-10 flex h-full items-center justify-center overflow-y-auto px-4 py-4 sm:px-8 lg:relative lg:inset-auto lg:z-10 lg:h-dvh lg:px-8 lg:py-6 xl:px-12"
       aria-label="Form masuk">
+      <div class="login-mobile-brand flex-col items-center lg:hidden">
+        <span class="login-mobile-brand-mark flex items-center justify-center"
+          aria-hidden="true">
+          <img src="{{ asset('assets/icon.svg') }}" alt="" class="h-9 w-9 object-contain">
+        </span>
+        <h1>InvenTrack</h1>
+      </div>
       <div
         class="login-form-card relative z-10 max-h-full w-full max-w-[27rem] overflow-y-auto rounded-[1.6rem] border border-slate-100 bg-white px-5 py-6 shadow-[0_18px_60px_rgba(0,56,90,0.12)] sm:rounded-none sm:border-0 sm:bg-transparent sm:px-8 sm:py-7 sm:shadow-none sm:backdrop-blur-none lg:max-h-[calc(100dvh-3rem)]">
-        <header class="login-form-heading mb-6">
-          <h2 class="text-2xl font-bold tracking-tight text-[#00385a] sm:text-[1.7rem]">Masuk ke akun</h2>
-          <p class="mt-1.5 text-sm leading-5 text-slate-500">Gunakan username dan password yang terdaftar.</p>
+        <header class="login-form-heading mb-5 border-b border-[#d8e2e0] pb-4 text-center">
+          <h2 class="text-[2.4rem] font-bold leading-none tracking-tight text-[#00385a] sm:text-[2.6rem]">
+            <span class="login-heading-desktop">InvenTrack</span>
+            <span class="login-heading-mobile">Masuk ke akun</span>
+          </h2>
+          <p class="mt-2 text-sm font-semibold tracking-[0.04em] text-[#83a4a2]">MASUK KE AKUN ANDA</p>
         </header>
 
         @if (session('success'))
@@ -386,17 +506,17 @@
           @csrf
 
           <div>
-            <label for="username" class="mb-2 block text-sm font-semibold text-slate-700">Username</label>
+            <label for="username" class="mb-2 block text-sm font-semibold text-[#607471]">Username</label>
             <div class="group relative">
               <iconify-icon icon="mdi:account-outline"
                 class="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-xl text-slate-400 transition-colors group-focus-within:text-[#008f82]"
                 aria-hidden="true"></iconify-icon>
               <input type="text" id="username" name="username" value="{{ old('username') }}" required
-                maxlength="255" autocomplete="username" autofocus placeholder="Masukkan username Anda"
+                maxlength="255" autocomplete="username" autofocus placeholder="Masukkan Username"
                 @class([
-                    'w-full rounded-xl border bg-slate-50 py-3.5 pl-12 pr-4 text-slate-900 outline-none transition focus:bg-white focus:ring-4',
+                    'w-full rounded-xl border bg-white py-2.5 pl-11 pr-4 text-slate-900 outline-none transition placeholder:text-[#83a4a2] focus:ring-2',
                     'border-rose-300 focus:border-rose-400 focus:ring-rose-500/10' => $errors->has('username'),
-                    'border-slate-200 focus:border-[#00a995] focus:ring-[#00a995]/10' => ! $errors->has('username'),
+                    'border-[#c9d8d6] focus:border-[#00a995] focus:ring-[#00a995]/10' => ! $errors->has('username'),
                 ])
                 @if ($errors->has('username')) aria-invalid="true" aria-describedby="username-error" @endif>
             </div>
@@ -406,17 +526,17 @@
           </div>
 
           <div>
-            <label for="password" class="mb-2 block text-sm font-semibold text-slate-700">Password</label>
+            <label for="password" class="mb-2 block text-sm font-semibold text-[#607471]">Password</label>
             <div class="group relative">
               <iconify-icon icon="mdi:lock-outline"
                 class="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-xl text-slate-400 transition-colors group-focus-within:text-[#008f82]"
                 aria-hidden="true"></iconify-icon>
               <input type="password" id="password" name="password" required autocomplete="current-password"
-                placeholder="Masukkan password Anda"
+                placeholder="Masukkan Password"
                 @class([
-                    'w-full rounded-xl border bg-slate-50 py-3.5 pl-12 pr-12 text-slate-900 outline-none transition focus:bg-white focus:ring-4',
+                    'w-full rounded-xl border bg-white py-2.5 pl-11 pr-12 text-slate-900 outline-none transition placeholder:text-[#83a4a2] focus:ring-2',
                     'border-rose-300 focus:border-rose-400 focus:ring-rose-500/10' => $errors->has('password'),
-                    'border-slate-200 focus:border-[#00a995] focus:ring-[#00a995]/10' => ! $errors->has('password'),
+                    'border-[#c9d8d6] focus:border-[#00a995] focus:ring-[#00a995]/10' => ! $errors->has('password'),
                 ])
                 @if ($errors->has('password')) aria-invalid="true" aria-describedby="password-error" @endif>
               <button type="button" id="togglePassword"
@@ -437,14 +557,12 @@
             </a>
           </div>
 
-          <button type="submit" id="loginBtn"
-            class="flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-[#00b19c] to-[#0098b1] px-4 py-3.5 font-semibold text-white shadow-md shadow-[#006b70]/15 transition hover:brightness-95 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#00385a] disabled:cursor-wait disabled:opacity-70">
-            <span class="btn-text inline-flex items-center gap-2">
-              Masuk
-              <iconify-icon icon="mdi:arrow-right" aria-hidden="true"></iconify-icon>
-            </span>
-            <span class="spinner hidden h-5 w-5 animate-spin rounded-full border-2 border-white/35 border-t-white"
-              aria-label="Sedang memproses"></span>
+          <button type="submit" id="loginBtn" aria-busy="false"
+            class="relative mx-auto flex w-full max-w-44 items-center justify-center rounded-lg bg-[#00d9a1] px-4 py-2.5 text-sm font-bold uppercase text-[#003f38] shadow-[0_3px_8px_rgba(0,63,56,0.2)] transition hover:bg-[#00c894] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#00385a] disabled:cursor-wait disabled:opacity-70">
+            <span class="btn-text">Masuk</span>
+            <span class="spinner absolute left-1/2 top-1/2 hidden h-5 w-5 -translate-x-1/2 -translate-y-1/2 animate-spin rounded-full border-2 border-[#003f38]/25 border-t-[#003f38]"
+              aria-hidden="true"></span>
+            <span class="sr-only spinner-label hidden">Sedang masuk...</span>
           </button>
         </form>
       </div>
@@ -487,8 +605,10 @@
 
     loginForm.addEventListener('submit', () => {
       loginBtn.disabled = true;
-      loginBtn.querySelector('.btn-text').classList.add('hidden');
+      loginBtn.setAttribute('aria-busy', 'true');
+      loginBtn.querySelector('.btn-text').classList.add('invisible');
       loginBtn.querySelector('.spinner').classList.remove('hidden');
+      loginBtn.querySelector('.spinner-label').classList.remove('hidden');
     });
 
     const forgotModal = document.getElementById('forgotModal');

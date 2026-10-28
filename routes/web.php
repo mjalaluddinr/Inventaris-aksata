@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Admin\LogMutasiController;
 use App\Http\Controllers\Admin\ManageBarang;
 use App\Http\Controllers\Admin\ManageKategori;
 use App\Http\Controllers\Admin\ManageLemari;
@@ -97,9 +98,9 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'permission:admin-pa
         return view('pages.admin.log_import');
     })->middleware('permission:accounts.manage-all')->name('log_import');
 
-    Route::get('/log-mutasi', function () {
-        return view('pages.admin.log_mutasi');
-    })->middleware('permission:accounts.manage-all')->name('log_mutasi');
+    Route::get('/log-mutasi', [LogMutasiController::class, 'index'])
+        ->middleware('permission:accounts.manage-all')
+        ->name('log_mutasi');
 });
 
 // ASVS V8.2.2/V8.3.1: protect borrower pages and actions at the server-side boundary.

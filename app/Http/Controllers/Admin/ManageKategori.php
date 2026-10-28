@@ -26,6 +26,7 @@ class ManageKategori extends Controller
                         ->orWhere('keterangan', 'like', '%'.$search.'%');
                 });
             })
+            ->orderByDesc('created_at')
             ->orderBy('nama_kategori')
             ->paginate(10)
             ->withQueryString();

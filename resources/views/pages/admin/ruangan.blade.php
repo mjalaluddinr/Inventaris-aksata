@@ -372,7 +372,7 @@
           </button>
         </div>
         @endif
-        <label class="ruangan-search relative block w-full sm:w-72">
+        <label class="ruangan-search relative block w-full sm:ml-auto sm:w-72">
           <span class="pointer-events-none absolute inset-y-0 left-3 flex items-center"><iconify-icon icon="mdi:magnify"
               width="17" class="block text-slate-400"></iconify-icon></span>
           <input type="search" name="search" x-model="searchQuery" @input="searchRuangan()"
@@ -562,12 +562,14 @@
           <div class="ruangan-modal-footer flex justify-end gap-2 border-t border-slate-200 bg-slate-50 px-5 py-3">
             <button type="button" @click="closeAccountModal()"
               class="rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-slate-400">Batal              </button>
-              <button type="submit" :disabled="formBusy"
-                class="ruangan-primary-button rounded-md border border-[#009F91] bg-sidebar-start px-4 py-2 text-sm font-semibold text-white shadow-sm transition focus:outline-none focus:ring-2 focus:ring-sidebar-start focus:ring-offset-2 flex items-center gap-2">
-              <iconify-icon
-                :icon="formBusy ? 'mdi:loading' : (modalMode === 'create' ? 'mdi:content-save-plus-outline' : 'mdi:content-save-edit-outline')"
-                :class="formBusy ? 'animate-spin' : ''" width="18" aria-hidden="true"></iconify-icon>
-              <span x-text="formBusy ? 'Menyimpan...' : (modalMode === 'create' ? 'Simpan Ruangan' : 'Simpan Perubahan')"></span>
+              <button type="submit" :disabled="formBusy" :aria-busy="formBusy.toString()"
+                class="ruangan-primary-button inline-flex items-center justify-center rounded-md border border-[#009F91] bg-sidebar-start px-4 py-2 text-sm font-semibold text-white shadow-sm transition focus:outline-none focus:ring-2 focus:ring-sidebar-start focus:ring-offset-2">
+              <iconify-icon x-show="formBusy" icon="mdi:loading" class="animate-spin text-lg" aria-hidden="true"></iconify-icon>
+              <iconify-icon x-show="!formBusy"
+                :icon="modalMode === 'create' ? 'mdi:content-save-plus-outline' : 'mdi:content-save-edit-outline'"
+                width="18" aria-hidden="true"></iconify-icon>
+              <span x-show="!formBusy" class="ml-2" x-text="modalMode === 'create' ? 'Simpan Ruangan' : 'Simpan Perubahan'"></span>
+              <span x-show="formBusy" class="sr-only">Sedang menyimpan...</span>
             </button>
           </div>
         </form>
@@ -599,10 +601,11 @@
           <button type="button" @click="cancelDelete()" :disabled="formBusy"
             class="rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-slate-400">Batal</button>
           <button type="button" @click="submitDelete()" :disabled="formBusy" :aria-busy="formBusy.toString()"
-            class="inline-flex items-center gap-2 rounded-md border border-rose-300 bg-rose-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-rose-700 focus:outline-none focus:ring-2 focus:ring-rose-500 focus:ring-offset-2 disabled:cursor-wait disabled:opacity-70">
+            class="inline-flex items-center justify-center rounded-md border border-rose-300 bg-rose-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-rose-700 focus:outline-none focus:ring-2 focus:ring-rose-500 focus:ring-offset-2 disabled:cursor-wait disabled:opacity-70">
             <iconify-icon x-show="formBusy" icon="mdi:loading" class="animate-spin" width="18"
               aria-hidden="true"></iconify-icon>
-            <span x-text="formBusy ? 'Menghapus...' : 'Ya, Hapus'"></span>
+            <span x-show="!formBusy">Ya, Hapus</span>
+            <span x-show="formBusy" class="sr-only">Sedang menghapus...</span>
           </button>
         </div>
       </div>

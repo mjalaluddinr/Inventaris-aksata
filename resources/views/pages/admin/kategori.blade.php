@@ -323,7 +323,7 @@
           Tambah Kategori
         </button>
         @endif
-        <label class="relative block w-full sm:w-72">
+        <label class="relative block w-full sm:ml-auto sm:w-72">
           <span class="sr-only">Cari kategori</span>
           <span class="pointer-events-none absolute inset-y-0 left-3 flex items-center text-slate-400">
             <iconify-icon icon="mdi:magnify" width="17" aria-hidden="true"></iconify-icon>
@@ -516,12 +516,14 @@
               class="rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-slate-400">
               Batal
             </button>
-            <button type="submit" :disabled="categoryBusy"
-              class="inline-flex items-center gap-2 rounded-md border border-[#009F91] bg-[#00B19C] px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-[#009A87] focus:outline-none focus:ring-2 focus:ring-[#00B19C] focus:ring-offset-2">
-              <iconify-icon
+            <button type="submit" :disabled="categoryBusy" :aria-busy="categoryBusy.toString()"
+              class="inline-flex items-center justify-center rounded-md border border-[#009F91] bg-[#00B19C] px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-[#009A87] focus:outline-none focus:ring-2 focus:ring-[#00B19C] focus:ring-offset-2">
+              <iconify-icon x-show="categoryBusy" icon="mdi:loading" class="animate-spin text-lg" aria-hidden="true"></iconify-icon>
+              <iconify-icon x-show="!categoryBusy"
                 :icon="modalMode === 'edit' ? 'mdi:content-save-edit-outline' : 'mdi:content-save-plus-outline'"
                 width="18" aria-hidden="true"></iconify-icon>
-              <span x-text="categoryBusy ? 'Menyimpan...' : (modalMode === 'edit' ? 'Simpan perubahan' : 'Simpan kategori')"></span>
+              <span x-show="!categoryBusy" class="ml-2" x-text="modalMode === 'edit' ? 'Simpan perubahan' : 'Simpan kategori'"></span>
+              <span x-show="categoryBusy" class="sr-only">Sedang menyimpan...</span>
             </button>
           </div>
         </form>
@@ -552,9 +554,11 @@
             class="rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-slate-400">
             Batal
           </button>
-          <button type="button" @click="submitDelete()" :disabled="categoryBusy"
-            class="rounded-md border border-rose-300 bg-rose-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-rose-700 focus:outline-none focus:ring-2 focus:ring-rose-500 focus:ring-offset-2">
-            <span x-text="categoryBusy ? 'Menghapus...' : 'Ya, Hapus'"></span>
+          <button type="button" @click="submitDelete()" :disabled="categoryBusy" :aria-busy="categoryBusy.toString()"
+            class="inline-flex items-center justify-center rounded-md border border-rose-300 bg-rose-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-rose-700 focus:outline-none focus:ring-2 focus:ring-rose-500 focus:ring-offset-2">
+            <iconify-icon x-show="categoryBusy" icon="mdi:loading" class="animate-spin text-lg" aria-hidden="true"></iconify-icon>
+            <span x-show="!categoryBusy">Ya, Hapus</span>
+            <span x-show="categoryBusy" class="sr-only">Sedang menghapus...</span>
           </button>
         </div>
       </section>
