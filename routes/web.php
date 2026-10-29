@@ -69,6 +69,7 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'permission:admin-pa
 
     Route::middleware('permission:loans.process')->group(function () {
         Route::get('/peminjaman', [ManagePeminjaman::class, 'index'])->name('peminjaman');
+        Route::get('/peminjaman/print', [ManagePeminjaman::class, 'printReport'])->name('peminjaman.print');
         Route::get('/peminjaman/export', [ManagePeminjaman::class, 'export'])->name('peminjaman.export');
         Route::post('/peminjaman/scan', [ManagePeminjaman::class, 'scan'])
             ->middleware('throttle:10,1')
@@ -105,6 +106,14 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'permission:admin-pa
     Route::get('/log-mutasi', [LogMutasiController::class, 'index'])
         ->middleware('permission:accounts.manage-all')
         ->name('log_mutasi');
+
+    // ASVS V8.2/V8.3: only administrators may view stock history or register item usage.
+    Route::middleware('permission:accounts.manage-all')->group(function () {
+        Route::post('/barang/{barang}/pemakaian', [ManageBarang::class, 'recordUsage'])
+            ->name('barang.pemakaian.store');
+        Route::post('/barang/{barang}/pemakaian/{usage}/tarik', [ManageBarang::class, 'withdrawUsage'])
+            ->name('barang.pemakaian.tarik');
+    });
 });
 
 // ASVS V8.2.2/V8.3.1: protect borrower pages and actions at the server-side boundary.
@@ -114,9 +123,9 @@ Route::prefix('user')->name('user.')->middleware(['auth', 'can:access-user-porta
     Route::post('/peminjaman', [PeminjamanController::class, 'store'])
         ->middleware('throttle:10,1')
         ->name('peminjaman.store');
-    Route::post('/peminjaman/{peminjamanId}/pembatalan', [PeminjamanController::class, 'requestCancellation'])
+    Route::post('/peminjaman/{peminjamanId}/cancel', [PeminjamanController::class, 'cancel'])
         ->middleware('throttle:5,1')
-        ->name('peminjaman.cancellation.store');
+        ->name('peminjaman.cancel');
 });
 
 Route::middleware(['auth', MustChangePassword::class])->group(function () {

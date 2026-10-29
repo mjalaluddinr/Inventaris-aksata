@@ -42,8 +42,7 @@
               @php
                 $detailStatuses = $loan->detailPeminjamans->pluck('status')->unique();
                 $loanStatus = $detailStatuses->count() === 1 ? $detailStatuses->first() : 'diproses';
-                $cancellationRequested = $loan->hasCancellationRequest();
-                $statusLabels = ['pending' => 'Menunggu konfirmasi', 'dipinjam' => 'Sedang dipinjam', 'dikembalikan' => 'Dikembalikan', 'ditolak' => 'Ditolak', 'dibatalkan' => 'Dibatalkan', 'diproses' => 'Beberapa status'];
+                $statusLabels = ['pending' => 'Menunggu konfirmasi', 'dipinjam' => 'Sedang dipinjam', 'dikembalikan' => 'Dikembalikan', 'ditolak' => 'Ditolak', 'dibatalkan' => 'Peminjaman Dibatalkan', 'diproses' => 'Beberapa status'];
                 $progressIndex = match ($loanStatus) {
                     'dipinjam' => 2,
                     'dikembalikan' => 3,
@@ -52,7 +51,6 @@
                 $isOverdue = $loanStatus === 'dipinjam'
                     && $loan->tanggal_rencana_kembali?->isBefore(today()) === true;
                 $statusStyle = match (true) {
-                    $cancellationRequested => 'bg-amber-100 text-amber-800',
                     $isOverdue => 'bg-amber-100 text-amber-800',
                     $loanStatus === 'pending' => 'bg-sky-100 text-sky-800',
                     $loanStatus === 'dipinjam' => 'bg-emerald-100 text-emerald-800',
@@ -62,14 +60,14 @@
                 };
                 $progressSteps = ['Diajukan', 'Dikonfirmasi', 'Dipinjam', 'Dikembalikan'];
               @endphp
-              <article data-loan-state="{{ $loan->peminjaman_id }}:{{ $loanStatus }}:{{ $loan->detailPeminjamans->pluck('status')->implode(',') }}:{{ $cancellationRequested ? '1' : '0' }}:{{ $isOverdue ? '1' : '0' }}" x-data="{ qrOpen: false, cancellationOpen: false }" @keydown.escape.window="qrOpen = false; cancellationOpen = false" class="user-card-enter overflow-hidden rounded-xl border border-[#d1e6e1] bg-white shadow-[0_2px_5px_rgba(20,55,48,0.12)]" style="animation-delay: {{ $loop->index * 70 }}ms">
+              <article data-loan-state="{{ $loan->peminjaman_id }}:{{ $loanStatus }}:{{ $loan->detailPeminjamans->pluck('status')->implode(',') }}:{{ $isOverdue ? '1' : '0' }}" x-data="{ qrOpen: false, cancellationOpen: false }" @keydown.escape.window="qrOpen = false; cancellationOpen = false" class="user-card-enter overflow-hidden rounded-xl border border-[#d1e6e1] bg-white shadow-[0_2px_5px_rgba(20,55,48,0.12)]" style="animation-delay: {{ $loop->index * 70 }}ms">
                 <div class="flex flex-wrap items-start justify-between gap-3 border-b border-slate-100 px-4 py-3.5 sm:px-5">
                   <div class="min-w-0">
                     <h2 class="text-sm font-bold tracking-wide text-slate-900 sm:text-base">Pesanan peminjaman</h2>
                     <p class="mt-1 text-[11px] text-slate-500">Diajukan {{ $loan->tanggal_pengajuan?->format('d M Y') ?? '—' }}</p>
                   </div>
                   <span class="shrink-0 rounded-full px-3 py-1 text-[10px] font-semibold {{ $statusStyle }}">
-                    {{ $cancellationRequested ? 'Menunggu keputusan pembatalan' : ($isOverdue ? 'Jatuh tempo' : ($statusLabels[$loanStatus] ?? ucfirst($loanStatus))) }}
+                    {{ $isOverdue ? 'Jatuh tempo' : ($statusLabels[$loanStatus] ?? ucfirst($loanStatus)) }}
                   </span>
                 </div>
                 <div class="divide-y divide-slate-100 px-4 sm:px-5">
@@ -118,9 +116,7 @@
                         class="rounded-md bg-[#00c99c] px-3 py-1.5 text-[10px] font-semibold text-[#004c43] transition hover:bg-[#00b68d] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#008b7a] focus-visible:ring-offset-2">
                         Tampilkan QR
                       </button>
-                      @unless ($cancellationRequested)
-                        <button type="button" @click="cancellationOpen = true" class="rounded-md border border-amber-300 px-3 py-1.5 text-[10px] font-semibold text-amber-800 transition hover:bg-amber-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-2">Ajukan pembatalan</button>
-                      @endunless
+                      <button type="button" @click="cancellationOpen = true" class="rounded-md border border-amber-300 px-3 py-1.5 text-[10px] font-semibold text-amber-800 transition hover:bg-amber-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-2">Batalkan Peminjaman</button>
                     </div>
                   @endif
                 </div>
@@ -151,7 +147,7 @@
                     </div>
                   </template>
                 @endif
-                @if ($loanStatus === 'pending' && ! $cancellationRequested)
+                @if ($loanStatus === 'pending')
                   <template x-teleport="body">
                     <div x-cloak x-show="cancellationOpen" x-transition.opacity @click.self="cancellationOpen = false" class="fixed inset-0 z-[120] flex items-center justify-center overflow-y-auto bg-slate-950/55 p-4 sm:p-6" role="presentation">
                       <section x-show="cancellationOpen" x-transition class="my-auto w-full max-w-md overflow-hidden rounded-2xl border border-amber-200 bg-white shadow-[0_24px_80px_rgba(2,25,41,0.35)]" role="alertdialog" aria-modal="true" aria-labelledby="cancellation-title-{{ $loan->peminjaman_id }}" aria-describedby="cancellation-description-{{ $loan->peminjaman_id }}">
@@ -162,8 +158,8 @@
                               <iconify-icon icon="mdi:calendar-remove-outline" class="text-2xl" aria-hidden="true"></iconify-icon>
                             </span>
                             <div>
-                              <h2 id="cancellation-title-{{ $loan->peminjaman_id }}" class="text-base font-bold text-slate-900">Ajukan pembatalan?</h2>
-                              <p class="mt-1 text-xs leading-relaxed text-slate-500">Permintaan ini akan dikirim ke Admin untuk ditinjau.</p>
+                              <h2 id="cancellation-title-{{ $loan->peminjaman_id }}" class="text-base font-bold text-slate-900">Batalkan peminjaman?</h2>
+                              <p class="mt-1 text-xs leading-relaxed text-slate-500">Peminjaman akan langsung dibatalkan dan stok barang dikembalikan.</p>
                             </div>
                           </div>
                           <button type="button" @click="cancellationOpen = false" class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-slate-400 transition hover:bg-slate-100 hover:text-slate-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500" aria-label="Tutup konfirmasi pembatalan">
@@ -172,13 +168,13 @@
                         </header>
                         <div class="px-5 pb-5 pt-4 sm:px-6">
                           <div id="cancellation-description-{{ $loan->peminjaman_id }}" class="rounded-xl border border-amber-100 bg-amber-50 p-3.5">
-                            <p class="text-xs leading-relaxed text-amber-950">Apakah kamu yakin ingin mengajukan pembatalan pesanan ini? Pesanan tidak akan dibatalkan sebelum Admin menyetujui permintaan.</p>
+                            <p class="text-xs leading-relaxed text-amber-950">Apakah kamu yakin ingin membatalkan peminjaman ini? Tindakan ini tidak dapat diurungkan.</p>
                           </div>
                           <div class="mt-5 flex flex-col-reverse justify-end gap-2 sm:flex-row">
                             <button type="button" @click="cancellationOpen = false" class="rounded-lg border border-slate-200 px-4 py-2.5 text-xs font-semibold text-slate-600 transition hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-400">Kembali</button>
-                            <form method="POST" action="{{ route('user.peminjaman.cancellation.store', $loan->peminjaman_id) }}" class="w-full sm:w-auto">
+                            <form method="POST" action="{{ route('user.peminjaman.cancel', $loan->peminjaman_id) }}" class="w-full sm:w-auto">
                               @csrf
-                              <button type="submit" class="w-full rounded-lg bg-amber-500 px-4 py-2.5 text-xs font-bold text-white shadow-sm transition hover:bg-amber-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-2 sm:w-auto">Ya, ajukan pembatalan</button>
+                              <button type="submit" class="w-full rounded-lg bg-rose-600 px-4 py-2.5 text-xs font-bold text-white shadow-sm transition hover:bg-rose-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-rose-600 focus-visible:ring-offset-2 sm:w-auto">Ya, Batalkan Peminjaman</button>
                             </form>
                           </div>
                         </div>

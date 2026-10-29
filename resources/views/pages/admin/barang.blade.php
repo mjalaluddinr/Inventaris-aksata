@@ -24,8 +24,7 @@
       currentItem: {
           barang_id: @js(old('barang_id', '')),
           kategori_id: @js(old('kategori_id', '')),
-          ruangan_id: @js(old('ruangan_id', '')),
-          lemari_ids: @js(is_array(old('lemari_id')) ? array_values(old('lemari_id')) : []),
+          locations: @js(old('locations', [['ruangan_id' => '', 'lemari_id' => '', 'stok_total' => 0, 'stok_tersedia' => 0]])),
           kode_barang: @js(old('kode_barang', '')),
           nama_barang: @js(old('nama_barang', '')),
           satuan: @js(old('satuan', 'unit')),
@@ -182,8 +181,7 @@
           this.currentItem = {
               barang_id: '',
               kategori_id: '',
-              ruangan_id: '',
-              lemari_ids: [],
+              locations: [{ ruangan_id: '', lemari_id: '', stok_total: 0, stok_tersedia: 0 }],
               kode_barang: '',
               nama_barang: '',
               satuan: 'unit',
@@ -196,14 +194,41 @@
           this.formAction = this.createUrl;
           this.modalOpen = true;
       },
-      setRuangan(ruanganId) {
-          this.currentItem.ruangan_id = ruanganId;
-          this.currentItem.lemari_ids = [];
+      addStockLocation() {
+          if (this.currentItem.locations.length >= 50) return;
+          this.currentItem.locations.push({
+              ruangan_id: '',
+              lemari_id: '',
+              stok_total: 0,
+              stok_tersedia: 0
+          });
+      },
+      removeStockLocation(index) {
+          if (this.currentItem.locations.length <= 1) return;
+          this.currentItem.locations.splice(index, 1);
+          this.syncStockTotals();
+      },
+      setStockLocationRoom(location, roomId) {
+          location.ruangan_id = roomId;
+          location.lemari_id = '';
+      },
+      syncStockTotals() {
+          if (this.modalMode !== 'create') return;
+
+          this.currentItem.stok_total = this.currentItem.locations.reduce(
+              (total, location) => total + Math.max(0, Number(location.stok_total) || 0),
+              0
+          );
+          this.currentItem.stok_tersedia = this.currentItem.locations.reduce(
+              (total, location) => total + Math.max(0, Number(location.stok_tersedia) || 0),
+              0
+          );
       },
       editItem(item) {
           this.modalMode = 'edit';
           this.formSubmitting = false;
           this.currentItem = item;
+          this.syncStockTotals();
           this.formAction = this.itemUpdateUrl(item.barang_id);
           this.modalOpen = true;
       },
@@ -562,12 +587,15 @@
                     </td>
                     <td class="min-w-max whitespace-nowrap px-4 py-3 text-xs leading-5 text-slate-600">
                       @forelse ($barang->lokasiBarangs as $lokasi)
-                        <p class="whitespace-nowrap">
+                        <p class="whitespace-nowrap font-medium text-slate-700">
                           {{ $lokasi->ruangan?->nama_ruangan ?? 'Ruangan tidak ditemukan' }}
                           @if ($lokasi->lemari)
                             <span class="px-1 font-semibold text-emerald-600" aria-hidden="true">›</span>
                             {{ $lokasi->lemari->nama_lemari }}
                           @endif
+                          <span class="ml-1 text-[11px] font-normal text-slate-500">
+                            {{ number_format($lokasi->stok_tersedia, 0, ',', '.') }}/{{ number_format($lokasi->stok_total, 0, ',', '.') }} tersedia
+                          </span>
                         </p>
                       @empty
                         <span class="text-slate-400">Belum ditempatkan</span>
@@ -580,8 +608,7 @@
                           @click="editItem({
                             barang_id: $el.dataset.barangId,
                             kategori_id: $el.dataset.kategoriId,
-                            ruangan_id: $el.dataset.ruanganId,
-                            lemari_ids: $el.dataset.lemariIds ? $el.dataset.lemariIds.split(',') : [],
+                            locations: JSON.parse($el.dataset.locations),
                             kode_barang: $el.dataset.kodeBarang,
                             nama_barang: $el.dataset.namaBarang,
                             satuan: $el.dataset.satuan,
@@ -596,10 +623,12 @@
                           data-nama-barang="{{ $barang->nama_barang }}" data-satuan="{{ $barang->satuan }}"
                           data-stok-total="{{ $barang->stok_total }}"
                           data-stok-tersedia="{{ $barang->stok_tersedia }}" data-kondisi="{{ $barangCondition }}"
-                          data-ruangan-id="{{ $barang->lokasiBarangs->first()?->ruangan_id }}"
-                          data-lemari-ids="{{ $barang->lokasiBarangs
-                              ->where('ruangan_id', $barang->lokasiBarangs->first()?->ruangan_id)
-                              ->pluck('lemari_id')->filter()->implode(',') }}"
+                          data-locations="{{ $barang->lokasiBarangs->map(fn ($location) => [
+                              'ruangan_id' => $location->ruangan_id,
+                              'lemari_id' => $location->lemari_id,
+                              'stok_total' => $location->stok_total,
+                              'stok_tersedia' => $location->stok_tersedia,
+                          ])->values()->toJson() }}"
                           data-kelayakan="{{ $barangEligibility }}" data-spesifikasi="{{ $barang->spesifikasi }}"
                           class="inline-flex min-h-8 items-center gap-1 rounded-md border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-700 transition hover:border-sky-400 hover:text-sky-700 focus:outline-none focus:ring-2 focus:ring-sky-400">
                           <iconify-icon icon="mdi:pencil-outline" width="15" aria-hidden="true"></iconify-icon>
@@ -717,6 +746,252 @@
         </section>
         @endfragment
       </div>
+      @if (auth()->user()?->canManageAllAccounts())
+        <section id="barang-usage-panel" class="overflow-hidden rounded-xl border border-[#B9DED4] bg-white shadow-sm">
+          @if ($selectedBarang)
+            @php
+              $activePanel = $filters['panel'] ?? 'history';
+              $mutationLabels = [
+                  'masuk' => 'Barang Masuk',
+                  'dipinjam' => 'Dipinjam',
+                  'dikembalikan' => 'Dikembalikan',
+                  'dipakai' => 'Dipakai di Ruangan',
+                  'ditarik' => 'Ditarik dari Ruangan',
+                  'dipindahkan' => 'Dipindahkan',
+                  'penyesuaian' => 'Penyesuaian',
+              ];
+            @endphp
+            <header class="flex flex-col gap-3 border-b border-[#D8EBE5] bg-[#F5FBF9] px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-6">
+              <div class="min-w-0">
+                <h2 class="text-base font-bold text-slate-800">{{ $selectedBarang->nama_barang }}</h2>
+                <p class="mt-1 text-xs text-slate-500">
+                  {{ $selectedBarang->kode_barang }} · Stok tersedia
+                  {{ number_format($selectedBarang->stok_tersedia, 0, ',', '.') }} {{ $selectedBarang->satuan }}
+                </p>
+              </div>
+              <div class="flex flex-col gap-2 sm:items-end">
+                <form method="GET" action="{{ route('admin.barang') }}">
+                  @foreach (['search', 'kategori_id', 'ruangan_id', 'lemari_id', 'kondisi', 'kelayakan'] as $filterName)
+                    @if (filled($filters[$filterName] ?? null))
+                      <input type="hidden" name="{{ $filterName }}" value="{{ $filters[$filterName] }}">
+                    @endif
+                  @endforeach
+                  <input type="hidden" name="panel" value="{{ $activePanel }}">
+                  <label for="usage-item" class="sr-only">Pilih barang untuk riwayat atau pemakaian</label>
+                  <select id="usage-item" name="barang_id" onchange="this.form.submit()"
+                    class="max-w-full rounded-lg border border-[#B9DED4] bg-white px-3 py-2 text-xs font-semibold text-slate-700 focus:border-[#008b7a] focus:outline-none focus:ring-2 focus:ring-[#008b7a]/20">
+                    @if (! $barangs->contains('barang_id', $selectedBarang->barang_id))
+                      <option value="{{ $selectedBarang->barang_id }}" selected>{{ $selectedBarang->nama_barang }}</option>
+                    @endif
+                    @foreach ($barangs as $barangOption)
+                      <option value="{{ $barangOption->barang_id }}" @selected($selectedBarang->barang_id === $barangOption->barang_id)>
+                        {{ $barangOption->nama_barang }} · {{ $barangOption->kode_barang }}
+                      </option>
+                    @endforeach
+                  </select>
+                </form>
+                <nav class="flex flex-wrap gap-2" aria-label="Riwayat dan pemakaian barang">
+                  <a href="{{ route('admin.barang', ['barang_id' => $selectedBarang->barang_id, 'panel' => 'history']) }}"
+                    @if ($activePanel === 'history') aria-current="page" @endif
+                    class="inline-flex min-h-9 items-center rounded-lg border px-3 py-2 text-xs font-semibold transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#008b7a] {{ $activePanel === 'history' ? 'border-[#008b7a] bg-[#008b7a] text-white hover:bg-[#006f62]' : 'border-[#B9DED4] bg-white text-slate-700 hover:bg-emerald-50' }}">
+                    Riwayat Mutasi
+                  </a>
+                  <a href="{{ route('admin.barang', ['barang_id' => $selectedBarang->barang_id, 'panel' => 'usage']) }}"
+                    @if ($activePanel === 'usage') aria-current="page" @endif
+                    class="inline-flex min-h-9 items-center rounded-lg border px-3 py-2 text-xs font-semibold transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#008b7a] {{ $activePanel === 'usage' ? 'border-[#008b7a] bg-[#008b7a] text-white hover:bg-[#006f62]' : 'border-[#B9DED4] bg-white text-slate-700 hover:bg-emerald-50' }}">
+                    Catat Pemakaian
+                  </a>
+                </nav>
+              </div>
+            </header>
+
+            @if ($activePanel === 'usage')
+              <div class="space-y-5 p-4 sm:p-6">
+                <form action="{{ route('admin.barang.pemakaian.store', $selectedBarang) }}" method="POST"
+                  class="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  @csrf
+                  <div>
+                    <label for="usage-quantity" class="mb-1 block text-[11px] font-semibold text-slate-600">Jumlah dipakai</label>
+                    <input id="usage-quantity" name="jumlah" type="number" min="1" step="1"
+                      value="{{ old('jumlah') }}" required placeholder="Contoh: 2"
+                      class="w-full rounded-md border border-slate-300 bg-[#F4F5F5] px-3 py-2 text-sm text-slate-800 focus:border-[#008b7a] focus:outline-none focus:ring-2 focus:ring-[#008b7a]/20">
+                    @error('jumlah')
+                      <p class="mt-1 text-xs text-rose-700">{{ $message }}</p>
+                    @enderror
+                  </div>
+                  <div>
+                    <label for="usage-room" class="mb-1 block text-[11px] font-semibold text-slate-600">Lokasi pemakaian</label>
+                    <select id="usage-room" name="ruangan_id" required
+                      class="w-full rounded-md border border-slate-300 bg-[#F4F5F5] px-3 py-2 text-sm text-slate-800 focus:border-[#008b7a] focus:outline-none focus:ring-2 focus:ring-[#008b7a]/20">
+                      <option value="">Pilih ruangan</option>
+                      @foreach ($usageLocations as $usageLocation)
+                        <option value="{{ $usageLocation['ruangan']->ruangan_id }}"
+                          @selected(old('ruangan_id') === $usageLocation['ruangan']->ruangan_id)>
+                          {{ $usageLocation['ruangan']->nama_ruangan }} · tersedia {{ $usageLocation['stok_tersedia'] }}
+                        </option>
+                      @endforeach
+                    </select>
+                    @error('ruangan_id')
+                      <p class="mt-1 text-xs text-rose-700">{{ $message }}</p>
+                    @enderror
+                    @if ($usageLocations->isEmpty())
+                      <p class="mt-1 text-xs text-amber-700">Barang belum memiliki stok di ruangan mana pun.</p>
+                    @endif
+                  </div>
+                  <div>
+                    <label for="usage-admin" class="mb-1 block text-[11px] font-semibold text-slate-600">Dipakai oleh (Admin)</label>
+                    <select id="usage-admin" name="akun_id" required
+                      class="w-full rounded-md border border-slate-300 bg-[#F4F5F5] px-3 py-2 text-sm text-slate-800 focus:border-[#008b7a] focus:outline-none focus:ring-2 focus:ring-[#008b7a]/20">
+                      <option value="">Pilih admin</option>
+                      @foreach ($adminAccounts as $adminAccount)
+                        @php
+                          $adminName = trim(($adminAccount->first_name ?? '').' '.($adminAccount->last_name ?? ''));
+                        @endphp
+                        <option value="{{ $adminAccount->akun_id }}" @selected(old('akun_id', auth()->id()) === $adminAccount->akun_id)>
+                          {{ $adminName !== '' ? $adminName : $adminAccount->username }} (Admin)
+                        </option>
+                      @endforeach
+                    </select>
+                    @error('akun_id')
+                      <p class="mt-1 text-xs text-rose-700">{{ $message }}</p>
+                    @enderror
+                  </div>
+                  <div>
+                    <label for="usage-date" class="mb-1 block text-[11px] font-semibold text-slate-600">Tanggal pasang</label>
+                    <input id="usage-date" name="tanggal_pasang" type="date"
+                      value="{{ old('tanggal_pasang', today()->toDateString()) }}" max="{{ today()->toDateString() }}" required
+                      class="w-full rounded-md border border-slate-300 bg-[#F4F5F5] px-3 py-2 text-sm text-slate-800 focus:border-[#008b7a] focus:outline-none focus:ring-2 focus:ring-[#008b7a]/20">
+                    @error('tanggal_pasang')
+                      <p class="mt-1 text-xs text-rose-700">{{ $message }}</p>
+                    @enderror
+                  </div>
+                  <div>
+                    <label for="usage-note" class="mb-1 block text-[11px] font-semibold text-slate-600">Keterangan</label>
+                    <textarea id="usage-note" name="keterangan" rows="2" maxlength="255"
+                      placeholder="Contoh: Dipakai sebagai colokan tambahan"
+                      class="w-full resize-y rounded-md border border-slate-300 bg-[#F4F5F5] px-3 py-2 text-sm text-slate-800 focus:border-[#008b7a] focus:outline-none focus:ring-2 focus:ring-[#008b7a]/20">{{ old('keterangan') }}</textarea>
+                    @error('keterangan')
+                      <p class="mt-1 text-xs text-rose-700">{{ $message }}</p>
+                    @enderror
+                  </div>
+                  <div class="flex flex-wrap items-center gap-2 sm:col-span-2">
+                    <button type="submit" @disabled($usageLocations->isEmpty() || $adminAccounts->isEmpty())
+                      class="inline-flex min-h-9 items-center justify-center rounded-md bg-[#00BFA5] px-4 py-2 text-xs font-bold text-white transition hover:bg-[#009E89] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#008b7a] disabled:cursor-not-allowed disabled:opacity-50">
+                      Catat Pemakaian
+                    </button>
+                    @if ($adminAccounts->isEmpty())
+                      <span class="text-xs text-amber-700">Tidak ada akun admin aktif untuk dicatat.</span>
+                    @endif
+                  </div>
+                </form>
+
+                <section aria-labelledby="active-usage-title">
+                  <div class="mb-2 flex items-center justify-between gap-3">
+                    <h3 id="active-usage-title" class="text-sm font-bold text-slate-800">Pemakaian aktif</h3>
+                    <span class="text-xs text-slate-500">{{ $activeUsages->count() }} catatan</span>
+                  </div>
+                  <div class="overflow-x-auto rounded-lg border border-[#DCE9E6]">
+                    <table class="min-w-full divide-y divide-[#E7EFED]">
+                      <thead class="bg-[#F5FBF9]">
+                        <tr>
+                          <th scope="col" class="px-3 py-2 text-left text-xs font-semibold text-slate-600">Tanggal</th>
+                          <th scope="col" class="px-3 py-2 text-left text-xs font-semibold text-slate-600">Lokasi / Admin</th>
+                          <th scope="col" class="px-3 py-2 text-right text-xs font-semibold text-slate-600">Jumlah</th>
+                          <th scope="col" class="px-3 py-2 text-left text-xs font-semibold text-slate-600">Keterangan</th>
+                          <th scope="col" class="px-3 py-2 text-right text-xs font-semibold text-slate-600">Aksi</th>
+                        </tr>
+                      </thead>
+                      <tbody class="divide-y divide-[#E7EFED] bg-white">
+                        @forelse ($activeUsages as $activeUsage)
+                          @php
+                            $usageAccountName = $activeUsage->akun
+                                ? trim(($activeUsage->akun->first_name ?? '').' '.($activeUsage->akun->last_name ?? '')) ?: $activeUsage->akun->username
+                                : 'Admin tidak tersedia';
+                          @endphp
+                          <tr>
+                            <td class="whitespace-nowrap px-3 py-2 text-xs text-slate-600">
+                              {{ $activeUsage->tanggal_pasang?->translatedFormat('d M Y') ?? '—' }}
+                            </td>
+                            <td class="px-3 py-2 text-xs text-slate-700">
+                              {{ $activeUsage->ruangan?->nama_ruangan ?? 'Ruangan tidak tersedia' }} · {{ $usageAccountName }}
+                            </td>
+                            <td class="whitespace-nowrap px-3 py-2 text-right text-xs font-semibold text-slate-700">
+                              {{ number_format($activeUsage->jumlah, 0, ',', '.') }} {{ $selectedBarang->satuan }}
+                            </td>
+                            <td class="max-w-64 px-3 py-2 text-xs text-slate-600">{{ $activeUsage->keterangan ?: '—' }}</td>
+                            <td class="whitespace-nowrap px-3 py-2 text-right">
+                              <form action="{{ route('admin.barang.pemakaian.tarik', [$selectedBarang, $activeUsage]) }}" method="POST">
+                                @csrf
+                                <button type="submit"
+                                  class="inline-flex min-h-8 items-center rounded-md border border-[#B9DED4] bg-white px-2.5 py-1.5 text-xs font-semibold text-[#007f70] transition hover:bg-emerald-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#008b7a]">
+                                  Tarik kembali
+                                </button>
+                              </form>
+                            </td>
+                          </tr>
+                        @empty
+                          <tr>
+                            <td colspan="5" class="px-4 py-6 text-center text-xs text-slate-500">Belum ada pemakaian aktif.</td>
+                          </tr>
+                        @endforelse
+                      </tbody>
+                    </table>
+                  </div>
+                </section>
+              </div>
+            @else
+              <ol class="divide-y divide-[#E3EEEA] px-4 sm:px-6">
+                @forelse ($mutationLogs as $mutation)
+                  @php
+                    $mutationColor = match ($mutation->tipe) {
+                        'masuk', 'dikembalikan' => 'bg-teal-500',
+                        'dipakai' => 'bg-orange-400',
+                        'ditarik' => 'bg-rose-600',
+                        default => 'bg-slate-400',
+                    };
+                    $mutationAccountName = $mutation->akun
+                        ? trim(($mutation->akun->first_name ?? '').' '.($mutation->akun->last_name ?? '')) ?: $mutation->akun->username
+                        : null;
+                  @endphp
+                  <li class="flex gap-3 py-3">
+                    <span class="mt-1.5 h-2.5 w-2.5 shrink-0 rounded-full {{ $mutationColor }}" aria-hidden="true"></span>
+                    <div class="min-w-0 flex-1">
+                      <div class="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+                        <p class="text-xs font-semibold text-slate-800">
+                          {{ $mutation->created_at?->translatedFormat('d M Y') ?? 'Tanggal tidak tersedia' }} ·
+                          {{ $mutationLabels[$mutation->tipe] ?? ucfirst($mutation->tipe) }}
+                        </p>
+                        <p class="whitespace-nowrap text-xs font-semibold text-slate-700">
+                          {{ number_format($mutation->jumlah, 0, ',', '.') }} {{ $selectedBarang->satuan }}
+                        </p>
+                      </div>
+                      <p class="mt-0.5 text-xs leading-5 text-slate-600">
+                        @if ($mutation->tipe === 'dipindahkan')
+                          Dari {{ $mutation->lemariAsal?->nama_lemari ?? $mutation->ruangan?->nama_ruangan ?? 'lokasi belum diketahui' }}
+                          ke {{ $mutation->lemariTujuan?->nama_lemari ?? 'lokasi tujuan' }} ·
+                        @elseif ($mutation->ruangan)
+                          {{ $mutation->ruangan->nama_ruangan }} ·
+                        @endif
+                        @if ($mutationAccountName)
+                          {{ $mutationAccountName }} ·
+                        @endif
+                        {{ $mutation->keterangan ?: 'Perubahan stok barang.' }}
+                      </p>
+                    </div>
+                  </li>
+                @empty
+                  <li class="py-8 text-center text-xs text-slate-500">Belum ada riwayat mutasi untuk barang ini.</li>
+                @endforelse
+              </ol>
+            @endif
+          @else
+            <div class="px-5 py-8 text-center">
+              <h2 class="text-sm font-semibold text-slate-800">Riwayat dan pemakaian barang</h2>
+              <p class="mt-1 text-xs text-slate-500">Belum ada barang yang dapat ditampilkan.</p>
+            </div>
+          @endif
+        </section>
+      @endif
     </div>
 
     @if(auth()->user()?->canManageInventory())
@@ -883,7 +1158,6 @@
                   <div>
                     <h2 id="barang-modal-title" class="text-base font-semibold text-slate-800"
                       x-text="modalMode === 'create' ? 'Tambah Barang' : 'Edit Barang'"></h2>
-                    <p class="mt-1 text-xs text-slate-500">Isi informasi sesuai data barang dan stok saat ini.</p>
                   </div>
                 </div>
                 <button type="button" @click="closeModal()"
@@ -894,7 +1168,7 @@
               </div>
 
               <div class="grid max-h-[calc(100vh-12rem)] grid-cols-1 gap-4 overflow-y-auto px-5 py-4 sm:grid-cols-2">
-                <div :class="modalMode === 'create' ? 'sm:col-span-2' : ''">
+                <div class="order-1">
                   <label for="nama_barang" class="mb-1 block text-xs font-medium text-slate-700">Nama Barang
                     <span x-show="modalMode === 'create' && !String(currentItem.nama_barang ?? '').trim()"
                       class="text-rose-500">*</span></label>
@@ -906,18 +1180,7 @@
                     <p class="mt-1 text-xs text-rose-700">{{ $message }}</p>
                   @enderror
                 </div>
-                <div x-show="modalMode === 'edit'">
-                  <label for="kode_barang" class="mb-1 block text-xs font-medium text-slate-700">Kode Barang</label>
-                  <input id="kode_barang" name="kode_barang" type="text" maxlength="30"
-                    x-model="currentItem.kode_barang" autocomplete="off" :required="modalMode === 'edit'"
-                    :disabled="modalMode !== 'edit'"
-                    class="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 focus:border-[#08A9D6] focus:outline-none focus:ring-2 focus:ring-[#08A9D6]/20"
-                    placeholder="BRG-001">
-                  @error('kode_barang')
-                    <p class="mt-1 text-xs text-rose-700">{{ $message }}</p>
-                  @enderror
-                </div>
-                <div>
+                <div class="order-2">
                   <label for="kategori_id" class="mb-1 block text-xs font-medium text-slate-700">Kategori
                     <span x-show="modalMode === 'create' && !currentItem.kategori_id"
                       class="text-rose-500">*</span></label>
@@ -932,49 +1195,14 @@
                     <p class="mt-1 text-xs text-rose-700">{{ $message }}</p>
                   @enderror
                 </div>
-                <div>
-                  <label for="ruangan_id" class="mb-1 block text-xs font-medium text-slate-700">Ruangan
-                    <span x-show="modalMode === 'create' && !currentItem.ruangan_id"
-                      class="text-rose-500">*</span></label>
-                  <select id="ruangan_id" name="ruangan_id" x-model="currentItem.ruangan_id"
-                    @change="setRuangan($event.target.value)" required
-                    class="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 focus:border-[#08A9D6] focus:outline-none focus:ring-2 focus:ring-[#08A9D6]/20">
-                    <option value="">Pilih ruangan</option>
-                    @foreach ($ruangans as $ruangan)
-                      <option value="{{ $ruangan->ruangan_id }}">{{ $ruangan->nama_ruangan }}</option>
-                    @endforeach
-                  </select>
-                  @error('ruangan_id')
-                    <p class="mt-1 text-xs text-rose-700">{{ $message }}</p>
-                  @enderror
-                </div>
-                <div>
-                  <span id="lemari-label" class="mb-1 block text-xs font-medium text-slate-700">Lemari</span>
-                  <div role="group" aria-labelledby="lemari-label"
-                    class="max-h-44 space-y-2 overflow-y-auto rounded-lg border border-slate-200 bg-slate-50 p-2">
-                    <template x-for="lemari in lemariOptions.filter((item) => item.ruangan_id === currentItem.ruangan_id)"
-                      :key="lemari.lemari_id">
-                      <label class="flex cursor-pointer items-center gap-3 rounded-md border border-transparent bg-white px-3 py-2.5 text-sm text-slate-700 transition hover:border-[#08A9D6]/40 hover:bg-[#F0FDFA] has-[:checked]:border-[#08A9D6] has-[:checked]:bg-[#F0FDFA]">
-                        <input type="checkbox" name="lemari_id[]" :value="lemari.lemari_id"
-                          x-model="currentItem.lemari_ids" :disabled="!currentItem.ruangan_id"
-                          class="h-4 w-4 rounded border-slate-300 text-[#008f7e] focus:ring-[#08A9D6]">
-                        <span class="min-w-0 flex-1 truncate" x-text="lemari.nama_lemari"></span>
-                        <span x-show="currentItem.lemari_ids.includes(lemari.lemari_id)"
-                          class="text-xs font-semibold text-[#087F70]">Dipilih</span>
-                      </label>
-                    </template>
-                    <p x-show="!currentItem.ruangan_id" class="px-2 py-2 text-center text-xs text-slate-500">
-                      Pilih ruangan untuk melihat lemari.
-                    </p>
-                    <p x-show="currentItem.ruangan_id && !lemariOptions.some((item) => item.ruangan_id === currentItem.ruangan_id)"
-                      class="px-2 py-2 text-xs text-slate-500">
-                      Belum ada lemari di ruangan ini.
-                    </p>
-                  </div>
-                  <p x-show="currentItem.lemari_ids.length > 0"
-                    x-text="currentItem.lemari_ids.length + ' lemari dipilih'"
-                    class="mt-1 text-xs font-medium text-[#087F70]"></p>
-                  @error('lemari_id.*')
+                <div x-show="modalMode === 'edit'" class="order-3">
+                  <label for="kode_barang" class="mb-1 block text-xs font-medium text-slate-700">Kode Barang</label>
+                  <input id="kode_barang" name="kode_barang" type="text" maxlength="30"
+                    x-model="currentItem.kode_barang" autocomplete="off" :required="modalMode === 'edit'"
+                    :disabled="modalMode !== 'edit'"
+                    class="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 focus:border-[#08A9D6] focus:outline-none focus:ring-2 focus:ring-[#08A9D6]/20"
+                    placeholder="BRG-001">
+                  @error('kode_barang')
                     <p class="mt-1 text-xs text-rose-700">{{ $message }}</p>
                   @enderror
                 </div>
@@ -1006,29 +1234,7 @@
                     <p class="mt-1 text-xs text-rose-700">{{ $message }}</p>
                   @enderror
                 </div>
-                <div class="order-1">
-                  <label for="stok_total" class="mb-1 block text-xs font-medium text-slate-700">Jumlah Total
-                    <span x-show="modalMode === 'create' && String(currentItem.stok_total ?? '').trim() === ''"
-                      class="text-rose-500">*</span></label>
-                  <input id="stok_total" name="stok_total" type="number" min="0" step="1" required
-                    x-model.number="currentItem.stok_total"
-                    class="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 focus:border-[#08A9D6] focus:outline-none focus:ring-2 focus:ring-[#08A9D6]/20">
-                  @error('stok_total')
-                    <p class="mt-1 text-xs text-rose-700">{{ $message }}</p>
-                  @enderror
-                </div>
-                <div class="order-2">
-                  <label for="stok_tersedia" class="mb-1 block text-xs font-medium text-slate-700">Stok Tersedia
-                    <span x-show="modalMode === 'create' && String(currentItem.stok_tersedia ?? '').trim() === ''"
-                      class="text-rose-500">*</span></label>
-                  <input id="stok_tersedia" name="stok_tersedia" type="number" min="0" step="1"
-                    required x-model.number="currentItem.stok_tersedia"
-                    class="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 focus:border-[#08A9D6] focus:outline-none focus:ring-2 focus:ring-[#08A9D6]/20">
-                  @error('stok_tersedia')
-                    <p class="mt-1 text-xs text-rose-700">{{ $message }}</p>
-                  @enderror
-                </div>
-                <div class="order-5">
+                <div :class="modalMode === 'create' ? 'order-5' : 'order-4'">
                   <label for="satuan" class="mb-1 block text-xs font-medium text-slate-700">Satuan
                     <span x-show="modalMode === 'create' && !String(currentItem.satuan ?? '').trim()"
                       class="text-rose-500">*</span></label>
@@ -1040,7 +1246,7 @@
                     <p class="mt-1 text-xs text-rose-700">{{ $message }}</p>
                   @enderror
                 </div>
-                <div class="sm:col-span-2">
+                <div class="sm:col-span-2" :class="modalMode === 'create' ? 'order-6' : 'order-5'">
                   <label for="spesifikasi" class="mb-1 block text-xs font-medium text-slate-700">Spesifikasi</label>
                   <textarea id="spesifikasi" name="spesifikasi" maxlength="255" rows="3" x-model="currentItem.spesifikasi"
                     class="w-full resize-y rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 focus:border-[#08A9D6] focus:outline-none focus:ring-2 focus:ring-[#08A9D6]/20"
@@ -1049,6 +1255,87 @@
                     <p class="mt-1 text-xs text-rose-700">{{ $message }}</p>
                   @enderror
                 </div>
+                <section class="sm:col-span-2" aria-label="Lokasi stok barang"
+                  :class="modalMode === 'create' ? 'order-7' : 'order-6'">
+                  <div class="mb-2 flex justify-end">
+                    <button type="button" @click="addStockLocation()" :disabled="currentItem.locations.length >= 50"
+                      class="inline-flex items-center gap-1 rounded-md border border-[#B9DED4] px-3 py-1.5 text-xs font-semibold text-[#007f70] transition hover:bg-emerald-50 disabled:cursor-not-allowed disabled:opacity-50">
+                      <iconify-icon icon="mdi:plus" aria-hidden="true"></iconify-icon>
+                      Tambah lokasi
+                    </button>
+                  </div>
+
+                  <input type="hidden" name="stok_total" :value="currentItem.stok_total">
+                  <input type="hidden" name="stok_tersedia" :value="currentItem.stok_tersedia">
+
+                  <div class="space-y-2">
+                    <template x-for="(location, index) in currentItem.locations" :key="index">
+                      <div class="grid gap-2 rounded-lg border border-slate-200 bg-slate-50 p-3 sm:grid-cols-2 lg:grid-cols-[minmax(9rem,1fr)_minmax(9rem,1fr)_7rem_7rem_auto]">
+                        <label class="text-[11px] font-semibold text-slate-600">
+                          Ruangan
+                          <select :name="`locations[${index}][ruangan_id]`" x-model="location.ruangan_id"
+                            @change="setStockLocationRoom(location, $event.target.value)" required
+                            class="mt-1 block w-full rounded-md border border-slate-300 bg-white px-2.5 py-2 text-xs font-normal text-slate-800 focus:border-[#08A9D6] focus:outline-none focus:ring-2 focus:ring-[#08A9D6]/20">
+                            <option value="">Pilih ruangan</option>
+                            @foreach ($ruangans as $ruangan)
+                              <option value="{{ $ruangan->ruangan_id }}">{{ $ruangan->nama_ruangan }}</option>
+                            @endforeach
+                          </select>
+                        </label>
+                        <label class="text-[11px] font-semibold text-slate-600">
+                          Lemari
+                          <select :name="`locations[${index}][lemari_id]`" x-model="location.lemari_id"
+                            :disabled="!location.ruangan_id"
+                            class="mt-1 block w-full rounded-md border border-slate-300 bg-white px-2.5 py-2 text-xs font-normal text-slate-800 focus:border-[#08A9D6] focus:outline-none focus:ring-2 focus:ring-[#08A9D6]/20 disabled:bg-slate-100">
+                            <option value="">Tanpa lemari</option>
+                            <template x-for="cabinet in lemariOptions.filter((item) => item.ruangan_id === location.ruangan_id)"
+                              :key="cabinet.lemari_id">
+                              <option :value="cabinet.lemari_id" x-text="cabinet.nama_lemari"></option>
+                            </template>
+                          </select>
+                        </label>
+                        <label class="text-[11px] font-semibold text-slate-600">
+                          Jumlah
+                          <input type="number" min="0" step="1" required
+                            :name="`locations[${index}][stok_total]`" x-model.number="location.stok_total"
+                            @input="syncStockTotals()"
+                            class="mt-1 block w-full rounded-md border border-slate-300 bg-white px-2.5 py-2 text-xs font-normal text-slate-800 focus:border-[#08A9D6] focus:outline-none focus:ring-2 focus:ring-[#08A9D6]/20">
+                        </label>
+                        <label class="text-[11px] font-semibold text-slate-600">
+                          Tersedia
+                          <input type="number" min="0" step="1" required
+                            :name="`locations[${index}][stok_tersedia]`" x-model.number="location.stok_tersedia"
+                            :max="location.stok_total" @input="syncStockTotals()"
+                            class="mt-1 block w-full rounded-md border border-slate-300 bg-white px-2.5 py-2 text-xs font-normal text-slate-800 focus:border-[#08A9D6] focus:outline-none focus:ring-2 focus:ring-[#08A9D6]/20">
+                        </label>
+                        <button type="button" @click="removeStockLocation(index)" :disabled="currentItem.locations.length <= 1"
+                          class="flex h-8 items-center justify-center self-end rounded-md px-2 text-slate-500 transition hover:bg-rose-50 hover:text-rose-600 disabled:cursor-not-allowed disabled:opacity-30"
+                          aria-label="Hapus lokasi">
+                          <iconify-icon icon="mdi:trash-can-outline" width="17" aria-hidden="true"></iconify-icon>
+                        </button>
+                      </div>
+                    </template>
+                  </div>
+                  <p x-show="modalMode === 'create'" class="mt-2 text-xs font-medium text-slate-600">
+                    Total barang: <span x-text="currentItem.stok_total"></span> ·
+                    Tersedia: <span x-text="currentItem.stok_tersedia"></span>
+                  </p>
+                  @error('locations')
+                    <p class="mt-1 text-xs text-rose-700">{{ $message }}</p>
+                  @enderror
+                  @error('locations.*.ruangan_id')
+                    <p class="mt-1 text-xs text-rose-700">{{ $message }}</p>
+                  @enderror
+                  @error('locations.*.lemari_id')
+                    <p class="mt-1 text-xs text-rose-700">{{ $message }}</p>
+                  @enderror
+                  @error('locations.*.stok_total')
+                    <p class="mt-1 text-xs text-rose-700">{{ $message }}</p>
+                  @enderror
+                  @error('locations.*.stok_tersedia')
+                    <p class="mt-1 text-xs text-rose-700">{{ $message }}</p>
+                  @enderror
+                </section>
               </div>
 
               <div class="flex justify-end gap-2 border-t border-slate-200 bg-slate-50 px-5 py-3">

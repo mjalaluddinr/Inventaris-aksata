@@ -14,6 +14,7 @@ use App\Models\LokasiBarang;
 use App\Models\Peminjaman;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -31,20 +32,7 @@ class ManagePeminjaman extends Controller
 
     public function index(Request $request): View|string
     {
-        $yearExpression = match (DB::connection()->getDriverName()) {
-            'sqlite' => "strftime('%Y', tanggal_pengajuan)",
-            'pgsql' => 'EXTRACT(YEAR FROM tanggal_pengajuan)',
-            'sqlsrv' => 'YEAR(tanggal_pengajuan)',
-            default => 'YEAR(tanggal_pengajuan)',
-        };
-        $reportYears = DB::table('peminjaman')
-            ->whereNotNull('tanggal_pengajuan')
-            ->selectRaw("{$yearExpression} as report_year")
-            ->distinct()
-            ->orderByDesc('report_year')
-            ->pluck('report_year')
-            ->map(static fn (string|int $year): int => (int) $year)
-            ->all();
+        $reportYears = $this->reportYears();
 
         $filters = $request->validate([
             'tab' => ['nullable', 'in:pending,borrowed,history'],
@@ -52,16 +40,90 @@ class ManagePeminjaman extends Controller
         ]);
         $activeTab = $filters['tab'] ?? 'pending';
         $year = (int) ($filters['year'] ?? ($reportYears[0] ?? now()->year));
-        $yearStart = now()->setDate($year, 1, 1)->startOfDay();
-        $yearEnd = $yearStart->copy()->endOfYear();
 
         $peminjamans = $this->loanQueryForTab($activeTab)
-            ->with(['akun', 'diprosesAkun', 'detailPeminjamans.barang'])
+            ->with([
+                'akun',
+                'diprosesAkun',
+                'detailPeminjamans.barang',
+                'detailPeminjamans.logMutasiBarangs' => fn (HasMany $query) => $query
+                    ->where('tipe', 'dipinjam')
+                    ->with(['ruangan', 'lemariAsal']),
+            ])
             ->orderByDesc('tanggal_pengajuan')
             ->orderByDesc('peminjaman_id')
             ->paginate(10)
             ->withQueryString();
 
+        $monthlyLoans = $this->monthlyLoanSummary($year);
+
+        /** @var View $renderedView */
+        $renderedView = view('pages.admin.peminjaman', compact(
+            'activeTab',
+            'monthlyLoans',
+            'peminjamans',
+            'reportYears',
+            'year',
+        ))->with('isPrintPreview', false);
+
+        return $renderedView->fragmentIf($request->ajax(), 'loan-list');
+    }
+
+    public function printReport(Request $request): View
+    {
+        $reportYears = $this->reportYears();
+        $yearRules = $reportYears === []
+            ? ['nullable', 'integer', 'min:2000', 'max:2100']
+            : ['nullable', 'integer', Rule::in($reportYears)];
+        $filters = $request->validate([
+            'year' => $yearRules,
+            'tab' => ['nullable', 'in:pending,borrowed,history'],
+        ]);
+        $year = (int) ($filters['year'] ?? ($reportYears[0] ?? now()->year));
+        $activeTab = $filters['tab'] ?? 'pending';
+        $monthlyLoans = $this->monthlyLoanSummary($year);
+        $backUrl = route('admin.peminjaman', array_filter([
+            'tab' => $activeTab,
+            'year' => $reportYears === [] ? null : $year,
+        ], static fn (mixed $value): bool => $value !== null));
+
+        return view('pages.admin.peminjaman', [
+            'backUrl' => $backUrl,
+            'isPrintPreview' => true,
+            'monthlyLoans' => $monthlyLoans,
+            'year' => $year,
+        ]);
+    }
+
+    /**
+     * @return array<int, int>
+     */
+    private function reportYears(): array
+    {
+        $yearExpression = match (DB::connection()->getDriverName()) {
+            'sqlite' => "strftime('%Y', tanggal_pengajuan)",
+            'pgsql' => 'EXTRACT(YEAR FROM tanggal_pengajuan)',
+            'sqlsrv' => 'YEAR(tanggal_pengajuan)',
+            default => 'YEAR(tanggal_pengajuan)',
+        };
+
+        return DB::table('peminjaman')
+            ->whereNotNull('tanggal_pengajuan')
+            ->selectRaw("{$yearExpression} as report_year")
+            ->distinct()
+            ->orderByDesc('report_year')
+            ->pluck('report_year')
+            ->map(static fn (string|int $year): int => (int) $year)
+            ->all();
+    }
+
+    /**
+     * @return Collection<int, array{label: string, total: int}>
+     */
+    private function monthlyLoanSummary(int $year): Collection
+    {
+        $yearStart = now()->setDate($year, 1, 1)->startOfDay();
+        $yearEnd = $yearStart->copy()->endOfYear();
         $monthExpression = match (DB::connection()->getDriverName()) {
             'sqlite' => "strftime('%m', tanggal_pengajuan)",
             'pgsql' => 'EXTRACT(MONTH FROM tanggal_pengajuan)::integer',
@@ -74,22 +136,11 @@ class ManagePeminjaman extends Controller
             ->groupBy('month')
             ->pluck('total', 'month');
 
-        $monthlyLoans = collect(range(1, 12))
+        return collect(range(1, 12))
             ->map(static fn (int $month): array => [
-                'label' => now()->startOfYear()->addMonths($month - 1)->translatedFormat('M'),
+                'label' => $yearStart->copy()->addMonths($month - 1)->translatedFormat('M'),
                 'total' => (int) ($monthlyTotals[(string) $month] ?? $monthlyTotals[sprintf('%02d', $month)] ?? 0),
             ]);
-
-        /** @var View $renderedView */
-        $renderedView = view('pages.admin.peminjaman', compact(
-            'activeTab',
-            'monthlyLoans',
-            'peminjamans',
-            'reportYears',
-            'year',
-        ));
-
-        return $renderedView->fragmentIf($request->ajax(), 'loan-list');
     }
 
     public function scan(ScanPeminjamanRequest $request): JsonResponse
@@ -270,7 +321,7 @@ class ManagePeminjaman extends Controller
                 $detail->barang?->nama_barang ?? 'Barang tidak tersedia',
                 $detail->jumlah_pinjam,
                 $loan->keperluan,
-                $detail->status,
+                $detail->status === 'dibatalkan' ? 'Peminjaman Dibatalkan' : $detail->status,
                 $loan->tanggal_pengajuan?->format('d-m-Y H:i'),
                 $loan->tanggal_rencana_kembali?->format('d-m-Y'),
             ]);

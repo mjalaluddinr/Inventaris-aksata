@@ -12,16 +12,16 @@ use Illuminate\View\View;
 class LogMutasiController extends Controller
 {
     private const MUTATION_LABELS = [
-        'masuk' => 'Stok masuk',
+        'masuk' => 'Barang Masuk',
         'dipinjam' => 'Dipinjam',
         'dikembalikan' => 'Dikembalikan',
-        'dipakai' => 'Dipakai',
-        'ditarik' => 'Ditarik',
+        'dipakai' => 'Dipakai di Ruangan',
+        'ditarik' => 'Ditarik dari Ruangan',
         'dipindahkan' => 'Dipindahkan',
         'penyesuaian' => 'Penyesuaian',
     ];
 
-    public function index(Request $request): View
+    public function index(Request $request): View|string
     {
         $filters = $request->validate([
             'search' => ['nullable', 'string', 'max:100'],
@@ -30,7 +30,14 @@ class LogMutasiController extends Controller
         $search = trim($filters['search'] ?? '');
 
         $logs = LogMutasiBarang::query()
-            ->with(['barang', 'ruangan', 'lemariAsal', 'lemariTujuan', 'akun', 'olehAkun'])
+            ->with([
+                'barang',
+                'ruangan',
+                'lemariAsal.ruangan',
+                'lemariTujuan.ruangan',
+                'akun',
+                'olehAkun',
+            ])
             ->when($filters['tipe'] ?? null, fn (Builder $query, string $type) => $query->where('tipe', $type))
             ->when($search !== '', function (Builder $query) use ($search): void {
                 // ASVS 2.2.1 / 1.2.4: bind the validated search term to known log and relation fields.
@@ -70,10 +77,12 @@ class LogMutasiController extends Controller
             ->paginate(20)
             ->withQueryString();
 
-        return view('pages.admin.log_mutasi', [
+        $renderedView = view('pages.admin.log_mutasi', [
             'logs' => $logs,
             'filters' => $filters,
             'mutationLabels' => self::MUTATION_LABELS,
         ]);
+
+        return $renderedView->fragmentIf($request->ajax(), 'mutation-results');
     }
 }

@@ -21,6 +21,10 @@ class PeminjamanController extends Controller
 {
     private const RESERVATION_NOTE = 'Reservasi QR peminjaman';
 
+    private const CANCELLATION_NOTE = 'Peminjaman dibatalkan oleh peminjam.';
+
+    private const CANCELLATION_MUTATION_NOTE = 'Reservasi dipulihkan karena peminjaman dibatalkan oleh peminjam.';
+
     public function store(StorePeminjamanRequest $request): RedirectResponse
     {
         $user = $request->user();
@@ -137,7 +141,7 @@ class PeminjamanController extends Controller
         return $redirect;
     }
 
-    public function requestCancellation(Request $request, string $peminjamanId): RedirectResponse
+    public function cancel(Request $request, string $peminjamanId): RedirectResponse
     {
         $user = $request->user();
 
@@ -145,6 +149,7 @@ class PeminjamanController extends Controller
 
         DB::transaction(function () use ($user, $peminjamanId): void {
             // ASVS V8.2.2: resolve a loan only within the authenticated borrower's records.
+            // ASVS V2.3.3/V2.3.4: lock and update the loan and reserved inventory atomically.
             $loan = Peminjaman::query()
                 ->where('akun_id', $user->akun_id)
                 ->where('peminjaman_id', $peminjamanId)
@@ -157,25 +162,115 @@ class PeminjamanController extends Controller
                 ->lockForUpdate()
                 ->get();
 
-            if ($details->isEmpty() || $details->contains(static fn (DetailPeminjaman $detail): bool => $detail->status !== 'pending')) {
+            if ($details->isEmpty() || $details->contains(
+                static fn (DetailPeminjaman $detail): bool => $detail->status !== 'pending' || $detail->jumlah_kembali !== 0,
+            )) {
                 throw ValidationException::withMessages([
-                    'peminjaman' => 'Permintaan pembatalan hanya dapat diajukan untuk pesanan yang menunggu konfirmasi admin.',
+                    'peminjaman' => 'Peminjaman hanya dapat dibatalkan saat menunggu konfirmasi admin.',
                 ]);
             }
 
-            if ($loan->hasCancellationRequest()) {
-                throw ValidationException::withMessages([
-                    'peminjaman' => 'Permintaan pembatalan untuk pesanan ini sudah menunggu keputusan admin.',
-                ]);
+            foreach ($details as $detail) {
+                $this->restorePendingReservation($loan, $detail, $user);
+                $detail->status = 'dibatalkan';
+                $detail->catatan_kembali = self::CANCELLATION_NOTE;
+                $detail->save();
             }
 
-            // ASVS V2.2.2: enforce the request workflow at the trusted server boundary.
-            $loan->requestCancellation();
+            $loan->clearCancellationRequest();
         }, 3);
 
         return redirect()
             ->route('user.beranda', ['page' => 'history'])
-            ->with('success', 'Permintaan pembatalan berhasil diajukan.');
+            ->with('success', 'Peminjaman berhasil dibatalkan.');
+    }
+
+    private function restorePendingReservation(Peminjaman $loan, DetailPeminjaman $detail, User $user): void
+    {
+        $barang = Barang::withTrashed()
+            ->whereKey($detail->barang_id)
+            ->lockForUpdate()
+            ->firstOrFail();
+        $reservations = LogMutasiBarang::query()
+            ->where('detail_peminjaman_id', $detail->detail_peminjaman_id)
+            ->where('tipe', 'dipinjam')
+            ->where('keterangan', self::RESERVATION_NOTE)
+            ->orderBy('created_at')
+            ->orderBy('log_mutasi_barang_id')
+            ->get();
+
+        if ($reservations->isEmpty()) {
+            $reservations = collect([new LogMutasiBarang([
+                'barang_id' => $barang->barang_id,
+                'jumlah' => $detail->jumlah_pinjam,
+            ])]);
+        }
+
+        if ((int) $reservations->sum('jumlah') !== $detail->jumlah_pinjam) {
+            throw ValidationException::withMessages([
+                'peminjaman' => 'Catatan reservasi stok tidak sesuai. Periksa stok barang sebelum melanjutkan.',
+            ]);
+        }
+
+        if ($barang->stok_tersedia + $detail->jumlah_pinjam > $barang->stok_total) {
+            throw ValidationException::withMessages([
+                'peminjaman' => 'Stok tersedia melebihi stok total. Periksa data inventaris sebelum melanjutkan.',
+            ]);
+        }
+
+        foreach ($reservations as $reservation) {
+            $location = null;
+            if ($reservation->ruangan_id !== null) {
+                $locationQuery = LokasiBarang::query()
+                    ->where('barang_id', $barang->barang_id)
+                    ->where('ruangan_id', $reservation->ruangan_id);
+
+                $locationQuery = $reservation->lemari_asal_id === null
+                    ? $locationQuery->whereNull('lemari_id')
+                    : $locationQuery->where('lemari_id', $reservation->lemari_asal_id);
+
+                $location = $locationQuery->lockForUpdate()->first();
+
+                if (! $location) {
+                    throw ValidationException::withMessages([
+                        'peminjaman' => 'Lokasi stok reservasi tidak ditemukan. Periksa data inventaris sebelum melanjutkan.',
+                    ]);
+                }
+
+                if ($location->stok_tersedia + $reservation->jumlah > $location->stok_total) {
+                    throw ValidationException::withMessages([
+                        'peminjaman' => 'Stok lokasi tidak cukup untuk menerima barang yang dibatalkan.',
+                    ]);
+                }
+            }
+
+            $stockBefore = $location?->stok_tersedia ?? $barang->stok_tersedia;
+            $stockAfter = $stockBefore + $reservation->jumlah;
+
+            if ($location) {
+                $location->stok_tersedia = $stockAfter;
+                $location->save();
+            }
+
+            $barang->stok_tersedia += $reservation->jumlah;
+
+            LogMutasiBarang::query()->create([
+                'barang_id' => $barang->barang_id,
+                'ruangan_id' => $reservation->ruangan_id,
+                'lemari_asal_id' => $reservation->lemari_asal_id,
+                'akun_id' => $loan->akun_id,
+                'oleh_akun_id' => $user->akun_id,
+                'detail_peminjaman_id' => $detail->detail_peminjaman_id,
+                'tipe' => 'dikembalikan',
+                'jumlah' => $reservation->jumlah,
+                'stok_sebelum' => $stockBefore,
+                'stok_sesudah' => $stockAfter,
+                'keterangan' => self::CANCELLATION_MUTATION_NOTE,
+                'created_at' => now(),
+            ]);
+        }
+
+        $barang->save();
     }
 
     /**

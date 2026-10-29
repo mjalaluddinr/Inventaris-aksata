@@ -100,6 +100,8 @@ Alpine.data('loanQrScanner', () => ({
     loanListRequest: null,
     loanListLoading: false,
     loanListError: '',
+    loanListRefreshTimer: null,
+    loanListVisibilityListener: null,
     scannerOpen: false,
     scannerMessage: '',
     cameraSupported: false,
@@ -120,6 +122,43 @@ Alpine.data('loanQrScanner', () => ({
         }
         this.scanEndpoint = this.$el.dataset.endpoint || '';
         this.csrfToken = this.$el.dataset.csrfToken || '';
+        this.loanListRefreshTimer = window.setInterval(() => {
+            this.refreshLoanList();
+        }, 10000);
+        this.loanListVisibilityListener = () => {
+            if (!document.hidden) {
+                this.refreshLoanList();
+            }
+        };
+        document.addEventListener('visibilitychange', this.loanListVisibilityListener);
+    },
+    destroy() {
+        window.clearInterval(this.loanListRefreshTimer);
+        document.removeEventListener('visibilitychange', this.loanListVisibilityListener);
+        this.loanListRequest?.abort();
+    },
+    refreshLoanList() {
+        if (document.hidden || this.loanListRequest) {
+            return;
+        }
+
+        this.loadLoanList(window.location.href, { silent: true });
+    },
+    loanListSignature(markup) {
+        const content = document.createElement('div');
+        content.innerHTML = markup;
+
+        return JSON.stringify({
+            text: content.textContent.replace(/\s+/g, ' ').trim(),
+            navigation: Array.from(content.querySelectorAll('a[href]'), (link) => [
+                link.getAttribute('href'),
+                link.getAttribute('aria-current'),
+            ]),
+            forms: Array.from(content.querySelectorAll('form[action]'), (form) => [
+                form.getAttribute('action'),
+                form.getAttribute('method'),
+            ]),
+        });
     },
     handleLoanNavigation(event) {
         const target = event.target instanceof Element ? event.target : null;
@@ -145,7 +184,7 @@ Alpine.data('loanQrScanner', () => ({
         event.preventDefault();
         this.loadLoanList(link.href);
     },
-    async loadLoanList(url) {
+    async loadLoanList(url, { silent = false } = {}) {
         const requestUrl = new URL(url, window.location.href);
         if (requestUrl.origin !== window.location.origin || requestUrl.pathname !== window.location.pathname) {
             return;
@@ -154,11 +193,12 @@ Alpine.data('loanQrScanner', () => ({
         this.loanListRequest?.abort();
         const request = new AbortController();
         this.loanListRequest = request;
-        this.loanListLoading = true;
+        this.loanListLoading = !silent;
         this.loanListError = '';
 
         try {
             const response = await fetch(requestUrl, {
+                cache: 'no-store',
                 headers: {
                     'Accept': 'text/html',
                     'X-Requested-With': 'XMLHttpRequest',
@@ -169,8 +209,13 @@ Alpine.data('loanQrScanner', () => ({
                 throw new Error('Daftar peminjaman tidak dapat dimuat.');
             }
 
-            this.$refs.loanList.innerHTML = await response.text();
-            window.history.replaceState({}, '', requestUrl);
+            const markup = await response.text();
+            if (this.loanListSignature(this.$refs.loanList.innerHTML) !== this.loanListSignature(markup)) {
+                this.$refs.loanList.innerHTML = markup;
+            }
+            if (requestUrl.href !== window.location.href) {
+                window.history.replaceState({}, '', requestUrl);
+            }
         } catch (error) {
             if (error.name !== 'AbortError') {
                 this.loanListError = error.message || 'Daftar peminjaman tidak dapat dimuat.';

@@ -7,8 +7,6 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
-use Illuminate\Support\Str;
-use Illuminate\Validation\ValidationException;
 
 class Peminjaman extends Model
 {
@@ -65,25 +63,6 @@ class Peminjaman extends Model
     public function hasCancellationRequest(): bool
     {
         return str_contains($this->catatan ?? '', self::CANCELLATION_REQUEST_MARKER);
-    }
-
-    public function requestCancellation(): void
-    {
-        if ($this->hasCancellationRequest()) {
-            return;
-        }
-
-        $separator = filled($this->catatan) ? "\n" : '';
-        $updatedNote = ($this->catatan ?? '').$separator.self::CANCELLATION_REQUEST_MARKER;
-
-        if (Str::length($updatedNote) > 255) {
-            throw ValidationException::withMessages([
-                'peminjaman' => 'Catatan transaksi terlalu panjang untuk menyimpan permintaan pembatalan. Hubungi admin.',
-            ]);
-        }
-
-        $this->catatan = $updatedNote;
-        $this->save();
     }
 
     public function clearCancellationRequest(): void

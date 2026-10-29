@@ -7,11 +7,14 @@ use App\Http\Requests\ManageBarang\ImportRequest;
 use App\Http\Requests\ManageBarang\StoreRequest;
 use App\Http\Requests\ManageBarang\UpdateRequest;
 use App\Models\Barang;
+use App\Models\BarangDipakai;
 use App\Models\Kategori;
 use App\Models\Lemari;
 use App\Models\LogInput;
+use App\Models\LogMutasiBarang;
 use App\Models\LokasiBarang;
 use App\Models\Ruangan;
+use App\Models\User;
 use Illuminate\Database\Eloquent\Collection as EloquentCollection;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\UniqueConstraintViolationException;
@@ -19,10 +22,12 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
 use Maatwebsite\Excel\Concerns\ToArray;
 use Maatwebsite\Excel\Exceptions\NoSheetsFoundException;
@@ -78,6 +83,12 @@ class ManageBarang extends Controller
             ],
             'kondisi' => ['nullable', Rule::in(['baru', 'lama'])],
             'kelayakan' => ['nullable', Rule::in(['layak', 'tidak_layak'])],
+            'barang_id' => [
+                'nullable',
+                'uuid',
+                Rule::exists('barang', 'barang_id')->whereNull('deleted_at'),
+            ],
+            'panel' => ['nullable', Rule::in(['history', 'usage'])],
         ]);
 
         $barangs = Barang::query()
@@ -110,11 +121,260 @@ class ManageBarang extends Controller
         $kategoris = Kategori::query()->orderBy('nama_kategori')->get(['kategori_id', 'nama_kategori']);
         $ruangans = Ruangan::query()->orderBy('nama_ruangan')->get(['ruangan_id', 'nama_ruangan']);
         $lemaris = Lemari::query()->orderBy('nama_lemari')->get(['lemari_id', 'ruangan_id', 'nama_lemari']);
+        $selectedBarang = null;
+        $adminAccounts = collect();
+        $mutationLogs = collect();
+        $activeUsages = collect();
+        $usageLocations = collect();
+
+        if ($request->user()?->canManageAllAccounts()) {
+            $selectedBarang = isset($filters['barang_id'])
+                ? Barang::query()->findOrFail($filters['barang_id'])
+                : $barangs->first();
+
+            if ($selectedBarang instanceof Barang) {
+                $adminAccounts = User::query()
+                    ->where('role', 'admin')
+                    ->where('is_active', true)
+                    ->orderBy('first_name')
+                    ->orderBy('last_name')
+                    ->get(['akun_id', 'first_name', 'last_name', 'username']);
+                $mutationLogs = $selectedBarang->logMutasiBarangs()
+                    ->with(['ruangan', 'lemariAsal', 'lemariTujuan', 'akun', 'olehAkun'])
+                    ->orderByDesc('created_at')
+                    ->orderByDesc('log_mutasi_barang_id')
+                    ->limit(30)
+                    ->get();
+                $activeUsages = $selectedBarang->barangDipakais()
+                    ->with(['ruangan', 'akun'])
+                    ->where('status', 'aktif')
+                    ->orderByDesc('tanggal_pasang')
+                    ->get();
+                $usageLocations = $selectedBarang->lokasiBarangs()
+                    ->with('ruangan')
+                    ->orderBy('ruangan_id')
+                    ->orderBy('lokasi_barang_id')
+                    ->get()
+                    ->filter(static fn (LokasiBarang $location): bool => $location->ruangan !== null)
+                    ->groupBy('ruangan_id')
+                    ->map(static fn ($locations): array => [
+                        'ruangan' => $locations->first()->ruangan,
+                        'stok_tersedia' => $locations->sum('stok_tersedia'),
+                    ])
+                    ->filter(static fn (array $location): bool => $location['stok_tersedia'] > 0)
+                    ->values();
+            }
+        }
 
         /** @var View $renderedView */
-        $renderedView = view('pages.admin.barang', compact('barangs', 'kategoris', 'ruangans', 'lemaris', 'filters'));
+        $renderedView = view('pages.admin.barang', compact(
+            'activeUsages',
+            'adminAccounts',
+            'barangs',
+            'filters',
+            'kategoris',
+            'lemaris',
+            'mutationLogs',
+            'ruangans',
+            'selectedBarang',
+            'usageLocations',
+        ));
 
         return $renderedView->fragmentIf($request->ajax(), 'barang-results');
+    }
+
+    public function recordUsage(Request $request, Barang $barang): RedirectResponse
+    {
+        // ASVS V2.2.1 / V8.2: validate submitted usage details and the selected admin account server-side.
+        $attributes = $request->validate([
+            'jumlah' => ['required', 'integer', 'min:1'],
+            'ruangan_id' => [
+                'required',
+                'uuid',
+                Rule::exists('ruangan', 'ruangan_id')->whereNull('deleted_at'),
+            ],
+            'akun_id' => [
+                'required',
+                'uuid',
+                Rule::exists('akun', 'akun_id')->where(fn ($query) => $query
+                    ->where('role', 'admin')
+                    ->where('is_active', true)
+                    ->whereNull('deleted_at')),
+            ],
+            'tanggal_pasang' => ['required', 'date', 'before_or_equal:today'],
+            'keterangan' => ['nullable', 'string', 'max:255'],
+        ]);
+        $actor = $request->user();
+        abort_unless($actor instanceof User, 403);
+
+        DB::transaction(function () use ($attributes, $actor, $barang): void {
+            // ASVS V2.3: lock stock and location rows before checking and applying the quantity change.
+            $lockedBarang = Barang::query()
+                ->whereKey($barang->getKey())
+                ->lockForUpdate()
+                ->firstOrFail();
+            $adminAccount = User::query()
+                ->whereKey($attributes['akun_id'])
+                ->where('role', 'admin')
+                ->where('is_active', true)
+                ->lockForUpdate()
+                ->first();
+
+            if (! $adminAccount instanceof User) {
+                throw ValidationException::withMessages([
+                    'akun_id' => 'Akun yang memakai barang harus merupakan admin aktif.',
+                ]);
+            }
+
+            $locations = $lockedBarang->lokasiBarangs()
+                ->where('ruangan_id', $attributes['ruangan_id'])
+                ->orderBy('lokasi_barang_id')
+                ->lockForUpdate()
+                ->get();
+            $quantity = (int) $attributes['jumlah'];
+            $roomAvailableStock = $locations->sum('stok_tersedia');
+
+            if ($quantity > $lockedBarang->stok_tersedia || $quantity > $roomAvailableStock) {
+                throw ValidationException::withMessages([
+                    'jumlah' => 'Jumlah pemakaian melebihi stok tersedia pada barang atau lokasi tersebut.',
+                ]);
+            }
+
+            $remainingQuantity = $quantity;
+
+            foreach ($locations as $location) {
+                if ($remainingQuantity === 0) {
+                    break;
+                }
+
+                $allocatedQuantity = min($remainingQuantity, $location->stok_tersedia);
+                $location->stok_tersedia -= $allocatedQuantity;
+                $location->save();
+                $remainingQuantity -= $allocatedQuantity;
+            }
+
+            $stockBefore = $lockedBarang->stok_tersedia;
+            $lockedBarang->stok_tersedia -= $quantity;
+            $lockedBarang->save();
+
+            $usage = BarangDipakai::query()->create([
+                'barang_id' => $lockedBarang->barang_id,
+                'ruangan_id' => $attributes['ruangan_id'],
+                'akun_id' => $adminAccount->akun_id,
+                'jumlah' => $quantity,
+                'keterangan' => $attributes['keterangan'] ?? null,
+                'status' => 'aktif',
+                'tanggal_pasang' => $attributes['tanggal_pasang'],
+            ]);
+
+            LogMutasiBarang::query()->create([
+                'barang_id' => $lockedBarang->barang_id,
+                'ruangan_id' => $attributes['ruangan_id'],
+                'akun_id' => $adminAccount->akun_id,
+                'oleh_akun_id' => $actor->akun_id,
+                'barang_dipakai_id' => $usage->barang_dipakai_id,
+                'tipe' => 'dipakai',
+                'jumlah' => $quantity,
+                'stok_sebelum' => $stockBefore,
+                'stok_sesudah' => $lockedBarang->stok_tersedia,
+                'keterangan' => $attributes['keterangan'] ?? 'Pemakaian barang dicatat.',
+                'created_at' => now(),
+            ]);
+        });
+
+        return redirect()->route('admin.barang', [
+            'barang_id' => $barang->barang_id,
+            'panel' => 'usage',
+        ])->with('success', 'Pemakaian barang berhasil dicatat.');
+    }
+
+    public function withdrawUsage(Request $request, Barang $barang, BarangDipakai $usage): RedirectResponse
+    {
+        $actor = $request->user();
+        abort_unless($actor instanceof User, 403);
+
+        DB::transaction(function () use ($actor, $barang, $usage): void {
+            // ASVS V2.3: serialize returns and reject duplicate withdrawals before restoring stock.
+            $lockedBarang = Barang::query()
+                ->whereKey($barang->getKey())
+                ->lockForUpdate()
+                ->firstOrFail();
+            $lockedUsage = $lockedBarang->barangDipakais()
+                ->whereKey($usage->getKey())
+                ->lockForUpdate()
+                ->firstOrFail();
+
+            if ($lockedUsage->status !== 'aktif') {
+                throw ValidationException::withMessages([
+                    'pemakaian' => 'Pemakaian ini sudah ditarik kembali.',
+                ]);
+            }
+
+            $locations = $lockedBarang->lokasiBarangs()
+                ->where('ruangan_id', $lockedUsage->ruangan_id)
+                ->orderBy('lokasi_barang_id')
+                ->lockForUpdate()
+                ->get();
+            $quantity = $lockedUsage->jumlah;
+            $globalCapacity = $lockedBarang->stok_total - $lockedBarang->stok_tersedia;
+            $roomCapacity = $locations->sum(
+                static fn (LokasiBarang $location): int => max(0, $location->stok_total - $location->stok_tersedia),
+            );
+
+            if ($quantity > $globalCapacity || $quantity > $roomCapacity) {
+                throw ValidationException::withMessages([
+                    'pemakaian' => 'Stok lokasi tidak memiliki kapasitas yang cukup untuk menarik kembali pemakaian ini.',
+                ]);
+            }
+
+            $remainingQuantity = $quantity;
+
+            foreach ($locations as $location) {
+                if ($remainingQuantity === 0) {
+                    break;
+                }
+
+                $locationCapacity = max(0, $location->stok_total - $location->stok_tersedia);
+                $restoredQuantity = min($remainingQuantity, $locationCapacity);
+                $location->stok_tersedia += $restoredQuantity;
+                $location->save();
+                $remainingQuantity -= $restoredQuantity;
+            }
+
+            $stockBefore = $lockedBarang->stok_tersedia;
+            $lockedBarang->stok_tersedia += $quantity;
+            $lockedBarang->save();
+
+            $lockedUsage->update([
+                'status' => 'ditarik',
+                'tanggal_tarik' => now(),
+            ]);
+
+            LogMutasiBarang::query()->create([
+                'barang_id' => $lockedBarang->barang_id,
+                'ruangan_id' => $lockedUsage->ruangan_id,
+                'akun_id' => $lockedUsage->akun_id,
+                'oleh_akun_id' => $actor->akun_id,
+                'barang_dipakai_id' => $lockedUsage->barang_dipakai_id,
+                'tipe' => 'ditarik',
+                'jumlah' => $quantity,
+                'stok_sebelum' => $stockBefore,
+                'stok_sesudah' => $lockedBarang->stok_tersedia,
+                'keterangan' => mb_substr(
+                    $lockedUsage->keterangan
+                        ? 'Pemakaian ditarik kembali: '.$lockedUsage->keterangan
+                        : 'Pemakaian ditarik kembali.',
+                    0,
+                    255,
+                ),
+                'created_at' => now(),
+            ]);
+        });
+
+        return redirect()->route('admin.barang', [
+            'barang_id' => $barang->barang_id,
+            'panel' => 'history',
+        ])->with('success', 'Barang berhasil ditarik kembali.');
     }
 
     public function import(ImportRequest $request): JsonResponse
@@ -255,7 +515,14 @@ class ManageBarang extends Controller
             }
         }
 
-        $usedCodes = array_fill_keys(Barang::withTrashed()->pluck('kode_barang')->all(), true);
+        $usedCodes = array_fill_keys(
+            Barang::withTrashed()
+                ->pluck('kode_barang')
+                ->map(static fn (string $code): string => Str::upper($code))
+                ->all(),
+            true,
+        );
+        $importedItems = [];
         $nextCodeNumber = 0;
         foreach (array_keys($usedCodes) as $code) {
             if (preg_match('/^BRG-(\d+)$/i', $code, $matches) === 1) {
@@ -367,7 +634,7 @@ class ManageBarang extends Controller
             if ($code === null) {
                 do {
                     $code = sprintf('BRG-%03d', ++$nextCodeNumber);
-                } while (isset($usedCodes[$code]));
+                } while (isset($usedCodes[Str::upper($code)]));
             }
 
             $data = [
@@ -386,10 +653,28 @@ class ManageBarang extends Controller
                 'kode_lemari' => $mappedRow['kode_lemari'] ?? null,
             ];
 
+            $groupKey = Str::upper(trim($data['kode_barang']));
+            $existingImportedItem = $importedItems[$groupKey] ?? null;
+            $groupMetadata = [
+                'kategori' => Str::lower(trim((string) $data['kategori'])),
+                'nama_barang' => Str::lower(trim((string) $data['nama_barang'])),
+                'satuan' => Str::lower(trim((string) $data['satuan'])),
+                'kondisi' => $data['kondisi'],
+                'kelayakan' => $data['kelayakan'],
+                'spesifikasi' => Str::lower(trim((string) ($data['spesifikasi'] ?? ''))),
+            ];
+            $locationKey = filled($roomName)
+                ? Str::lower(trim($roomName)).'|'.Str::lower(trim((string) ($cabinetName ?? '')))
+                : null;
+            $codeRules = ['required', 'string', 'max:30'];
+            if ($existingImportedItem === null) {
+                $codeRules[] = Rule::unique('barang', 'kode_barang');
+            }
+
             // ASVS V2.2.1/V2.2.2/V2.2.3: Validate spreadsheet values and related stock/location fields server-side.
             $validator = Validator::make($data, [
                 'kategori' => ['required', 'string', 'max:100'],
-                'kode_barang' => ['required', 'string', 'max:30', Rule::unique('barang', 'kode_barang')],
+                'kode_barang' => $codeRules,
                 'nama_barang' => ['required', 'string', 'max:150'],
                 'satuan' => ['required', 'string', 'max:20'],
                 'stok_total' => ['required', 'integer', 'min:0'],
@@ -446,6 +731,10 @@ class ManageBarang extends Controller
                 $lemariByRoomAndName,
                 $room,
                 $cabinet,
+                $existingImportedItem,
+                $groupMetadata,
+                $locationKey,
+                $roomName,
             ): void {
                 $categoryKey = Str::lower(trim((string) $data['kategori']));
                 if (array_key_exists($categoryKey, $kategoriByName) && $kategoriByName[$categoryKey] === null) {
@@ -475,6 +764,18 @@ class ManageBarang extends Controller
                     ->exists()) {
                     $validator->errors()->add('kode_lemari', 'Kode lemari sudah digunakan di ruangan tersebut.');
                 }
+
+                if ($existingImportedItem !== null) {
+                    if ($existingImportedItem['metadata'] !== $groupMetadata) {
+                        $validator->errors()->add('kode_barang', 'Data barang dengan kode yang sama harus memiliki nama, kategori, satuan, kondisi, kelayakan, dan spesifikasi yang sama.');
+                    }
+
+                    if ($locationKey === null || $existingImportedItem['locations'] === []) {
+                        $validator->errors()->add('ruangan', 'Setiap baris dengan kode barang yang sama harus memiliki lokasi penyimpanan.');
+                    } elseif (isset($existingImportedItem['locations'][$locationKey])) {
+                        $validator->errors()->add('ruangan', 'Kode barang yang sama harus menggunakan lokasi penyimpanan yang berbeda di setiap baris.');
+                    }
+                }
             });
 
             if ($validator->fails()) {
@@ -485,11 +786,22 @@ class ManageBarang extends Controller
             }
 
             try {
+                $operator = $request->user();
+                abort_unless($operator instanceof User, 403);
+
                 DB::transaction(function () use (
                     $validator,
                     &$kategoriByName,
                     &$ruanganByName,
                     &$lemariByRoomAndName,
+                    &$importedItems,
+                    $operator,
+                    $log,
+                    $fileName,
+                    $groupKey,
+                    $existingImportedItem,
+                    $groupMetadata,
+                    $locationKey,
                 ): void {
                     $validated = $validator->validated();
                     $kategori = $this->resolveKategori($validated['kategori'], $kategoriByName);
@@ -505,27 +817,68 @@ class ManageBarang extends Controller
                         )
                         : null;
 
-                    $barang = Barang::create([
-                        'kategori_id' => $kategori->kategori_id,
-                        'kode_barang' => $validated['kode_barang'],
-                        'nama_barang' => $validated['nama_barang'],
-                        'satuan' => $validated['satuan'],
-                        'stok_total' => $validated['stok_total'],
-                        'stok_tersedia' => $validated['stok_tersedia'],
-                        'kondisi' => $validated['kondisi'],
-                        'kelayakan' => $validated['kelayakan'],
-                        'spesifikasi' => $validated['spesifikasi'] ?? null,
-                    ]);
-
-                    if ($ruangan instanceof Ruangan) {
-                        LokasiBarang::create([
-                            'barang_id' => $barang->barang_id,
+                    if ($existingImportedItem !== null) {
+                        $barang = Barang::query()
+                            ->whereKey($existingImportedItem['barang_id'])
+                            ->lockForUpdate()
+                            ->firstOrFail();
+                        $stockBefore = $barang->stok_tersedia;
+                        $barang->stok_total += (int) $validated['stok_total'];
+                        $barang->stok_tersedia += (int) $validated['stok_tersedia'];
+                        $barang->save();
+                        $barang->lokasiBarangs()->create([
                             'ruangan_id' => $ruangan->ruangan_id,
                             'lemari_id' => $lemari?->lemari_id,
-                            'stok_total' => $barang->stok_total,
-                            'stok_tersedia' => $barang->stok_tersedia,
+                            'stok_total' => (int) $validated['stok_total'],
+                            'stok_tersedia' => (int) $validated['stok_tersedia'],
                         ]);
+                    } else {
+                        $barang = Barang::create([
+                            'kategori_id' => $kategori->kategori_id,
+                            'kode_barang' => $validated['kode_barang'],
+                            'nama_barang' => $validated['nama_barang'],
+                            'satuan' => $validated['satuan'],
+                            'stok_total' => $validated['stok_total'],
+                            'stok_tersedia' => $validated['stok_tersedia'],
+                            'kondisi' => $validated['kondisi'],
+                            'kelayakan' => $validated['kelayakan'],
+                            'spesifikasi' => $validated['spesifikasi'] ?? null,
+                        ]);
+
+                        if ($ruangan instanceof Ruangan) {
+                            $barang->lokasiBarangs()->create([
+                                'ruangan_id' => $ruangan->ruangan_id,
+                                'lemari_id' => $lemari?->lemari_id,
+                                'stok_total' => $barang->stok_total,
+                                'stok_tersedia' => $barang->stok_tersedia,
+                            ]);
+                        }
+
+                        $stockBefore = 0;
                     }
+
+                    $this->recordInboundMutation(
+                        $barang,
+                        $operator,
+                        $ruangan?->ruangan_id,
+                        $lemari?->lemari_id,
+                        (int) $validated['stok_total'],
+                        $stockBefore,
+                        $barang->stok_tersedia,
+                        $log->log_input_id,
+                        "Barang diimpor dari {$fileName}.",
+                    );
+
+                    $groupLocations = $existingImportedItem['locations'] ?? [];
+                    if ($locationKey !== null) {
+                        $groupLocations[$locationKey] = true;
+                    }
+
+                    $importedItems[$groupKey] = [
+                        'barang_id' => $barang->barang_id,
+                        'metadata' => $groupMetadata,
+                        'locations' => $groupLocations,
+                    ];
                 });
             } catch (UniqueConstraintViolationException) {
                 $failedRows++;
@@ -537,7 +890,7 @@ class ManageBarang extends Controller
                 continue;
             }
 
-            $usedCodes[$data['kode_barang']] = true;
+            $usedCodes[$groupKey] = true;
             $successRows++;
         }
 
@@ -546,15 +899,34 @@ class ManageBarang extends Controller
 
     public function store(StoreRequest $request): RedirectResponse
     {
-        $barang = DB::transaction(function () use ($request): Barang {
+        $actor = $request->user();
+        abort_unless($actor instanceof User, 403);
+
+        $barang = DB::transaction(function () use ($request, $actor): Barang {
             $attributes = $request->validated();
-            $ruanganId = $attributes['ruangan_id'];
-            $lemariIds = $attributes['lemari_id'] ?? [];
-            unset($attributes['ruangan_id'], $attributes['lemari_id']);
+            $locations = $attributes['locations'];
+            unset($attributes['locations']);
             $attributes['kode_barang'] = $this->nextBarangCode();
 
             $barang = Barang::create($attributes);
-            $this->syncBarangLocations($barang, $ruanganId, $lemariIds);
+            $stockBefore = 0;
+
+            foreach ($locations as $locationAttributes) {
+                $location = $barang->lokasiBarangs()->create($locationAttributes);
+                $stockAfter = $stockBefore + $location->stok_tersedia;
+                $this->recordInboundMutation(
+                    $barang,
+                    $actor,
+                    $location->ruangan_id,
+                    $location->lemari_id,
+                    $location->stok_total,
+                    $stockBefore,
+                    $stockAfter,
+                    null,
+                    'Barang ditambahkan dari formulir.',
+                );
+                $stockBefore = $stockAfter;
+            }
 
             return $barang;
         });
@@ -588,18 +960,25 @@ class ManageBarang extends Controller
 
     public function update(UpdateRequest $request, Barang $barang): RedirectResponse
     {
-        DB::transaction(function () use ($request, $barang): void {
+        $actor = $request->user();
+        abort_unless($actor instanceof User, 403);
+
+        DB::transaction(function () use ($request, $barang, $actor): void {
             $attributes = $request->validated();
             $isEdit = $attributes['barang_form'] === 'edit';
-            $ruanganId = $attributes['ruangan_id'] ?? null;
-            $lemariIds = $attributes['lemari_id'] ?? [];
-            unset($attributes['barang_form'], $attributes['ruangan_id'], $attributes['lemari_id']);
+            $locations = $attributes['locations'] ?? [];
+            unset($attributes['barang_form'], $attributes['locations']);
 
-            $barang->update($attributes);
+            $lockedBarang = Barang::query()
+                ->whereKey($barang->getKey())
+                ->lockForUpdate()
+                ->firstOrFail();
 
             if ($isEdit) {
-                $this->syncBarangLocations($barang, $ruanganId, $lemariIds);
+                $this->syncStockLocations($lockedBarang, $locations, $actor);
             }
+
+            $lockedBarang->update($attributes);
         });
 
         return redirect()->route('admin.barang')
@@ -609,35 +988,170 @@ class ManageBarang extends Controller
     }
 
     /**
-     * @param  array<int, string>  $lemariIds
+     * @param  array<int, array{ruangan_id: string, lemari_id: string|null, stok_total: int, stok_tersedia: int}>  $allocations
      */
-    private function syncBarangLocations(Barang $barang, string $ruanganId, array $lemariIds): void
+    private function syncStockLocations(Barang $barang, array $allocations, User $operator): void
     {
-        $lemariIds = array_values(array_unique($lemariIds));
         $existingLocations = $barang->lokasiBarangs()
-            ->where('ruangan_id', $ruanganId)
+            ->with(['ruangan', 'lemari'])
+            ->lockForUpdate()
             ->get()
-            ->keyBy(fn (LokasiBarang $location): string => (string) $location->lemari_id);
-        $selectedKeys = $lemariIds === [] ? [''] : $lemariIds;
-        $reusableLocation = $existingLocations->isEmpty()
-            ? $barang->lokasiBarangs()
-                ->orderBy('created_at')
-                ->orderBy('lokasi_barang_id')
-                ->first()
-            : null;
+            ->keyBy(fn (LokasiBarang $location): string => $this->stockLocationKey(
+                $location->ruangan_id,
+                $location->lemari_id,
+            ));
+        $desiredLocations = [];
 
-        foreach ($selectedKeys as $index => $lemariId) {
-            $location = $existingLocations->get((string) $lemariId);
-            $attributes = [
-                'ruangan_id' => $ruanganId,
-                'lemari_id' => $lemariId === '' ? null : $lemariId,
-                'stok_total' => 0,
-                'stok_tersedia' => 0,
+        foreach ($allocations as $attributes) {
+            $key = $this->stockLocationKey($attributes['ruangan_id'], $attributes['lemari_id'] ?? null);
+            $desiredLocations[$key] = [
+                'ruangan_id' => $attributes['ruangan_id'],
+                'lemari_id' => $attributes['lemari_id'] ?: null,
+                'stok_total' => (int) $attributes['stok_total'],
+                'stok_tersedia' => (int) $attributes['stok_tersedia'],
             ];
+        }
 
-            if (! $location instanceof LokasiBarang && $index === 0 && $reusableLocation instanceof LokasiBarang) {
-                $location = $reusableLocation;
+        $existingTotal = $existingLocations->sum('stok_total');
+        $existingAvailable = $existingLocations->sum('stok_tersedia');
+        $unallocatedTotal = $barang->stok_total - $existingTotal;
+        $unallocatedAvailable = $barang->stok_tersedia - $existingAvailable;
+
+        if ($unallocatedTotal < 0 || $unallocatedAvailable < 0 || $unallocatedTotal !== $unallocatedAvailable) {
+            throw ValidationException::withMessages([
+                'locations' => 'Stok lama memiliki jumlah yang belum terpetakan atau sedang dipinjam. Periksa riwayat stok sebelum mengubah lokasi.',
+            ]);
+        }
+
+        foreach ($existingLocations as $key => $location) {
+            $reservedQuantity = $location->stok_total - $location->stok_tersedia;
+            $desired = $desiredLocations[$key] ?? null;
+
+            if ($desired === null && $reservedQuantity > 0) {
+                throw ValidationException::withMessages([
+                    'locations' => 'Lokasi tidak dapat dihapus karena masih memiliki barang yang sedang dipinjam atau dipakai.',
+                ]);
             }
+
+            if ($desired !== null && $reservedQuantity !== $desired['stok_total'] - $desired['stok_tersedia']) {
+                throw ValidationException::withMessages([
+                    'locations' => 'Stok yang sedang dipinjam atau dipakai harus tetap berada di lokasi asal.',
+                ]);
+            }
+        }
+
+        foreach ($desiredLocations as $key => $desired) {
+            if (! $existingLocations->has($key) && $desired['stok_total'] !== $desired['stok_tersedia']) {
+                throw ValidationException::withMessages([
+                    'locations' => 'Lokasi baru hanya dapat menerima stok yang tersedia.',
+                ]);
+            }
+        }
+
+        $roomIds = collect($desiredLocations)
+            ->pluck('ruangan_id')
+            ->merge($existingLocations->pluck('ruangan_id'))
+            ->unique()
+            ->values();
+        $cabinetIds = collect($desiredLocations)
+            ->pluck('lemari_id')
+            ->merge($existingLocations->pluck('lemari_id'))
+            ->filter()
+            ->unique()
+            ->values();
+        $roomNames = Ruangan::query()->whereIn('ruangan_id', $roomIds)->pluck('nama_ruangan', 'ruangan_id');
+        $cabinetNames = Lemari::query()->whereIn('lemari_id', $cabinetIds)->pluck('nama_lemari', 'lemari_id');
+        $sources = [];
+        $targets = [];
+
+        foreach ($existingLocations as $key => $location) {
+            $availableAfter = $desiredLocations[$key]['stok_tersedia'] ?? 0;
+            $surplus = $location->stok_tersedia - $availableAfter;
+
+            if ($surplus > 0) {
+                $sources[] = [
+                    'location' => $location,
+                    'quantity' => $surplus,
+                    'remaining' => $location->stok_tersedia,
+                ];
+            }
+        }
+
+        if ($unallocatedAvailable > 0) {
+            $sources[] = [
+                'location' => null,
+                'quantity' => $unallocatedAvailable,
+                'remaining' => $unallocatedAvailable,
+            ];
+        }
+
+        foreach ($desiredLocations as $key => $desired) {
+            $availableBefore = $existingLocations->get($key)?->stok_tersedia ?? 0;
+            $increase = $desired['stok_tersedia'] - $availableBefore;
+
+            if ($increase > 0) {
+                $targets[] = [
+                    'attributes' => $desired,
+                    'quantity' => $increase,
+                ];
+            }
+        }
+
+        $sourceTotal = array_sum(array_column($sources, 'quantity'));
+        $targetTotal = array_sum(array_column($targets, 'quantity'));
+
+        if ($sourceTotal !== $targetTotal) {
+            throw ValidationException::withMessages([
+                'locations' => 'Jumlah stok lokasi tidak seimbang. Pastikan stok total dan stok tersedia tetap sama.',
+            ]);
+        }
+
+        foreach ($sources as &$source) {
+            foreach ($targets as &$target) {
+                if ($source['quantity'] === 0 || $target['quantity'] === 0) {
+                    continue;
+                }
+
+                $quantity = min($source['quantity'], $target['quantity']);
+                $sourceLocation = $source['location'];
+                $destination = $target['attributes'];
+                $sourceRoomId = $sourceLocation?->ruangan_id;
+                $sourceCabinetId = $sourceLocation?->lemari_id;
+                $sourceLabel = $sourceLocation === null
+                    ? 'stok barang yang belum memiliki lokasi'
+                    : $this->stockLocationLabel($sourceRoomId, $sourceCabinetId, $roomNames, $cabinetNames);
+                $destinationLabel = $this->stockLocationLabel(
+                    $destination['ruangan_id'],
+                    $destination['lemari_id'],
+                    $roomNames,
+                    $cabinetNames,
+                );
+
+                LogMutasiBarang::query()->create([
+                    'barang_id' => $barang->barang_id,
+                    'ruangan_id' => $sourceRoomId ?? $destination['ruangan_id'],
+                    'lemari_asal_id' => $sourceCabinetId,
+                    'lemari_tujuan_id' => $destination['lemari_id'],
+                    'akun_id' => null,
+                    'oleh_akun_id' => $operator->akun_id,
+                    'tipe' => 'dipindahkan',
+                    'jumlah' => $quantity,
+                    'stok_sebelum' => $source['remaining'],
+                    'stok_sesudah' => $source['remaining'] - $quantity,
+                    'keterangan' => "Stok dipindahkan dari {$sourceLabel} ke {$destinationLabel}.",
+                    'created_at' => now(),
+                ]);
+
+                $source['quantity'] -= $quantity;
+                $source['remaining'] -= $quantity;
+                $target['quantity'] -= $quantity;
+            }
+            unset($target);
+        }
+        unset($source);
+
+        foreach ($desiredLocations as $key => $attributes) {
+            $location = $existingLocations->get($key);
 
             if ($location instanceof LokasiBarang) {
                 $location->update($attributes);
@@ -646,17 +1160,59 @@ class ManageBarang extends Controller
             }
         }
 
-        $barang->lokasiBarangs()
-            ->where('ruangan_id', $ruanganId)
-            ->when(
-                $lemariIds === [],
-                fn ($query) => $query->whereNotNull('lemari_id'),
-                fn ($query) => $query->where(function ($query) use ($lemariIds): void {
-                    $query->whereNull('lemari_id')
-                        ->orWhereNotIn('lemari_id', $lemariIds);
-                }),
-            )
-            ->delete();
+        foreach ($existingLocations as $key => $location) {
+            if (! array_key_exists($key, $desiredLocations)) {
+                $location->delete();
+            }
+        }
+    }
+
+    private function stockLocationKey(string $roomId, ?string $cabinetId): string
+    {
+        return $roomId.'|'.($cabinetId ?? '');
+    }
+
+    /**
+     * @param  Collection<string, string>  $roomNames
+     * @param  Collection<string, string>  $cabinetNames
+     */
+    private function stockLocationLabel(
+        string $roomId,
+        ?string $cabinetId,
+        Collection $roomNames,
+        Collection $cabinetNames,
+    ): string {
+        $roomName = $roomNames->get($roomId, 'Ruangan tidak tersedia');
+        $cabinetName = $cabinetId === null ? null : $cabinetNames->get($cabinetId, 'Lemari tidak tersedia');
+
+        return $cabinetName === null ? $roomName : "{$roomName} · {$cabinetName}";
+    }
+
+    private function recordInboundMutation(
+        Barang $barang,
+        User $operator,
+        ?string $roomId,
+        ?string $cabinetId,
+        int $quantity,
+        int $stockBefore,
+        int $stockAfter,
+        ?string $inputLogId,
+        string $description,
+    ): void {
+        LogMutasiBarang::query()->create([
+            'barang_id' => $barang->barang_id,
+            'ruangan_id' => $roomId,
+            'lemari_tujuan_id' => $cabinetId,
+            'akun_id' => null,
+            'oleh_akun_id' => $operator->akun_id,
+            'log_input_id' => $inputLogId,
+            'tipe' => 'masuk',
+            'jumlah' => $quantity,
+            'stok_sebelum' => $stockBefore,
+            'stok_sesudah' => $stockAfter,
+            'keterangan' => $description,
+            'created_at' => now(),
+        ]);
     }
 
     public function destroy(Request $request, Barang $barang): RedirectResponse|JsonResponse
