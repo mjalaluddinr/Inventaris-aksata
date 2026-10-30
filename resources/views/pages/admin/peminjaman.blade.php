@@ -6,6 +6,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="color-scheme" content="light">
+    <link rel="icon" type="image/svg+xml" href="{{ asset('assets/icon.svg') }}">
     <title>Pratinjau Laporan Peminjaman {{ $year }}</title>
     @vite('resources/css/app.css')
     <style>

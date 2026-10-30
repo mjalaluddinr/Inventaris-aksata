@@ -13,18 +13,22 @@
   </button>
 
   <!-- Logo Section -->
-  <div class="flex items-center p-5 transition-[padding] duration-300"
-    :class="(open || mobileSidebarOpen) ? 'justify-start gap-3' : 'justify-center'">
-    <div
-      class="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-white shadow-lg transition duration-300 hover:-rotate-3 hover:scale-105">
-      <iconify-icon icon="mdi:grid" class="text-teal-500" width="28"></iconify-icon>
-    </div>
-    <div x-show="open || mobileSidebarOpen" x-transition:enter="transition ease-out duration-200"
-      x-transition:enter-start="opacity-0 -translate-x-2" x-transition:enter-end="opacity-100 translate-x-0"
-      x-transition:leave="transition ease-in duration-150" x-transition:leave-start="opacity-100 translate-x-0"
-      x-transition:leave-end="opacity-0 -translate-x-2" class="whitespace-nowrap overflow-hidden">
-      <h1 class="text-white font-bold text-xl leading-tight tracking-wide">InvenTrack</h1>
-      <p class="text-white/80 text-[9px] uppercase tracking-wider font-medium">Sistem Inventaris Jurusan</p>
+  <div class="flex items-center justify-center transition-[padding] duration-300"
+    :class="(open || mobileSidebarOpen) ? 'px-3 py-4' : 'p-2'">
+    <div class="flex h-16 shrink-0 items-center rounded-2xl bg-white p-1 shadow-lg transition-[width] duration-300"
+      :class="(open || mobileSidebarOpen) ? 'w-full gap-3' : 'w-16 justify-center'">
+      <span
+        class="flex h-14 w-14 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-teal-300 to-teal-500">
+        <img src="{{ asset('assets/icon.svg') }}" alt="" class="h-10 w-10 translate-x-0.5 object-contain">
+      </span>
+      <div x-show="open || mobileSidebarOpen" x-transition:enter="transition ease-out duration-200"
+        x-transition:enter-start="opacity-0 -translate-x-2" x-transition:enter-end="opacity-100 translate-x-0"
+        x-transition:leave="transition ease-in duration-150" x-transition:leave-start="opacity-100 translate-x-0"
+        x-transition:leave-end="opacity-0 -translate-x-2" class="min-w-0 overflow-hidden">
+        <h1 class="whitespace-nowrap text-xl font-bold leading-tight tracking-wide text-[#00385A]">InvenTrack</h1>
+        <p class="text-[9px] font-semibold uppercase leading-tight tracking-wider text-[#7f9e9a]">Sistem Inventaris
+          Jurusan</p>
+      </div>
     </div>
   </div>
 
@@ -48,21 +52,21 @@
 
       if ($currentUser?->role !== 'admin') {
           if ($currentUser?->canManajemen()) {
-              if (! $currentUser->canMeminjamkan()) {
+              if (!$currentUser->canMeminjamkan()) {
                   $menuItems = array_filter(
                       $menuItems,
-                      static fn (array $menu): bool => $menu['route'] !== 'admin.peminjaman',
+                      static fn(array $menu): bool => $menu['route'] !== 'admin.peminjaman',
                   );
               }
           } elseif ($currentUser?->canMeminjamkan()) {
               $menuItems = array_filter(
                   $menuItems,
-                  static fn (array $menu): bool => $menu['route'] === 'admin.peminjaman',
+                  static fn(array $menu): bool => $menu['route'] === 'admin.peminjaman',
               );
           } elseif ($currentUser?->canMelihat()) {
               $menuItems = array_filter(
                   $menuItems,
-                  static fn (array $menu): bool => in_array(
+                  static fn(array $menu): bool => in_array(
                       $menu['route'],
                       ['admin.dashboard', 'admin.barang', 'admin.kategori', 'admin.ruangan.index', 'admin.rak.index'],
                       true,
@@ -75,7 +79,7 @@
           // Account management and logs are administrator-only.
           $menuItems = array_filter(
               $menuItems,
-              static fn (array $menu): bool => ! in_array(
+              static fn(array $menu): bool => !in_array(
                   $menu['route'],
                   ['admin.akun.index', 'admin.log_import', 'admin.log_mutasi'],
                   true,

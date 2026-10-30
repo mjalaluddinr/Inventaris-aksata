@@ -27,9 +27,9 @@
   <nav class="flex w-full items-center justify-between gap-2 px-3 transition-[height] duration-300 sm:gap-5 sm:px-8 lg:px-10"
     :class="isScrolled ? 'h-20' : 'h-[88px]'">
     <a href="{{ route('user.beranda') }}" class="flex min-w-0 shrink items-center gap-2 sm:gap-3" aria-label="InvenTrack, Sistem Inventaris Jurusan">
-      <span class="flex shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-white/75 to-[#00d8b0]/70 shadow-inner transition-[width,height] duration-300"
+      <span class="flex shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-[#a7f3e8] to-[#00bfa5] shadow-inner transition-[width,height] duration-300"
         :class="isScrolled ? 'h-12 w-12' : 'h-14 w-14'">
-        <iconify-icon icon="mdi:archive-cog-outline" class="text-2xl text-white sm:text-3xl" aria-hidden="true"></iconify-icon>
+        <img src="{{ asset('assets/icon.svg') }}" alt="" class="h-10 w-10 translate-x-0.5 object-contain" aria-hidden="true">
       </span>
       <span class="min-w-0 leading-tight">
         <span class="block truncate text-[11px] font-bold tracking-wide min-[380px]:text-xs sm:text-sm md:text-base">InvenTrack</span>

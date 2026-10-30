@@ -5,6 +5,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="theme-color" content="#00385A">
+  <link rel="icon" type="image/svg+xml" href="{{ asset('assets/icon.svg') }}">
   <title>Pengajuan Lupa Password - InvenTrack</title>
   @vite(['resources/css/app.css', 'resources/js/app.js'])
 </head>

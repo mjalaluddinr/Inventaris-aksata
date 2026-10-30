@@ -23,6 +23,7 @@ class LokasiBarang extends Model
         'barang_id',
         'ruangan_id',
         'lemari_id',
+        'toolbox_id',
         'stok_total',
         'stok_tersedia',
     ];
@@ -50,5 +51,10 @@ class LokasiBarang extends Model
     public function lemari(): BelongsTo
     {
         return $this->belongsTo(Lemari::class, 'lemari_id', 'lemari_id');
+    }
+
+    public function toolbox(): BelongsTo
+    {
+        return $this->belongsTo(Toolbox::class, 'toolbox_id', 'toolbox_id');
     }
 }

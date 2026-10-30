@@ -5,6 +5,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="theme-color" content="#006b70">
+  <link rel="icon" type="image/svg+xml" href="{{ asset('assets/icon.svg') }}">
   <title>Login - InvenTrack</title>
   @vite(['resources/css/app.css', 'resources/js/app.js'])
   <style>
@@ -95,6 +96,7 @@
       max-width: 100%;
       height: auto;
       object-fit: contain;
+      filter: brightness(0) invert(1) drop-shadow(0 10px 7px rgb(0 0 0 / 18%));
       animation: login-device-float 5.5s ease-in-out infinite;
       will-change: transform;
     }
@@ -185,6 +187,10 @@
         border-radius: 1rem;
         background: #00B19C;
         box-shadow: 0 8px 22px rgb(0 24 48 / 25%);
+      }
+
+      .login-mobile-brand-mark img {
+        filter: brightness(0) invert(1);
       }
 
       .login-form-card {
@@ -345,8 +351,7 @@
       <div class="login-brand-content mx-auto flex min-h-0 w-full max-w-xl flex-1 flex-col justify-center lg:mx-0">
         <div class="login-hero-icon flex w-full shrink-0 items-center justify-center"
           aria-hidden="true">
-          <img src="{{ asset('assets/icon.svg') }}" alt=""
-            class="drop-shadow-[0_10px_7px_rgba(0,0,0,0.18)]">
+          <img src="{{ asset('assets/icon.svg') }}" alt="">
         </div>
         <div class="login-hero-copy">
           <h1 class="text-4xl font-semibold tracking-tight xl:text-[clamp(2.5rem,4.2vw,3.25rem)]">Halo, Pengguna...</h1>

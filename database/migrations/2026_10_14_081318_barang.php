@@ -11,6 +11,7 @@ return new class extends Migration
         Schema::create('barang', function (Blueprint $table) {
             $table->uuid('barang_id')->primary();
             $table->string('kode_barang', 30)->unique('uq_barang_kode');
+            $table->string('image_path')->nullable(); // Menampung path/nama file foto barang
             $table->string('nama_barang', 150);
             $table->string('satuan', 20)->default('unit');
             $table->integer('stok_total')->default(0);

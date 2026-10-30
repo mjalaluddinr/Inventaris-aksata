@@ -18,6 +18,7 @@ return new class extends Migration
             $table->foreignUuid('barang_id')->constrained('barang', 'barang_id')->restrictOnDelete();
             $table->foreignUuid('ruangan_id')->constrained('ruangan', 'ruangan_id')->restrictOnDelete();
             $table->foreignUuid('lemari_id')->nullable()->constrained('lemari', 'lemari_id')->restrictOnDelete();
+            $table->foreignUuid('toolbox_id')->nullable()->constrained('toolbox', 'toolbox_id')->restrictOnDelete();
         });
     }
 
