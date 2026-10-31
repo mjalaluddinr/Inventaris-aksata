@@ -311,7 +311,7 @@ class ManageBarang extends Controller
         return redirect()->route('admin.barang', [
             'barang_id' => $barang->barang_id,
             'panel' => 'usage',
-        ])->with('success', 'Pemakaian barang berhasil dicatat.');
+        ])->with('success', "Barang {$barang->nama_barang} berhasil dicatat untuk pemakaian.");
     }
 
     public function withdrawUsage(Request $request, Barang $barang, BarangDipakai $usage): RedirectResponse|JsonResponse
@@ -407,7 +407,7 @@ class ManageBarang extends Controller
         return redirect()->route('admin.barang', [
             'barang_id' => $barang->barang_id,
             'panel' => 'history',
-        ])->with('success', 'Barang berhasil ditarik kembali.');
+        ])->with('success', "Barang {$barang->nama_barang} berhasil ditarik kembali.");
     }
 
     public function import(ImportRequest $request): JsonResponse
@@ -968,7 +968,7 @@ class ManageBarang extends Controller
         }
 
         return redirect()->route('admin.barang')
-            ->with('success', 'Barang berhasil ditambahkan.')
+            ->with('success', "Barang {$barang->nama_barang} berhasil ditambahkan.")
             ->with('barang_feedback_name', $barang->nama_barang)
             ->with('barang_feedback_action', 'ditambahkan');
     }
@@ -1043,7 +1043,7 @@ class ManageBarang extends Controller
         }
 
         return redirect()->route('admin.barang')
-            ->with('success', 'Barang berhasil diperbarui.')
+            ->with('success', "Barang {$barang->nama_barang} berhasil diperbarui.")
             ->with('barang_feedback_name', $barang->nama_barang)
             ->with('barang_feedback_action', 'diperbarui');
     }
@@ -1164,17 +1164,10 @@ class ManageBarang extends Controller
                 $targets[] = [
                     'attributes' => $desired,
                     'quantity' => $increase,
+                    'initial_quantity' => $increase,
+                    'stock_before' => $availableBefore,
                 ];
             }
-        }
-
-        $sourceTotal = array_sum(array_column($sources, 'quantity'));
-        $targetTotal = array_sum(array_column($targets, 'quantity'));
-
-        if ($sourceTotal !== $targetTotal) {
-            throw ValidationException::withMessages([
-                'locations' => 'Jumlah stok lokasi tidak seimbang. Pastikan stok total dan stok tersedia tetap sama.',
-            ]);
         }
 
         foreach ($sources as &$source) {
@@ -1230,6 +1223,48 @@ class ManageBarang extends Controller
         }
         unset($source);
 
+        foreach ($sources as $source) {
+            if ($source['quantity'] === 0) {
+                continue;
+            }
+
+            $sourceLocation = $source['location'];
+            $this->recordStockAdjustment(
+                $barang,
+                $operator,
+                $sourceLocation?->ruangan_id,
+                $sourceLocation?->lemari_id,
+                null,
+                $source['quantity'],
+                $source['remaining'],
+                $source['remaining'] - $source['quantity'],
+                'Stok dikurangi saat mengubah jumlah barang.',
+            );
+        }
+
+        foreach ($targets as $target) {
+            if ($target['quantity'] === 0) {
+                continue;
+            }
+
+            $destination = $target['attributes'];
+            $stockBefore = $target['stock_before']
+                + $target['initial_quantity']
+                - $target['quantity'];
+
+            $this->recordStockAdjustment(
+                $barang,
+                $operator,
+                $destination['ruangan_id'],
+                null,
+                $destination['lemari_id'],
+                $target['quantity'],
+                $stockBefore,
+                $stockBefore + $target['quantity'],
+                'Stok ditambahkan saat mengubah jumlah barang.',
+            );
+        }
+
         foreach ($desiredLocations as $key => $attributes) {
             $location = $existingLocations->get($key);
 
@@ -1245,6 +1280,33 @@ class ManageBarang extends Controller
                 $location->delete();
             }
         }
+    }
+
+    private function recordStockAdjustment(
+        Barang $barang,
+        User $operator,
+        ?string $roomId,
+        ?string $sourceCabinetId,
+        ?string $destinationCabinetId,
+        int $quantity,
+        int $stockBefore,
+        int $stockAfter,
+        string $description,
+    ): void {
+        LogMutasiBarang::query()->create([
+            'barang_id' => $barang->barang_id,
+            'ruangan_id' => $roomId,
+            'lemari_asal_id' => $sourceCabinetId,
+            'lemari_tujuan_id' => $destinationCabinetId,
+            'akun_id' => null,
+            'oleh_akun_id' => $operator->akun_id,
+            'tipe' => 'penyesuaian',
+            'jumlah' => $quantity,
+            'stok_sebelum' => $stockBefore,
+            'stok_sesudah' => $stockAfter,
+            'keterangan' => $description,
+            'created_at' => now(),
+        ]);
     }
 
     private function stockLocationKey(string $roomId, ?string $cabinetId, ?string $toolboxId): string
@@ -1305,27 +1367,18 @@ class ManageBarang extends Controller
                 ->lockForUpdate()
                 ->firstOrFail();
 
-            if ($lockedBarang->detailPeminjamans()->exists()) {
-                return 'Barang tidak dapat dihapus karena memiliki riwayat peminjaman.';
+            if ($lockedBarang->detailPeminjamans()->whereIn('status', ['pending', 'dipinjam'])->exists()) {
+                return "Barang {$lockedBarang->nama_barang} tidak dapat dihapus karena masih memiliki peminjaman yang menunggu atau belum dikembalikan.";
             }
 
-            if ($lockedBarang->barangDipakais()->exists()) {
-                return 'Barang tidak dapat dihapus karena memiliki riwayat pemakaian.';
+            if ($lockedBarang->barangDipakais()->where('status', 'aktif')->exists()) {
+                return "Barang {$lockedBarang->nama_barang} tidak dapat dihapus karena masih digunakan di ruangan.";
             }
 
-            if ($lockedBarang->logMutasiBarangs()->exists()) {
-                return 'Barang tidak dapat dihapus karena memiliki riwayat mutasi.';
-            }
-
-            if ($lockedBarang->image_path && Storage::disk('public')->exists($lockedBarang->image_path)) {
-                Storage::disk('public')->delete($lockedBarang->image_path);
-            }
-
-            $lockedBarang->lokasiBarangs()->delete();
             $lockedBarang->delete();
 
             return null;
-        });
+        }, 3);
 
         if ($errorMessage !== null) {
             if ($request->expectsJson()) {
@@ -1337,15 +1390,15 @@ class ManageBarang extends Controller
         }
 
         if ($request->expectsJson()) {
-            $request->session()->flash('success', 'Barang berhasil dihapus.');
+            $request->session()->flash('success', "Barang {$barangName} berhasil dihapus.");
             $request->session()->flash('barang_feedback_name', $barangName);
             $request->session()->flash('barang_feedback_action', 'dihapus');
 
-            return response()->json(['message' => 'Barang berhasil dihapus.']);
+            return response()->json(['message' => "Barang {$barangName} berhasil dihapus."]);
         }
 
         return redirect()->route('admin.barang')
-            ->with('success', 'Barang berhasil dihapus.')
+            ->with('success', "Barang {$barangName} berhasil dihapus.")
             ->with('barang_feedback_name', $barangName)
             ->with('barang_feedback_action', 'dihapus');
     }

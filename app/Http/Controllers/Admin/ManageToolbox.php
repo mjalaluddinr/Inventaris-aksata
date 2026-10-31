@@ -13,10 +13,12 @@ class ManageToolbox extends Controller
 {
     public function store(StoreRequest $request): RedirectResponse
     {
+        $attributes = $request->validated();
+
         try {
-            DB::transaction(function () use ($request): void {
+            DB::transaction(function () use ($attributes): void {
                 Toolbox::query()->create([
-                    ...$request->validated(),
+                    ...$attributes,
                     'kode_toolbox' => $this->nextToolboxCode(),
                 ]);
             });
@@ -29,7 +31,7 @@ class ManageToolbox extends Controller
         }
 
         return redirect()->route('admin.barang')
-            ->with('success', 'Wadah berhasil ditambahkan.');
+            ->with('success', "Wadah {$attributes['nama_toolbox']} berhasil ditambahkan.");
     }
 
     private function nextToolboxCode(): string

@@ -50,7 +50,8 @@ class ManageRuangan extends Controller
                 Ruangan::create($validated);
             });
 
-            return redirect()->route('admin.ruangan.index')->with('success', 'Ruangan berhasil ditambahkan.');
+            return redirect()->route('admin.ruangan.index')
+                ->with('success', "Ruangan {$validated['nama_ruangan']} berhasil ditambahkan.");
         } catch (Exception $e) {
             Log::error('Gagal menambahkan ruangan.', ['exception' => $e]);
 
@@ -67,7 +68,8 @@ class ManageRuangan extends Controller
                 $ruangan->update($validated);
             });
 
-            return redirect()->route('admin.ruangan.index')->with('success', 'Ruangan berhasil diupdate.');
+            return redirect()->route('admin.ruangan.index')
+                ->with('success', "Ruangan {$ruangan->nama_ruangan} berhasil diperbarui.");
         } catch (Exception $e) {
             Log::error('Gagal memperbarui ruangan.', ['exception' => $e]);
 
@@ -81,14 +83,18 @@ class ManageRuangan extends Controller
             // ASVS 2.3.2: Preserve the existing restriction while cabinets still depend on the room.
             $lemariCount = $ruangan->lemaris()->count();
             if ($lemariCount > 0) {
-                return redirect()->back()->with('error', 'Ruangan tidak dapat dihapus karena masih memiliki '.$lemariCount.' lemari.');
+                return redirect()->back()->with(
+                    'error',
+                    "Ruangan {$ruangan->nama_ruangan} tidak dapat dihapus karena masih memiliki {$lemariCount} lemari.",
+                );
             }
 
             DB::transaction(function () use ($ruangan) {
                 $ruangan->delete();
             });
 
-            return redirect()->route('admin.ruangan.index')->with('success', 'Ruangan berhasil dihapus.');
+            return redirect()->route('admin.ruangan.index')
+                ->with('success', "Ruangan {$ruangan->nama_ruangan} berhasil dihapus.");
         } catch (Exception $e) {
             Log::error('Gagal menghapus ruangan.', ['exception' => $e]);
 

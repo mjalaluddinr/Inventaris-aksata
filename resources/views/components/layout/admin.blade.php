@@ -15,7 +15,7 @@
   @vite(['resources/css/app.css', 'resources/js/app.js'])
 </head>
 
-<body class="font-sans antialiased bg-gray-100">
+<body class="font-sans antialiased bg-gray-100" data-admin-field-indicators>
   <div x-data="globalToast" x-cloak x-show="visible"
     x-transition:enter="transition ease-out duration-200"
     x-transition:enter-start="translate-x-4 opacity-0"
@@ -72,13 +72,12 @@
       class="min-w-0 flex-1 overflow-y-auto px-8 pb-8 pt-0">
       <div class="admin-page-enter min-w-0">
         <x-admin.header :title="$headerTitle" :description="$headerDescription" />
-        {{-- ASVS 16.5.1: Import feedback is handled by the sanitized account-page toast. --}}
-        @if (session('success') && session('success') !== 'Login berhasil!' && !session()->has('import_log_id') && !request()->routeIs('admin.barang*', 'admin.rak.*', 'admin.kategori*', 'admin.peminjaman*', 'admin.ruangan.*', 'admin.akun.*'))
-          <div class="mb-6 flex items-center gap-3 rounded-xl border-l-4 border-emerald-500 bg-emerald-50 px-4 py-3 text-sm text-emerald-800"
-            role="status">
-            <iconify-icon icon="mdi:check-circle-outline" class="shrink-0 text-xl" aria-hidden="true"></iconify-icon>
-            <span>{{ session('success') }}</span>
-          </div>
+        @if (!request()->routeIs('admin.barang*', 'admin.rak.*', 'admin.kategori*', 'admin.peminjaman*', 'admin.ruangan.*', 'admin.akun.*'))
+          @if (session('success') && session('success') !== 'Login berhasil!')
+            <span class="hidden" x-init="window.showToast(@js(session('success')), 'success')"></span>
+          @elseif (session('error'))
+            <span class="hidden" x-init="window.showToast(@js(session('error')), 'error')"></span>
+          @endif
         @endif
         {{ $slot }}
       </div>

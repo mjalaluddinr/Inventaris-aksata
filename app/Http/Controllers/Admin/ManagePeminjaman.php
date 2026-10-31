@@ -166,7 +166,7 @@ class ManagePeminjaman extends Controller
             return $loan->peminjaman_id;
         }, 3);
 
-        session()->flash('success', 'Konfirmasi berhasil.');
+        session()->flash('success', "Peminjaman {$code} berhasil dikonfirmasi.");
 
         return response()->json([
             'message' => 'QR berhasil dipindai. Peminjaman telah dikonfirmasi.',
@@ -184,7 +184,7 @@ class ManagePeminjaman extends Controller
 
         return redirect()
             ->route('admin.peminjaman', ['tab' => 'borrowed'])
-            ->with('success', 'Konfirmasi berhasil.');
+            ->with('success', "Peminjaman {$peminjaman->kode_peminjaman} berhasil dikonfirmasi.");
     }
 
     public function reject(RejectPeminjamanRequest $request, Peminjaman $peminjaman): RedirectResponse
@@ -216,7 +216,10 @@ class ManagePeminjaman extends Controller
 
         return redirect()
             ->route('admin.peminjaman', ['tab' => 'pending'])
-            ->with('success', 'Pengajuan ditolak dan stok dikembalikan.');
+            ->with(
+                'success',
+                "Peminjaman {$peminjaman->kode_peminjaman} ditolak dan stok dikembalikan.",
+            );
     }
 
     public function returnItems(ReturnPeminjamanRequest $request, Peminjaman $peminjaman): RedirectResponse
@@ -293,10 +296,13 @@ class ManagePeminjaman extends Controller
         $hasRemainingItems = $peminjaman->detailPeminjamans()
             ->where('status', 'dipinjam')
             ->exists();
+        $returnMessage = $hasRemainingItems
+            ? "Peminjaman {$peminjaman->kode_peminjaman} berhasil dikembalikan sebagian."
+            : "Peminjaman {$peminjaman->kode_peminjaman} berhasil dikembalikan sepenuhnya.";
 
         return redirect()
             ->route('admin.peminjaman', ['tab' => $hasRemainingItems ? 'borrowed' : 'history'])
-            ->with('success', $hasRemainingItems ? 'Pengembalian berhasil dicatat.' : 'Pengembalian selesai.');
+            ->with('success', $returnMessage);
     }
 
     public function export(Request $request): BinaryFileResponse

@@ -41,14 +41,16 @@ class ManageKategori extends Controller
     {
         Kategori::create($request->validated());
 
-        return redirect()->route('admin.kategori')->with('success', 'Kategori berhasil ditambahkan.');
+        return redirect()->route('admin.kategori')
+            ->with('success', "Kategori {$kategori->nama_kategori} berhasil ditambahkan.");
     }
 
     public function update(UpdateRequest $request, Kategori $kategori): RedirectResponse
     {
         $kategori->update($request->validated());
 
-        return redirect()->route('admin.kategori')->with('success', 'Kategori berhasil diperbarui.');
+        return redirect()->route('admin.kategori')
+            ->with('success', "Kategori {$kategori->nama_kategori} berhasil diperbarui.");
     }
 
     public function destroy(Kategori $kategori): RedirectResponse
@@ -60,6 +62,7 @@ class ManageKategori extends Controller
 
         $kategori->delete();
 
-        return redirect()->route('admin.kategori')->with('success', 'Kategori berhasil dihapus.');
+        return redirect()->route('admin.kategori')
+            ->with('success', "Kategori {$kategori->nama_kategori} berhasil dihapus.");
     }
 }

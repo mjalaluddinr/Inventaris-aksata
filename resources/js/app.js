@@ -8,8 +8,23 @@ const toastTypes = new Set(['success', 'error', 'info', 'warning']);
 
 const formatToastMessage = (message, type) => {
     if (typeof message === 'string') {
+        const namedEntity = message.match(
+            /^(Barang|Kategori|Ruangan|Lemari(?:\/Rak)?|Wadah|Akun|Peminjaman)\s+(.+?)\s+(?=(?:berhasil|gagal|tidak|masih|ditolak|diaktifkan|dinonaktifkan)\b)/i,
+        );
+
+        if (namedEntity) {
+            const entityNameStart = namedEntity.index + namedEntity[1].length + 1;
+            const entityNameEnd = entityNameStart + namedEntity[2].length;
+
+            return [
+                { text: message.slice(0, entityNameStart), bold: false },
+                { text: namedEntity[2], bold: true },
+                { text: message.slice(entityNameEnd), bold: false },
+            ];
+        }
+
         const importantPhrase = type === 'error'
-            ? message.match(/(?:masih digunakan oleh|digunakan oleh|masih memiliki|memiliki riwayat)\s+([^.!?]+)([.!?]?)$/i)
+            ? message.match(/(?:masih digunakan oleh|digunakan oleh|masih memiliki|memiliki riwayat|riwayat peminjaman|riwayat pemakaian|riwayat mutasi)\s+([^.!?]+)([.!?]?)$/i)
             : null;
 
         if (importantPhrase) {
@@ -425,7 +440,157 @@ Alpine.data('loanQrScanner', () => ({
     },
 }));
 
+const adminFieldSelector = 'input, select, textarea';
+const ignoredIndicatorTypes = new Set(['hidden', 'button', 'submit', 'reset', 'image']);
+const adminFieldIndicators = new WeakMap();
+
+const findAdminFieldLabel = (field) => {
+    const directLabel = field.closest('label') || field.labels?.[0];
+    if (directLabel) {
+        return directLabel;
+    }
+
+    const form = field.closest('form');
+    let ancestor = field.parentElement;
+
+    while (ancestor && ancestor !== form) {
+        const labels = Array.from(ancestor.children).filter((child) => child.tagName === 'LABEL');
+        const controls = ancestor.querySelectorAll(adminFieldSelector);
+        if (labels.length === 1 && controls.length === 1) {
+            return labels[0];
+        }
+
+        ancestor = ancestor.parentElement;
+    }
+
+    return null;
+};
+
+const adminFieldHasValue = (field) => {
+    if (field.type === 'checkbox' || field.type === 'radio') {
+        return field.checked;
+    }
+
+    if (field.type === 'file') {
+        return (field.files?.length ?? 0) > 0;
+    }
+
+    return String(field.value ?? '').trim() !== '';
+};
+
+const isAdminFilterOrSearchField = (field, label) => (
+    field.type === 'search'
+    || field.name.toLocaleLowerCase() === 'search'
+    || field.closest('form')?.method === 'get'
+    || /\b(filter|cari|pencarian)\b/i.test(label.textContent)
+);
+
+const updateAdminFieldIndicator = (field) => {
+    if (
+        !(field instanceof HTMLInputElement || field instanceof HTMLSelectElement || field instanceof HTMLTextAreaElement)
+        || ignoredIndicatorTypes.has(field.type)
+    ) {
+        return;
+    }
+
+    const label = findAdminFieldLabel(field);
+    if (!label) {
+        return;
+    }
+
+    const requiredGroup = field.type === 'radio'
+        ? field.closest('fieldset')?.querySelector(':scope > legend [data-admin-field-indicator], :scope > legend span')
+        : null;
+    if (requiredGroup?.textContent.trim() === '*') {
+        return;
+    }
+
+    const required = field.required || field.getAttribute('aria-required') === 'true';
+    if (!required && isAdminFilterOrSearchField(field, label)) {
+        return;
+    }
+
+    let indicator = adminFieldIndicators.get(field);
+
+    if (!indicator) {
+        indicator = Array.from(label.children).find((child) => (
+            child.dataset.adminFieldIndicator !== undefined
+            || child.textContent.trim() === '*'
+            || child.textContent.trim() === '(opsional)'
+        ));
+
+        if (!indicator) {
+            indicator = document.createElement('span');
+            const firstControl = label.querySelector(adminFieldSelector);
+            if (firstControl) {
+                label.insertBefore(indicator, firstControl);
+            } else {
+                label.append(indicator);
+            }
+        }
+
+        indicator.dataset.adminFieldIndicator = '';
+        indicator.setAttribute('aria-hidden', 'true');
+        adminFieldIndicators.set(field, indicator);
+    }
+
+    const indicatorText = required ? '*' : '(opsional)';
+    if (indicator.textContent !== indicatorText) {
+        indicator.textContent = indicatorText;
+    }
+
+    const indicatorClass = required
+        ? 'ml-1 text-rose-500'
+        : 'ml-1 font-normal text-slate-400';
+    if (indicator.className !== indicatorClass) {
+        indicator.className = indicatorClass;
+    }
+
+    indicator.hidden = field.disabled || (required && adminFieldHasValue(field));
+};
+
+const updateAdminFieldsetIndicators = () => {
+    document.querySelectorAll('fieldset > legend span').forEach((indicator) => {
+        if (indicator.textContent.trim() !== '*') {
+            return;
+        }
+
+        const fieldset = indicator.closest('fieldset');
+        const selected = fieldset?.querySelector('input[type="radio"]:checked, input[type="checkbox"]:checked');
+        indicator.hidden = Boolean(selected);
+    });
+};
+
+const updateAdminFieldIndicators = () => {
+    if (!document.body.hasAttribute('data-admin-field-indicators')) {
+        return;
+    }
+
+    document.querySelectorAll(adminFieldSelector).forEach(updateAdminFieldIndicator);
+    updateAdminFieldsetIndicators();
+};
+
+if (document.body.hasAttribute('data-admin-field-indicators')) {
+    const adminFieldIndicatorObserver = new MutationObserver(updateAdminFieldIndicators);
+    adminFieldIndicatorObserver.observe(document.body, {
+        attributes: true,
+        attributeFilter: ['aria-required', 'disabled', 'required'],
+        childList: true,
+        subtree: true,
+    });
+
+    document.addEventListener('input', (event) => {
+        updateAdminFieldIndicator(event.target);
+        updateAdminFieldsetIndicators();
+    });
+    document.addEventListener('change', (event) => {
+        updateAdminFieldIndicator(event.target);
+        updateAdminFieldsetIndicators();
+    });
+}
+
 Alpine.start();
+updateAdminFieldIndicators();
 
 const renderLoanQr = (element) => {
     if (element.dataset.loanQrRendered === 'true') {

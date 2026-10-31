@@ -82,7 +82,8 @@ class ManageUser extends Controller
 
         $this->syncPrivilege($user, $user->role, $validated['privileges'] ?? []);
 
-        return redirect()->route('admin.akun.index')->with('success', 'Akun berhasil ditambahkan.');
+        return redirect()->route('admin.akun.index')
+            ->with('success', "Akun {$user->username} berhasil ditambahkan.");
     }
 
     public function update(UpdateRequest $request, User $user)
@@ -107,7 +108,8 @@ class ManageUser extends Controller
         $user->update($updateData);
         $this->syncPrivilege($user, $user->role, $validated['privileges'] ?? []);
 
-        return redirect()->route('admin.akun.index')->with('success', 'Akun berhasil diupdate.');
+        return redirect()->route('admin.akun.index')
+            ->with('success', "Akun {$user->username} berhasil diperbarui.");
     }
 
     public function editPassword(User $user): RedirectResponse
@@ -149,7 +151,7 @@ class ManageUser extends Controller
 
         return redirect()
             ->route('admin.akun.index')
-            ->with('success', 'Password berhasil diperbarui dan permintaan reset selesai.');
+            ->with('success', "Akun {$user->username} berhasil memperbarui password dan menyelesaikan reset.");
     }
 
     public function destroy(User $user)
@@ -158,7 +160,8 @@ class ManageUser extends Controller
         $user->privileges()->delete();
         $user->delete();
 
-        return redirect()->route('admin.akun.index')->with('success', 'Akun berhasil dihapus.');
+        return redirect()->route('admin.akun.index')
+            ->with('success', "Akun {$user->username} berhasil dihapus.");
     }
 
     // ✅ METHOD BARU: AJAX Toggle Status
@@ -170,7 +173,7 @@ class ManageUser extends Controller
         return response()->json([
             'success' => true,
             'is_active' => $user->is_active,
-            'message' => $user->is_active ? 'Akun diaktifkan.' : 'Akun dinonaktifkan.',
+            'message' => "Akun {$user->username} berhasil ".($user->is_active ? 'diaktifkan.' : 'dinonaktifkan.'),
         ]);
     }
 

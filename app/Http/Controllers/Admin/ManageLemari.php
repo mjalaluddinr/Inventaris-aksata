@@ -76,7 +76,8 @@ class ManageLemari extends Controller
                 Lemari::create($validated);
             });
 
-            return redirect()->route('admin.rak.index')->with('success', 'Lemari/Rak berhasil ditambahkan.');
+            return redirect()->route('admin.rak.index')
+                ->with('success', "Lemari/Rak {$validated['nama_lemari']} berhasil ditambahkan.");
         } catch (QueryException $e) {
             if ($e->getCode() === '23000') {
                 return redirect()->back()->withInput()->with('error', 'Kode lemari untuk ruangan ini sudah digunakan.');
@@ -95,7 +96,8 @@ class ManageLemari extends Controller
                 $lemari->update($validated);
             });
 
-            return redirect()->route('admin.rak.index')->with('success', 'Lemari/Rak berhasil diperbarui.');
+            return redirect()->route('admin.rak.index')
+                ->with('success', "Lemari/Rak {$lemari->nama_lemari} berhasil diperbarui.");
         } catch (QueryException $e) {
             if ($e->getCode() === '23000') {
                 return redirect()->back()->withInput()->with('error', 'Kode lemari untuk ruangan ini sudah digunakan.');
@@ -109,14 +111,18 @@ class ManageLemari extends Controller
     {
         try {
             if ($lemari->lokasiBarangs()->exists()) {
-                return redirect()->back()->with('error', 'Lemari/Rak tidak dapat dihapus karena masih memiliki stok barang.');
+                return redirect()->back()->with(
+                    'error',
+                    "Lemari/Rak {$lemari->nama_lemari} tidak dapat dihapus karena masih memiliki stok barang.",
+                );
             }
 
             DB::transaction(function () use ($lemari) {
                 $lemari->delete();
             });
 
-            return redirect()->route('admin.rak.index')->with('success', 'Lemari/Rak berhasil dihapus.');
+            return redirect()->route('admin.rak.index')
+                ->with('success', "Lemari/Rak {$lemari->nama_lemari} berhasil dihapus.");
         } catch (\Exception $e) {
             Log::error('Gagal menghapus lemari: '.$e->getMessage()); // ✅ Sekarang Log sudah terdefinisi
 

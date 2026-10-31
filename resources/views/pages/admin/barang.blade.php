@@ -35,7 +35,7 @@
           locations: @js(old('locations', [['ruangan_id' => '', 'lemari_id' => '', 'toolbox_id' => '', 'stok_total' => 0, 'stok_tersedia' => 0]])),
           kode_barang: @js(old('kode_barang', '')),
           nama_barang: @js(old('nama_barang', '')),
-          satuan: @js(old('satuan', 'unit')),
+          satuan: @js(old('satuan', '')),
           stok_total: @js(old('stok_total', 0)),
           stok_tersedia: @js(old('stok_tersedia', 0)),
           kondisi: @js(old('kondisi', 'baru')),
@@ -317,10 +317,17 @@
           this.currentItem = {
               barang_id: '',
               kategori_id: '',
-              locations: [{ ruangan_id: '', lemari_id: '', toolbox_id: '', stok_total: 0, stok_tersedia: 0 }],
+              locations: [{
+                  ruangan_id: '',
+                  lemari_id: '',
+                  toolbox_id: '',
+                  stok_total: 0,
+                  stok_tersedia: 0,
+                  reserved_stock: 0
+              }],
               kode_barang: '',
               nama_barang: '',
-              satuan: 'unit',
+              satuan: '',
               stok_total: 0,
               stok_tersedia: 0,
               kondisi: 'baru',
@@ -343,7 +350,10 @@
           });
       },
       removeStockLocation(index) {
-          if (this.currentItem.locations.length <= 1) return;
+          if (
+              this.currentItem.locations.length <= 1
+              || Number(this.currentItem.locations[index].reserved_stock) > 0
+          ) return;
           this.currentItem.locations.splice(index, 1);
           this.syncStockTotals('location');
       },
@@ -351,10 +361,35 @@
           location.ruangan_id = roomId;
           location.lemari_id = '';
       },
-      syncStockTotals(changedField = 'location') {
-          let availableTotal = 0;
-          let reservedTotal = 0;
+      distributeAvailableStock(targetAvailable) {
+          let availableTotal = this.currentItem.locations.reduce(
+              (total, location) => total + Math.max(0, Number(location.stok_tersedia) || 0),
+              0
+          );
+          let difference = targetAvailable - availableTotal;
 
+          if (difference > 0) {
+              this.currentItem.locations[0].stok_tersedia =
+                  (Number(this.currentItem.locations[0].stok_tersedia) || 0) + difference;
+              return;
+          }
+
+          for (let index = this.currentItem.locations.length - 1; index >= 0 && difference < 0; index--) {
+              const location = this.currentItem.locations[index];
+              const available = Math.max(0, Number(location.stok_tersedia) || 0);
+              const reduction = Math.min(available, Math.abs(difference));
+
+              location.stok_tersedia = available - reduction;
+              difference += reduction;
+          }
+      },
+      reservedStockTotal() {
+          return this.currentItem.locations.reduce(
+              (total, location) => total + Math.max(0, Number(location.reserved_stock) || 0),
+              0
+          );
+      },
+      syncStockTotals(changedField = 'location') {
           this.currentItem.locations.forEach((location) => {
               const available = Math.max(0, Number(location.stok_tersedia) || 0);
               const reserved = Number.isFinite(Number(location.reserved_stock))
@@ -363,25 +398,29 @@
 
               location.reserved_stock = reserved;
               location.stok_total = available + reserved;
-              availableTotal += available;
-              reservedTotal += reserved;
           });
 
-          if (changedField === 'total' && this.currentItem.locations.length > 0) {
-              const desiredAvailable = Math.max(0, (Number(this.currentItem.stok_total) || 0) - reservedTotal);
-              const availableDifference = desiredAvailable - availableTotal;
-              const firstLocation = this.currentItem.locations[0];
-              firstLocation.stok_tersedia = Math.max(
-                  0,
-                  (Number(firstLocation.stok_tersedia) || 0) + availableDifference
+          const reservedTotal = this.reservedStockTotal();
+
+          if (changedField === 'total') {
+              const requestedTotal = Math.max(reservedTotal, Number(this.currentItem.stok_total) || 0);
+              this.distributeAvailableStock(requestedTotal - reservedTotal);
+          } else if (changedField === 'available') {
+              const maximumAvailable = Math.max(0, Number(this.currentItem.stok_total) - reservedTotal);
+              const requestedAvailable = Math.min(
+                  maximumAvailable,
+                  Math.max(0, Number(this.currentItem.stok_tersedia) || 0)
               );
-              availableTotal = this.currentItem.locations.reduce(
-                  (total, location) => total + Math.max(0, Number(location.stok_tersedia) || 0),
-                  0
-              );
+              this.distributeAvailableStock(requestedAvailable);
+              this.currentItem.stok_total = reservedTotal + requestedAvailable;
           }
 
-          this.currentItem.stok_total = availableTotal + reservedTotal;
+          const availableTotal = this.currentItem.locations.reduce(
+              (total, location) => total + Math.max(0, Number(location.stok_tersedia) || 0),
+              0
+          );
+          const nextReservedTotal = this.reservedStockTotal();
+          this.currentItem.stok_total = availableTotal + nextReservedTotal;
           this.currentItem.stok_tersedia = availableTotal;
 
           this.currentItem.locations.forEach((location) => {
@@ -1529,7 +1568,7 @@
                     </select>
                   </label>
 
-                  <div class="grid grid-cols-1 gap-4 sm:col-span-2 sm:grid-cols-2">
+                  <div class="grid grid-cols-1 gap-4 sm:col-span-2 sm:grid-cols-3">
                     <label class="text-xs font-medium text-slate-700">
                       Jumlah total
                       <input name="stok_total" type="number" min="0" step="1" required
@@ -1547,6 +1586,18 @@
                         class="mt-1 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 focus:border-[#08A9D6] focus:outline-none focus:ring-2 focus:ring-[#08A9D6]/20"
                         placeholder="unit">
                       @error('satuan')
+                        <span class="mt-1 block text-xs text-rose-700">{{ $message }}</span>
+                      @enderror
+                    </label>
+
+                    <label class="text-xs font-medium text-slate-700">
+                      Stok tersedia
+                      <input name="stok_tersedia" type="number" min="0" step="1" required
+                        x-model.number="currentItem.stok_tersedia" @input="syncStockTotals('available')"
+                        :max="Math.max(0, currentItem.stok_total - reservedStockTotal())"
+                        class="mt-1 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 focus:border-[#08A9D6] focus:outline-none focus:ring-2 focus:ring-[#08A9D6]/20"
+                        placeholder="0">
+                      @error('stok_tersedia')
                         <span class="mt-1 block text-xs text-rose-700">{{ $message }}</span>
                       @enderror
                     </label>
@@ -1602,16 +1653,18 @@
                         Tambah lokasi
                       </button>
                     </div>
-                    <input type="hidden" name="stok_tersedia" :value="currentItem.stok_tersedia">
                     <div class="space-y-2">
                       <template x-for="(location, index) in currentItem.locations" :key="index">
                         <div class="grid gap-2 rounded-lg border border-slate-200 bg-slate-50 p-3 sm:grid-cols-2 lg:grid-cols-[minmax(9rem,1fr)_minmax(9rem,1fr)_minmax(9rem,1fr)_8rem_auto]">
                           <input type="hidden" :name="`locations[${index}][stok_total]`"
                             :value="location.stok_total">
+                          <input type="hidden" :name="`locations[${index}][ruangan_id]`"
+                            :value="location.ruangan_id" :disabled="Number(location.reserved_stock) <= 0">
                           <label class="text-[11px] font-semibold text-slate-600">
                             Ruangan
                             <select :name="`locations[${index}][ruangan_id]`" x-model="location.ruangan_id"
                               @change="setStockLocationRoom(location, $event.target.value)" required
+                              :disabled="Number(location.reserved_stock) > 0"
                               class="mt-1 block w-full rounded-md border border-slate-300 bg-white px-2.5 py-2 text-xs font-normal text-slate-800">
                               <option value="">Pilih ruangan</option>
                               @foreach ($ruangans as $ruangan)
@@ -1619,10 +1672,12 @@
                               @endforeach
                             </select>
                           </label>
+                          <input type="hidden" :name="`locations[${index}][lemari_id]`"
+                            :value="location.lemari_id" :disabled="Number(location.reserved_stock) <= 0">
                           <label class="text-[11px] font-semibold text-slate-600">
                             Lemari
                             <select :name="`locations[${index}][lemari_id]`" x-model="location.lemari_id"
-                              :disabled="!location.ruangan_id"
+                              :disabled="!location.ruangan_id || Number(location.reserved_stock) > 0"
                               class="mt-1 block w-full rounded-md border border-slate-300 bg-white px-2.5 py-2 text-xs font-normal text-slate-800 disabled:bg-slate-100">
                               <option value="">Tanpa lemari</option>
                               <template x-for="cabinet in lemariOptions.filter((item) => item.ruangan_id === location.ruangan_id)"
@@ -1631,9 +1686,12 @@
                               </template>
                             </select>
                           </label>
+                          <input type="hidden" :name="`locations[${index}][toolbox_id]`"
+                            :value="location.toolbox_id" :disabled="Number(location.reserved_stock) <= 0">
                           <label class="text-[11px] font-semibold text-slate-600">
                             Wadah
                             <select :name="`locations[${index}][toolbox_id]`" x-model="location.toolbox_id"
+                              :disabled="Number(location.reserved_stock) > 0"
                               class="mt-1 block w-full rounded-md border border-slate-300 bg-white px-2.5 py-2 text-xs font-normal text-slate-800">
                               <option value="">Tanpa wadah</option>
                               <template x-for="toolbox in toolboxOptions" :key="toolbox.toolbox_id">
@@ -1649,7 +1707,12 @@
                               @input="syncStockTotals('location')"
                               class="mt-1 block w-full rounded-md border border-slate-300 bg-white px-2.5 py-2 text-xs font-normal text-slate-800">
                           </label>
-                          <button type="button" @click="removeStockLocation(index)" :disabled="currentItem.locations.length <= 1"
+                          <p x-show="Number(location.reserved_stock) > 0"
+                            class="self-end text-[10px] font-normal text-amber-700 lg:col-span-4">
+                            Stok yang sedang dipinjam/dipakai tetap di lokasi ini.
+                          </p>
+                          <button type="button" @click="removeStockLocation(index)"
+                            :disabled="currentItem.locations.length <= 1 || Number(location.reserved_stock) > 0"
                             class="flex h-8 items-center justify-center self-end rounded-md px-2 text-slate-500 transition hover:bg-rose-50 hover:text-rose-600 disabled:cursor-not-allowed disabled:opacity-30"
                             aria-label="Hapus lokasi">
                             <iconify-icon icon="mdi:trash-can-outline" width="17" aria-hidden="true"></iconify-icon>
@@ -1657,6 +1720,9 @@
                         </div>
                       </template>
                     </div>
+                    <p class="mt-2 text-xs text-slate-500">
+                      Stok tersedia lokasi dijumlahkan otomatis. Stok yang sedang dipinjam atau dipakai tidak dapat dipindah dari lokasi asal.
+                    </p>
                     @error('locations')
                       <p class="mt-1 text-xs text-rose-700">{{ $message }}</p>
                     @enderror
@@ -1753,6 +1819,39 @@
                   </button>
                 </div>
               </form>
+            </section>
+          </div>
+          <div x-cloak x-show="deleteModalOpen" x-transition.opacity
+            class="fixed inset-0 z-[110] flex items-center justify-center overflow-y-auto overscroll-contain bg-slate-950/55 p-4 backdrop-blur-sm sm:p-6"
+            @click.self="cancelDelete()" role="presentation">
+            <section x-show="deleteModalOpen" x-transition
+              class="relative z-10 my-auto w-full max-w-md overflow-hidden rounded-xl border-2 border-rose-300 bg-white shadow-[0_24px_80px_rgba(2,25,41,0.4)]"
+              role="alertdialog" aria-modal="true" aria-labelledby="barang-delete-title"
+              aria-describedby="barang-delete-description">
+              <div class="p-6 text-center">
+                <span class="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-rose-100 text-rose-600">
+                  <iconify-icon icon="mdi:alert-circle" width="28" aria-hidden="true"></iconify-icon>
+                </span>
+                <h2 id="barang-delete-title" class="text-lg font-semibold text-slate-900">Hapus Barang?</h2>
+                <p id="barang-delete-description" class="mt-2 text-sm text-slate-600">
+                  Barang <strong class="font-bold text-slate-900" x-text="pendingDeleteName"></strong> akan
+                  disembunyikan dari daftar. Riwayat dan data lokasinya tetap tersimpan.
+                  Barang yang masih dipinjam atau digunakan tidak dapat dihapus.
+                </p>
+              </div>
+              <div class="flex justify-center gap-3 border-t border-slate-200 bg-slate-50 px-6 py-4">
+                <button type="button" @click="cancelDelete()" :disabled="deleteLoading"
+                  class="rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-60">
+                  Batal
+                </button>
+                <button type="button" @click="confirmDelete()" :disabled="deleteLoading"
+                  :aria-busy="deleteLoading.toString()"
+                  class="inline-flex min-w-32 items-center justify-center gap-2 rounded-md border border-rose-300 bg-rose-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-rose-700 disabled:cursor-not-allowed disabled:opacity-70">
+                  <iconify-icon x-show="deleteLoading" icon="mdi:loading" class="animate-spin text-lg" aria-hidden="true"></iconify-icon>
+                  <iconify-icon x-show="!deleteLoading" icon="mdi:delete-outline" class="text-lg" aria-hidden="true"></iconify-icon>
+                  <span x-text="deleteLoading ? 'Menghapus...' : 'Ya, Hapus'"></span>
+                </button>
+              </div>
             </section>
           </div>
         </div>
