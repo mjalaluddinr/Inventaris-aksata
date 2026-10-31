@@ -7,6 +7,7 @@ use App\Http\Controllers\Admin\ManageKategori;
 use App\Http\Controllers\Admin\ManageLemari;
 use App\Http\Controllers\Admin\ManagePeminjaman;
 use App\Http\Controllers\Admin\ManageRuangan;
+use App\Http\Controllers\Admin\ManageToolbox;
 use App\Http\Controllers\Admin\ManageUser;
 use App\Http\Controllers\Auth\ChangePasswordController;
 use App\Http\Controllers\Auth\LoginController;
@@ -47,7 +48,10 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'permission:admin-pa
 
     Route::middleware('permission:inventory.manage')->group(function () {
         Route::post('/barang', [ManageBarang::class, 'store'])->name('barang.store');
+        Route::post('/toolbox', [ManageToolbox::class, 'store'])->name('toolbox.store');
         Route::post('/barang/import', [ManageBarang::class, 'import'])->name('barang.import');
+        Route::get('/barang/import/{logInput}/status', [ManageBarang::class, 'importStatus'])
+            ->name('barang.import.status');
         Route::put('/barang/{barang}', [ManageBarang::class, 'update'])->name('barang.update');
         Route::delete('/barang/{barang}', [ManageBarang::class, 'destroy'])->name('barang.destroy');
         Route::post('/kategori', [ManageKategori::class, 'store'])->name('kategori.store');

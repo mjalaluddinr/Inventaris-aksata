@@ -10,23 +10,29 @@
       createUrl: @js(route('admin.barang.store')),
       updateUrlTemplate: @js(route('admin.barang.update', ['barang' => '__BARANG__'])),
       importUrl: @js(route('admin.barang.import')),
+      importStatusUrlTemplate: @js(route('admin.barang.import.status', ['logInput' => '__LOG_INPUT__'])),
       formAction: '',
       importOpen: false,
       importLoading: false,
-      importFileName: '',
-      importFileSize: '',
+      importQueued: false,
+      importPollTimedOut: false,
+      importReloadAvailable: false,
+      importFiles: [],
+      importJobs: [],
       importZipName: '',
       importZipSize: '',
       importError: '',
       importResult: '',
-      importErrors: [],
-      importErrorsTruncated: false,
+      imagePreview: '',
+      imagePreviewName: '',
+      toolboxModalOpen: @js($errors->any() && old('toolbox_form') === 'store'),
+      toolboxSubmitting: false,
       modalOpen: @js($errors->any() && in_array(old('barang_form'), ['create', 'edit'], true)),
       modalMode: @js(old('barang_form') === 'edit' ? 'edit' : 'create'),
       currentItem: {
           barang_id: @js(old('barang_id', '')),
           kategori_id: @js(old('kategori_id', '')),
-          locations: @js(old('locations', [['ruangan_id' => '', 'lemari_id' => '', 'stok_total' => 0, 'stok_tersedia' => 0]])),
+          locations: @js(old('locations', [['ruangan_id' => '', 'lemari_id' => '', 'toolbox_id' => '', 'stok_total' => 0, 'stok_tersedia' => 0]])),
           kode_barang: @js(old('kode_barang', '')),
           nama_barang: @js(old('nama_barang', '')),
           satuan: @js(old('satuan', 'unit')),
@@ -43,6 +49,17 @@
                 'lemari_id' => $lemari->lemari_id,
                 'ruangan_id' => $lemari->ruangan_id,
                 'nama_lemari' => $lemari->nama_lemari,
+            ],
+        )
+        ->values(),
+),
+      toolboxOptions: @js(
+    $toolboxes
+        ->map(
+            fn($toolbox) => [
+                'toolbox_id' => $toolbox->toolbox_id,
+                'kode_toolbox' => $toolbox->kode_toolbox,
+                'nama_toolbox' => $toolbox->nama_toolbox,
             ],
         )
         ->values(),
@@ -296,10 +313,11 @@
       createItem() {
           this.modalMode = 'create';
           this.formSubmitting = false;
+          this.clearBarangImagePreview();
           this.currentItem = {
               barang_id: '',
               kategori_id: '',
-              locations: [{ ruangan_id: '', lemari_id: '', stok_total: 0, stok_tersedia: 0 }],
+              locations: [{ ruangan_id: '', lemari_id: '', toolbox_id: '', stok_total: 0, stok_tersedia: 0 }],
               kode_barang: '',
               nama_barang: '',
               satuan: 'unit',
@@ -309,6 +327,7 @@
               kelayakan: 'layak',
               spesifikasi: ''
           };
+          this.syncStockTotals('total');
           this.formAction = this.createUrl;
           this.modalOpen = true;
       },
@@ -317,36 +336,72 @@
           this.currentItem.locations.push({
               ruangan_id: '',
               lemari_id: '',
+              toolbox_id: '',
               stok_total: 0,
-              stok_tersedia: 0
+              stok_tersedia: 0,
+              reserved_stock: 0
           });
       },
       removeStockLocation(index) {
           if (this.currentItem.locations.length <= 1) return;
           this.currentItem.locations.splice(index, 1);
-          this.syncStockTotals();
+          this.syncStockTotals('location');
       },
       setStockLocationRoom(location, roomId) {
           location.ruangan_id = roomId;
           location.lemari_id = '';
       },
-      syncStockTotals() {
-          if (this.modalMode !== 'create') return;
-  
-          this.currentItem.stok_total = this.currentItem.locations.reduce(
-              (total, location) => total + Math.max(0, Number(location.stok_total) || 0),
-              0
-          );
-          this.currentItem.stok_tersedia = this.currentItem.locations.reduce(
-              (total, location) => total + Math.max(0, Number(location.stok_tersedia) || 0),
-              0
-          );
+      syncStockTotals(changedField = 'location') {
+          let availableTotal = 0;
+          let reservedTotal = 0;
+
+          this.currentItem.locations.forEach((location) => {
+              const available = Math.max(0, Number(location.stok_tersedia) || 0);
+              const reserved = Number.isFinite(Number(location.reserved_stock))
+                  ? Math.max(0, Number(location.reserved_stock))
+                  : Math.max(0, (Number(location.stok_total) || 0) - available);
+
+              location.reserved_stock = reserved;
+              location.stok_total = available + reserved;
+              availableTotal += available;
+              reservedTotal += reserved;
+          });
+
+          if (changedField === 'total' && this.currentItem.locations.length > 0) {
+              const desiredAvailable = Math.max(0, (Number(this.currentItem.stok_total) || 0) - reservedTotal);
+              const availableDifference = desiredAvailable - availableTotal;
+              const firstLocation = this.currentItem.locations[0];
+              firstLocation.stok_tersedia = Math.max(
+                  0,
+                  (Number(firstLocation.stok_tersedia) || 0) + availableDifference
+              );
+              availableTotal = this.currentItem.locations.reduce(
+                  (total, location) => total + Math.max(0, Number(location.stok_tersedia) || 0),
+                  0
+              );
+          }
+
+          this.currentItem.stok_total = availableTotal + reservedTotal;
+          this.currentItem.stok_tersedia = availableTotal;
+
+          this.currentItem.locations.forEach((location) => {
+              location.stok_total = Math.max(0, Number(location.stok_tersedia) || 0) +
+                  Math.max(0, Number(location.reserved_stock) || 0);
+          });
       },
       editItem(item) {
           this.modalMode = 'edit';
           this.formSubmitting = false;
-          this.currentItem = item;
-          this.syncStockTotals();
+          this.clearBarangImagePreview();
+          this.currentItem = {
+              ...item,
+              locations: item.locations.map((location) => ({
+                  ...location,
+                  reserved_stock: Math.max(0, Number(location.stok_total) - Number(location.stok_tersedia))
+              }))
+          };
+          this.imagePreview = item.image_url || '';
+          this.syncStockTotals('location');
           this.formAction = this.itemUpdateUrl(item.barang_id);
           this.modalOpen = true;
       },
@@ -403,28 +458,67 @@
       },
       closeModal() {
           this.modalOpen = false;
+          if (this.$refs.barangImageInput) this.$refs.barangImageInput.value = '';
+          this.clearBarangImagePreview();
+      },
+      openBarangImagePicker() {
+          this.$refs.barangImageInput.click();
+      },
+      previewBarangImage(event) {
+          const file = event.target.files?.[0];
+          if (!file) return;
+
+          this.clearBarangImagePreview();
+          this.imagePreview = URL.createObjectURL(file);
+          this.imagePreviewName = file.name;
+      },
+      handleBarangImageDrop(event) {
+          const file = Array.from(event.dataTransfer.files).find(file => file.type.startsWith('image/'));
+          if (!file) return;
+
+          const transfer = new DataTransfer();
+          transfer.items.add(file);
+          this.$refs.barangImageInput.files = transfer.files;
+          this.previewBarangImage({ target: this.$refs.barangImageInput });
+      },
+      clearBarangImagePreview() {
+          if (this.imagePreview.startsWith('blob:')) URL.revokeObjectURL(this.imagePreview);
+          this.imagePreview = '';
+          this.imagePreviewName = '';
+      },
+      removeBarangImage() {
+          if (this.$refs.barangImageInput) this.$refs.barangImageInput.value = '';
+          this.clearBarangImagePreview();
+          this.imagePreview = this.modalMode === 'edit' ? this.currentItem.image_url || '' : '';
       },
       handleEscape() {
           this.modalOpen = false;
           this.importOpen = false;
+          this.toolboxModalOpen = false;
           this.cancelDelete();
       },
-      selectImportFile(files = this.$refs.barangImportFile.files) {
-          const file = files[0];
-          this.importFileName = file?.name || '';
-          this.importFileSize = file ?
-              file.size < 1024 ?
-              `${file.size} B` :
-              `${(file.size / 1024).toFixed(1)} KB` :
-              '';
+      selectImportFiles(files = this.$refs.barangImportFile.files) {
+          this.importFiles = Array.from(files || []).map(file => ({
+              name: file.name,
+              size: file.size < 1024 ? `${file.size} B` : `${(file.size / 1024).toFixed(1)} KB`
+          }));
           this.importError = '';
           this.importResult = '';
-          this.importErrors = [];
-          this.importErrorsTruncated = false;
+          if (this.importFiles.length > 10) {
+              this.importError = 'Maksimal 10 file Excel dapat diimpor sekaligus.';
+          }
       },
       clearImportFile() {
           this.$refs.barangImportFile.value = '';
-          this.selectImportFile([]);
+          this.selectImportFiles([]);
+      },
+      removeImportFile(index) {
+          const files = Array.from(this.$refs.barangImportFile.files);
+          files.splice(index, 1);
+          const transfer = new DataTransfer();
+          files.forEach(file => transfer.items.add(file));
+          this.$refs.barangImportFile.files = transfer.files;
+          this.selectImportFiles(transfer.files);
       },
       openImportFilePicker() {
           this.$refs.barangImportFile.click();
@@ -437,6 +531,7 @@
               `${file.size} B` :
               `${(file.size / 1024).toFixed(1)} KB` :
               '';
+          this.importError = '';
       },
       clearImportZip() {
           this.$refs.barangImportZip.value = '';
@@ -453,12 +548,27 @@
           }
       },
       handleImportDrop(event) {
+          const files = Array.from(event.dataTransfer.files);
+          if (!files.length) return;
+          const transfer = new DataTransfer();
+          files.forEach(file => transfer.items.add(file));
+          this.$refs.barangImportFile.files = transfer.files;
+          this.selectImportFiles(transfer.files);
+      },
+      handleImportZipDrop(event) {
           const files = event.dataTransfer.files;
           if (!files.length) return;
           const transfer = new DataTransfer();
           transfer.items.add(files[0]);
-          this.$refs.barangImportFile.files = transfer.files;
-          this.selectImportFile(transfer.files);
+          this.$refs.barangImportZip.files = transfer.files;
+          this.selectImportZip(transfer.files);
+      },
+      handleImportZipKeydown(event) {
+          if (event.target !== event.currentTarget) return;
+          if (event.key === 'Enter' || event.key === ' ') {
+              event.preventDefault();
+              this.openImportZipPicker();
+          }
       },
       closeImport() {
           if (this.importLoading) return;
@@ -470,8 +580,7 @@
           this.importLoading = true;
           this.importError = '';
           this.importResult = '';
-          this.importErrors = [];
-          this.importErrorsTruncated = false;
+          this.importJobs = [];
   
           try {
               const response = await fetch(this.importUrl, {
@@ -487,23 +596,98 @@
               }
   
               if (!response.ok) {
-                  this.importError = result.errors?.file?.[0] || result.errors?.images_zip?.[0] ||
+                  this.importError = Object.values(result.errors || {}).flat()[0] ||
                       (response.status === 422 ? result.message : 'Import gagal diproses. Coba lagi nanti.');
                   return;
               }
-  
+
               this.importResult = result.message;
-              this.importErrors = result.errors || [];
-              this.importErrorsTruncated = Boolean(result.errors_truncated);
-              this.feedbackType = result.failed_rows > 0 ? 'error' : 'success';
-              this.feedbackMessage = result.message;
-              this.notifyFeedback();
-              window.location.assign(@js(route('admin.barang')));
+              this.importJobs = result.imports || [{
+                  log_id: result.log_id,
+                  file_name: this.importFiles[0]?.name || 'File import',
+                  status: result.status
+              }];
+              this.importQueued = true;
+              this.importPollTimedOut = false;
+              this.importReloadAvailable = false;
+              this.importJobs.forEach(job => {
+                  job.errors = [];
+                  job.pollTimedOut = false;
+                  void this.pollBarangImportStatus(job.log_id);
+              });
           } catch (error) {
               this.importError = error.message || 'File tidak dapat diimpor. Periksa koneksi lalu coba lagi.';
           } finally {
               this.importLoading = false;
           }
+      },
+      async pollBarangImportStatus(logId) {
+          const job = this.importJobs.find(item => item.log_id === logId);
+          if (!job) return;
+
+          const statusUrl = this.importStatusUrlTemplate.replace('__LOG_INPUT__', encodeURIComponent(logId));
+
+          for (let attempt = 0; attempt < 150; attempt++) {
+              if (attempt > 0) {
+                  await new Promise(resolve => setTimeout(resolve, 2000));
+              }
+
+              try {
+                  const response = await fetch(statusUrl, {
+                      headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+                      cache: 'no-store'
+                  });
+                  const result = await response.json();
+                  if (!response.ok) throw new Error('Status import tidak dapat dimuat.');
+                  if (result.status === 'proses') continue;
+
+                  Object.assign(job, result, {
+                      errors: Array.isArray(result.errors) ? result.errors : [],
+                      pollTimedOut: false
+                  });
+                  this.finishBarangImportPolling();
+                  return;
+              } catch (error) {
+                  if (attempt === 149) {
+                      this.importError = error.message || 'Status import gagal diperiksa. Coba buka kembali halaman.';
+                      job.pollTimedOut = true;
+                      this.importPollTimedOut = true;
+                  }
+              }
+          }
+
+          if (job.status === 'proses') {
+              job.pollTimedOut = true;
+              this.importPollTimedOut = true;
+              this.importError = 'Import masih berjalan. Periksa kembali statusnya atau biarkan halaman ini terbuka.';
+          }
+      },
+      finishBarangImportPolling() {
+          const pendingJobs = this.importJobs.some(job => job.status === 'proses' || job.pollTimedOut);
+          this.importQueued = pendingJobs;
+          this.importReloadAvailable = this.importJobs.some(job => Number(job.success_rows) > 0);
+          if (pendingJobs) return;
+
+          this.importPollTimedOut = false;
+          this.$refs.barangImportForm.reset();
+          this.importFiles = [];
+          this.importZipName = '';
+          this.importZipSize = '';
+          const succeeded = this.importJobs.filter(job => Number(job.success_rows) > 0).length;
+          this.importResult = `${succeeded} dari ${this.importJobs.length} file selesai dengan data berhasil diimpor.`;
+          this.feedbackType = this.importJobs.some(job => Number(job.failed_rows) > 0 || job.status === 'gagal') ?
+              'error' : 'success';
+          this.feedbackMessage = this.importResult;
+          this.notifyFeedback();
+      },
+      retryBarangImportStatus() {
+          if (!this.importQueued) return;
+          this.importPollTimedOut = false;
+          this.importError = '';
+          this.importJobs.filter(job => job.status === 'proses' || job.pollTimedOut).forEach(job => {
+              job.pollTimedOut = false;
+              void this.pollBarangImportStatus(job.log_id);
+          });
       }
   }" @keydown.escape.window="handleEscape()"
     class="-mx-8 -mt-8 -mb-8 min-h-[calc(100vh-10rem)] bg-[#E8F8F4]">
@@ -517,6 +701,11 @@
                 class="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-[#009F91] bg-[#00B19C] px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-[#009A87] focus:outline-none focus:ring-2 focus:ring-[#00B19C] focus:ring-offset-2">
                 <iconify-icon icon="mdi:plus" width="18" aria-hidden="true"></iconify-icon>
                 Tambah Barang
+              </button>
+              <button type="button" @click="toolboxModalOpen = true"
+                class="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm transition hover:border-emerald-400 hover:bg-emerald-50 focus:outline-none focus:ring-2 focus:ring-[#00B19C] focus:ring-offset-2">
+                <iconify-icon icon="mdi:archive-plus-outline" width="18" aria-hidden="true"></iconify-icon>
+                Tambah Wadah
               </button>
               <button type="button" @click="importOpen = true"
                 class="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm transition hover:border-emerald-400 hover:bg-emerald-50 focus:outline-none focus:ring-2 focus:ring-[#00B19C] focus:ring-offset-2">
@@ -611,6 +800,7 @@
               <table class="min-w-full w-full divide-y divide-[#DCE9E6]">
                 <thead class="bg-[#F1F3F4]">
                   <tr>
+                    <th scope="col" class="px-4 py-3 text-left text-xs font-semibold text-slate-700">Gambar</th>
                     <th scope="col" class="px-4 py-3 text-left text-xs font-semibold text-slate-700">Barang</th>
                     <th scope="col" class="px-4 py-3 text-left text-xs font-semibold text-slate-700">Spesifikasi</th>
                     <th scope="col" class="whitespace-nowrap px-4 py-3 text-left text-xs font-semibold text-slate-700">
@@ -633,6 +823,19 @@
                     <tr data-barang-row
                       data-searchable="{{ mb_strtolower(trim($barang->kode_barang . ' ' . $barang->nama_barang . ' ' . ($barang->spesifikasi ?? ''))) }}"
                       x-show="matchesBarang($el.dataset.searchable)" class="transition-colors hover:bg-[#F7FBFA]">
+                      <td class="w-24 px-4 py-3">
+                        @if ($barang->image_url)
+                          <img src="{{ $barang->image_url }}" alt="Gambar {{ $barang->nama_barang }}"
+                            decoding="async"
+                            class="h-16 w-16 rounded-lg border border-slate-200 bg-white object-cover shadow-sm">
+                        @else
+                          <span
+                            class="flex h-16 w-16 items-center justify-center rounded-lg border border-dashed border-slate-300 bg-slate-50 text-slate-400"
+                            role="img" aria-label="Barang tidak memiliki gambar">
+                            <iconify-icon icon="mdi:image-outline" width="22" aria-hidden="true"></iconify-icon>
+                          </span>
+                        @endif
+                      </td>
                       <td class="max-w-56 px-4 py-3">
                         <button type="button" @click="changeUsageBarang('{{ $barang->barang_id }}')"
                           class="group text-left cursor-pointer focus:outline-none">
@@ -737,6 +940,10 @@
                               <span class="px-1 font-semibold text-emerald-600" aria-hidden="true">›</span>
                               {{ $lokasi->lemari->nama_lemari }}
                             @endif
+                            @if ($lokasi->toolbox)
+                              <span class="px-1 font-semibold text-emerald-600" aria-hidden="true">›</span>
+                              {{ $lokasi->toolbox->nama_toolbox }}
+                            @endif
                             <span class="ml-1 text-[11px] font-normal text-slate-500">
                               {{ number_format($lokasi->stok_tersedia, 0, ',', '.') }}/{{ number_format($lokasi->stok_total, 0, ',', '.') }}
                               tersedia
@@ -761,7 +968,8 @@
                             stok_tersedia: Number($el.dataset.stokTersedia),
                             kondisi: $el.dataset.kondisi,
                             kelayakan: $el.dataset.kelayakan,
-                            spesifikasi: $el.dataset.spesifikasi
+                            spesifikasi: $el.dataset.spesifikasi,
+                            image_url: $el.dataset.imageUrl
                         })"
                               data-barang-id="{{ $barang->barang_id }}" data-kategori-id="{{ $barang->kategori_id }}"
                               data-kode-barang="{{ $barang->kode_barang }}"
@@ -772,11 +980,14 @@
                                       fn($location) => [
                                           'ruangan_id' => $location->ruangan_id,
                                           'lemari_id' => $location->lemari_id,
+                                          'toolbox_id' => $location->toolbox_id,
                                           'stok_total' => $location->stok_total,
                                           'stok_tersedia' => $location->stok_tersedia,
+                                          'reserved_stock' => max(0, $location->stok_total - $location->stok_tersedia),
                                       ],
                                   )->values()->toJson() }}"
                               data-kelayakan="{{ $barangEligibility }}" data-spesifikasi="{{ $barang->spesifikasi }}"
+                              data-image-url="{{ $barang->image_url }}"
                               class="inline-flex min-h-8 items-center gap-1 rounded-md border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-700 transition hover:border-sky-400 hover:text-sky-700 focus:outline-none focus:ring-2 focus:ring-sky-400">
                               <iconify-icon icon="mdi:pencil-outline" width="15" aria-hidden="true"></iconify-icon>
                               Edit
@@ -828,21 +1039,215 @@
               ];
             @endphp
             @if ($selectedBarang)
-              <div class="mb-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                <nav class="flex items-center gap-2">
-                  <button type="button" @click="setUsagePanel('history')"
-                    :class="usageActivePanel === 'history' ? 'border-[#00c99c] bg-[#00d69f] text-[#003f38]' :
-                        'border-[#9ccfc4] bg-white text-[#153c36] hover:bg-[#effbf7]'"
-                    class="inline-flex items-center justify-center rounded-lg border px-3.5 py-2 text-xs font-semibold shadow-sm transition">
-                    Riwayat Mutasi
-                  </button>
-                  <button type="button" @click="setUsagePanel('usage')"
-                    :class="usageActivePanel === 'usage' ? 'border-[#00c99c] bg-[#00d69f] text-[#003f38]' :
-                        'border-[#9ccfc4] bg-white text-[#153c36] hover:bg-[#effbf7]'"
-                    class="inline-flex items-center justify-center rounded-lg border px-3.5 py-2 text-xs font-semibold shadow-sm transition">
-                    Catat Pemakaian
-                  </button>
-                </nav>
+              <section class="overflow-hidden rounded-xl border border-[#B9DED4] bg-white shadow-sm">
+                <header class="flex flex-col gap-3 border-b border-[#D8EBE5] bg-[#F5FBF9] px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-6">
+                  <div class="min-w-0">
+                    <h2 class="text-base font-bold text-slate-800">{{ $selectedBarang->nama_barang }}</h2>
+                    <p class="mt-1 text-xs text-slate-500">
+                      {{ $selectedBarang->kode_barang }} · Stok tersedia
+                      {{ number_format($selectedBarang->stok_tersedia, 0, ',', '.') }} {{ $selectedBarang->satuan }}
+                    </p>
+                  </div>
+                  <div class="flex flex-col gap-2 sm:items-end">
+                    <label for="usage-item" class="sr-only">Pilih barang untuk riwayat atau pemakaian</label>
+                    <select id="usage-item" x-model="selectedBarangId" @change="changeUsageBarang($event.target.value)"
+                      class="max-w-full rounded-lg border border-[#B9DED4] bg-white px-3 py-2 text-xs font-semibold text-slate-700 focus:border-[#008b7a] focus:outline-none focus:ring-2 focus:ring-[#008b7a]/20">
+                      @if (! $barangs->contains('barang_id', $selectedBarang->barang_id))
+                        <option value="{{ $selectedBarang->barang_id }}">{{ $selectedBarang->nama_barang }}</option>
+                      @endif
+                      @foreach ($barangs as $barangOption)
+                        <option value="{{ $barangOption->barang_id }}">
+                          {{ $barangOption->nama_barang }} · {{ $barangOption->kode_barang }}
+                        </option>
+                      @endforeach
+                    </select>
+                    <nav class="flex flex-wrap gap-2" aria-label="Riwayat dan pemakaian barang">
+                      <button type="button" @click="setUsagePanel('history')"
+                        :aria-current="usageActivePanel === 'history' ? 'page' : null"
+                        :class="usageActivePanel === 'history' ? 'border-[#008b7a] bg-[#008b7a] text-white hover:bg-[#006f62]' :
+                            'border-[#B9DED4] bg-white text-slate-700 hover:bg-emerald-50'"
+                        class="inline-flex min-h-9 items-center rounded-lg border px-3 py-2 text-xs font-semibold transition">
+                        Riwayat Mutasi
+                      </button>
+                      <button type="button" @click="setUsagePanel('usage')"
+                        :aria-current="usageActivePanel === 'usage' ? 'page' : null"
+                        :class="usageActivePanel === 'usage' ? 'border-[#008b7a] bg-[#008b7a] text-white hover:bg-[#006f62]' :
+                            'border-[#B9DED4] bg-white text-slate-700 hover:bg-emerald-50'"
+                        class="inline-flex min-h-9 items-center rounded-lg border px-3 py-2 text-xs font-semibold transition">
+                        Catat Pemakaian
+                      </button>
+                    </nav>
+                  </div>
+                </header>
+
+                <div x-show="usageActivePanel === 'usage'" class="space-y-5 p-4 sm:p-6">
+                  <form action="{{ route('admin.barang.pemakaian.store', $selectedBarang) }}" method="POST"
+                    @submit.prevent="submitUsageForm($event)" class="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                    @csrf
+                    <div>
+                      <label for="usage-quantity" class="mb-1 block text-[11px] font-semibold text-slate-600">Jumlah dipakai</label>
+                      <input id="usage-quantity" name="jumlah" type="number" min="1" step="1" required
+                        placeholder="Contoh: 2"
+                        class="w-full rounded-md border border-slate-300 bg-[#F4F5F5] px-3 py-2 text-sm text-slate-800 focus:border-[#008b7a] focus:outline-none focus:ring-2 focus:ring-[#008b7a]/20">
+                    </div>
+                    <div>
+                      <label for="usage-room" class="mb-1 block text-[11px] font-semibold text-slate-600">Lokasi pemakaian</label>
+                      <select id="usage-room" name="ruangan_id" required
+                        class="w-full rounded-md border border-slate-300 bg-[#F4F5F5] px-3 py-2 text-sm text-slate-800 focus:border-[#008b7a] focus:outline-none focus:ring-2 focus:ring-[#008b7a]/20">
+                        <option value="">Pilih ruangan</option>
+                        @foreach ($usageLocations as $usageLocation)
+                          <option value="{{ $usageLocation['ruangan']->ruangan_id }}">
+                            {{ $usageLocation['ruangan']->nama_ruangan }} · tersedia {{ $usageLocation['stok_tersedia'] }}
+                          </option>
+                        @endforeach
+                      </select>
+                      @if ($usageLocations->isEmpty())
+                        <p class="mt-1 text-xs text-amber-700">Barang belum memiliki stok di ruangan mana pun.</p>
+                      @endif
+                    </div>
+                    <div>
+                      <label for="usage-admin" class="mb-1 block text-[11px] font-semibold text-slate-600">Dipakai oleh (Admin)</label>
+                      <select id="usage-admin" name="akun_id" required
+                        class="w-full rounded-md border border-slate-300 bg-[#F4F5F5] px-3 py-2 text-sm text-slate-800 focus:border-[#008b7a] focus:outline-none focus:ring-2 focus:ring-[#008b7a]/20">
+                        <option value="">Pilih admin</option>
+                        @foreach ($adminAccounts as $adminAccount)
+                          @php
+                            $adminName = trim(($adminAccount->first_name ?? '').' '.($adminAccount->last_name ?? ''));
+                          @endphp
+                          <option value="{{ $adminAccount->akun_id }}">
+                            {{ $adminName !== '' ? $adminName : $adminAccount->username }} (Admin)
+                          </option>
+                        @endforeach
+                      </select>
+                    </div>
+                    <div>
+                      <label for="usage-date" class="mb-1 block text-[11px] font-semibold text-slate-600">Tanggal pasang</label>
+                      <input id="usage-date" name="tanggal_pasang" type="date" value="{{ today()->toDateString() }}"
+                        max="{{ today()->toDateString() }}" required
+                        class="w-full rounded-md border border-slate-300 bg-[#F4F5F5] px-3 py-2 text-sm text-slate-800 focus:border-[#008b7a] focus:outline-none focus:ring-2 focus:ring-[#008b7a]/20">
+                    </div>
+                    <div class="sm:col-span-2">
+                      <label for="usage-note" class="mb-1 block text-[11px] font-semibold text-slate-600">Catatan pemakaian</label>
+                      <textarea id="usage-note" name="keterangan" rows="2" maxlength="255"
+                        placeholder="Contoh: Dipakai sebagai colokan tambahan"
+                        class="w-full resize-y rounded-md border border-slate-300 bg-[#F4F5F5] px-3 py-2 text-sm text-slate-800 focus:border-[#008b7a] focus:outline-none focus:ring-2 focus:ring-[#008b7a]/20"></textarea>
+                    </div>
+                    <div class="flex flex-wrap items-center gap-2 sm:col-span-2">
+                      <button type="submit" :disabled="usageSubmitting || {{ $usageLocations->isEmpty() || $adminAccounts->isEmpty() ? 'true' : 'false' }}"
+                        class="inline-flex min-h-9 items-center justify-center rounded-md bg-[#00BFA5] px-4 py-2 text-xs font-bold text-white transition hover:bg-[#009E89] disabled:cursor-not-allowed disabled:opacity-50">
+                        Catat Pemakaian
+                      </button>
+                      @if ($adminAccounts->isEmpty())
+                        <span class="text-xs text-amber-700">Tidak ada akun admin aktif untuk dicatat.</span>
+                      @endif
+                    </div>
+                  </form>
+
+                  <section aria-labelledby="active-usage-title">
+                    <div class="mb-2 flex items-center justify-between gap-3">
+                      <h3 id="active-usage-title" class="text-sm font-bold text-slate-800">Pemakaian aktif</h3>
+                      <span class="text-xs text-slate-500">{{ $activeUsages->count() }} catatan</span>
+                    </div>
+                    <div class="overflow-x-auto rounded-lg border border-[#DCE9E6]">
+                      <table class="min-w-full divide-y divide-[#E7EFED]">
+                        <thead class="bg-[#F5FBF9]">
+                          <tr>
+                            <th scope="col" class="px-3 py-2 text-left text-xs font-semibold text-slate-600">Tanggal</th>
+                            <th scope="col" class="px-3 py-2 text-left text-xs font-semibold text-slate-600">Lokasi / Admin</th>
+                            <th scope="col" class="px-3 py-2 text-right text-xs font-semibold text-slate-600">Jumlah</th>
+                            <th scope="col" class="px-3 py-2 text-left text-xs font-semibold text-slate-600">Catatan</th>
+                            <th scope="col" class="px-3 py-2 text-right text-xs font-semibold text-slate-600">Aksi</th>
+                          </tr>
+                        </thead>
+                        <tbody class="divide-y divide-[#E7EFED] bg-white">
+                          @forelse ($activeUsages as $activeUsage)
+                            @php
+                              $usageAccountName = $activeUsage->akun
+                                  ? trim(($activeUsage->akun->first_name ?? '').' '.($activeUsage->akun->last_name ?? '')) ?: $activeUsage->akun->username
+                                  : 'Admin tidak tersedia';
+                            @endphp
+                            <tr>
+                              <td class="whitespace-nowrap px-3 py-2 text-xs text-slate-600">
+                                {{ $activeUsage->tanggal_pasang?->translatedFormat('d M Y') ?? '—' }}
+                              </td>
+                              <td class="px-3 py-2 text-xs text-slate-700">
+                                {{ $activeUsage->ruangan?->nama_ruangan ?? 'Ruangan tidak tersedia' }} · {{ $usageAccountName }}
+                              </td>
+                              <td class="whitespace-nowrap px-3 py-2 text-right text-xs font-semibold text-slate-700">
+                                {{ number_format($activeUsage->jumlah, 0, ',', '.') }} {{ $selectedBarang->satuan }}
+                              </td>
+                              <td class="max-w-64 px-3 py-2 text-xs text-slate-600">{{ $activeUsage->keterangan ?: '—' }}</td>
+                              <td class="whitespace-nowrap px-3 py-2 text-right">
+                                <form action="{{ route('admin.barang.pemakaian.tarik', [$selectedBarang, $activeUsage]) }}" method="POST"
+                                  @submit.prevent="withdrawUsageItem($event)">
+                                  @csrf
+                                  <button type="submit"
+                                    class="inline-flex min-h-8 items-center rounded-md border border-[#B9DED4] bg-white px-2.5 py-1.5 text-xs font-semibold text-[#007f70] transition hover:bg-emerald-50">
+                                    Tarik kembali
+                                  </button>
+                                </form>
+                              </td>
+                            </tr>
+                          @empty
+                            <tr>
+                              <td colspan="5" class="px-4 py-6 text-center text-xs text-slate-500">Belum ada pemakaian aktif.</td>
+                            </tr>
+                          @endforelse
+                        </tbody>
+                      </table>
+                    </div>
+                  </section>
+                </div>
+
+                <ol x-show="usageActivePanel === 'history'" class="divide-y divide-[#E3EEEA] px-4 sm:px-6">
+                  @forelse ($mutationLogs as $mutation)
+                    @php
+                      $mutationColor = match ($mutation->tipe) {
+                          'masuk', 'dikembalikan' => 'bg-teal-500',
+                          'dipakai' => 'bg-orange-400',
+                          'ditarik' => 'bg-rose-600',
+                          default => 'bg-slate-400',
+                      };
+                      $mutationAccount = $mutation->akun ?? $mutation->olehAkun;
+                      $mutationAccountName = $mutationAccount
+                          ? trim(($mutationAccount->first_name ?? '').' '.($mutationAccount->last_name ?? '')) ?: $mutationAccount->username
+                          : null;
+                    @endphp
+                    <li class="flex gap-3 py-3">
+                      <span class="mt-1.5 h-2.5 w-2.5 shrink-0 rounded-full {{ $mutationColor }}" aria-hidden="true"></span>
+                      <div class="min-w-0 flex-1">
+                        <div class="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+                          <p class="text-xs font-semibold text-slate-800">
+                            {{ $mutation->created_at?->translatedFormat('d M Y') ?? 'Tanggal tidak tersedia' }} ·
+                            {{ $mutationLabels[$mutation->tipe] ?? ucfirst($mutation->tipe) }}
+                          </p>
+                          <p class="whitespace-nowrap text-xs font-semibold text-slate-700">
+                            {{ number_format($mutation->jumlah, 0, ',', '.') }} {{ $selectedBarang->satuan }}
+                          </p>
+                        </div>
+                        <p class="mt-0.5 text-xs leading-5 text-slate-600">
+                          @if ($mutation->tipe === 'dipindahkan')
+                            Dari {{ $mutation->lemariAsal?->nama_lemari ?? $mutation->ruangan?->nama_ruangan ?? 'lokasi belum diketahui' }}
+                            ke {{ $mutation->lemariTujuan?->nama_lemari ?? 'lokasi tujuan' }} ·
+                          @elseif ($mutation->ruangan)
+                            {{ $mutation->ruangan->nama_ruangan }} ·
+                          @endif
+                          @if ($mutationAccountName)
+                            {{ $mutationAccountName }} ·
+                          @endif
+                          {{ $mutation->keterangan ?: 'Perubahan stok barang.' }}
+                        </p>
+                      </div>
+                    </li>
+                  @empty
+                    <li class="py-8 text-center text-xs text-slate-500">Belum ada riwayat mutasi untuk barang ini.</li>
+                  @endforelse
+                </ol>
+              </section>
+            @else
+              <div class="rounded-xl border border-[#B9DED4] bg-white px-5 py-8 text-center">
+                <h2 class="text-sm font-semibold text-slate-800">Riwayat dan pemakaian barang</h2>
+                <p class="mt-1 text-xs text-slate-500">Belum ada barang yang dapat ditampilkan.</p>
               </div>
             @endif
           @endfragment
@@ -863,14 +1268,13 @@
                 @csrf
                 <div class="flex items-center justify-between border-b border-slate-200 px-5 py-4">
                   <div class="flex items-center gap-3">
-                    <span class="flex h-10 w-10 items-center justify-center rounded-lg bg-emerald-50 text-emerald-700">
+                    <span
+                      class="flex h-10 w-10 items-center justify-center rounded-lg bg-emerald-50 text-emerald-700">
                       <iconify-icon icon="mdi:file-excel-outline" width="22" aria-hidden="true"></iconify-icon>
                     </span>
                     <div>
-                      <h2 id="barang-import-title" class="text-base font-semibold text-slate-800">Import Data Barang &
-                        Gambar</h2>
-                      <p class="mt-1 text-xs text-slate-500">Unggah Excel dan ZIP gambar. Isi kolom Gambar Barang
-                        dengan nama file di ZIP.</p>
+                      <h2 id="barang-import-title" class="text-base font-semibold text-slate-800">Import Data Barang</h2>
+                      <p class="mt-1 text-xs text-slate-500">Unggah file Excel dan ZIP gambar barang.</p>
                     </div>
                   </div>
                   <button type="button" @click="closeImport()" :disabled="importLoading"
@@ -881,58 +1285,118 @@
                 </div>
 
                 <div class="space-y-4 px-5 py-4">
-                  <!-- Input Excel -->
-                  <div>
-                    <label for="barang-import-file" class="mb-1 block text-sm font-medium text-slate-700">File Excel
-                      atau CSV <span class="text-rose-500">*</span></label>
-                    <input id="barang-import-file" x-ref="barangImportFile" name="file" type="file"
-                      accept=".csv,.xls,.xlsx" required @change="selectImportFile($event.target.files)"
-                      class="hidden">
-                    <div role="button" tabindex="0" @click="openImportFilePicker()"
-                      class="group cursor-pointer rounded-lg border-2 border-dashed p-4 text-left transition"
-                      :class="importFileName ? 'border-emerald-300 bg-emerald-50/70' :
-                          'border-slate-300 bg-slate-50 text-center'">
-                      <template x-if="!importFileName">
-                        <div>
-                          <p class="text-sm font-semibold text-slate-800">Klik untuk pilih file Excel (.xlsx / .csv)
-                          </p>
-                        </div>
-                      </template>
-                      <template x-if="importFileName">
-                        <div class="flex items-center justify-between">
-                          <span class="text-xs font-semibold text-emerald-800"
-                            x-text="importFileName + ' (' + importFileSize + ')'"></span>
+                  <input id="barang-import-file" x-ref="barangImportFile" name="files[]" type="file"
+                    accept=".xlsx,.xls,.csv" multiple required aria-label="Pilih beberapa file Excel atau CSV"
+                    @change="selectImportFiles($event.target.files)" class="hidden">
+                  <div role="button" tabindex="0" @click="openImportFilePicker()"
+                    @keydown="handleImportFileKeydown($event)" @dragover.prevent @drop.prevent="handleImportDrop($event)"
+                    class="group cursor-pointer rounded-lg border-2 border-dashed p-5 text-left transition focus:outline-none focus-visible:ring-2 focus-visible:ring-[#08A9D6] focus-visible:ring-offset-2"
+                    :class="importFiles.length ? 'border-emerald-300 bg-emerald-50/70 hover:border-emerald-400 hover:bg-emerald-50' :
+                        'border-slate-300 bg-slate-50 text-center hover:border-[#08A9D6] hover:bg-[#F0FDFA]'">
+                    <template x-if="!importFiles.length">
+                      <div class="flex flex-col items-center">
+                        <span
+                          class="mb-3 flex h-14 w-14 items-center justify-center rounded-2xl bg-emerald-100 text-emerald-700 transition group-hover:bg-emerald-200">
+                          <iconify-icon icon="mdi:file-excel-outline" width="32"></iconify-icon>
+                        </span>
+                        <p class="text-sm font-semibold text-slate-800">Seret beberapa file Excel ke sini</p>
+                        <p class="mt-1 text-sm text-slate-600">atau klik untuk memilih lebih dari satu file</p>
+                        <p
+                          class="mt-3 rounded-full bg-white px-3 py-1 text-xs font-medium text-slate-500 ring-1 ring-slate-200">
+                          .xlsx, .xls, .csv · Maks. 10 file · Maks. 5 MB per file
+                        </p>
+                      </div>
+                    </template>
+                    <template x-if="importFiles.length">
+                      <div class="space-y-2">
+                        <div class="flex items-center justify-between gap-3">
+                          <span class="text-sm font-semibold text-slate-800">
+                            <span x-text="importFiles.length"></span> file siap diimpor
+                          </span>
                           <button type="button" @click.stop="clearImportFile()"
-                            class="text-rose-600 text-xs">Ganti</button>
+                            class="text-xs font-semibold text-rose-700 hover:text-rose-800">
+                            Hapus semua
+                          </button>
                         </div>
-                      </template>
-                    </div>
+                        <ul class="max-h-36 space-y-1 overflow-y-auto">
+                          <template x-for="(file, index) in importFiles" :key="`${file.name}-${index}`">
+                            <li class="flex items-center gap-2 rounded-md bg-white px-2.5 py-2 ring-1 ring-emerald-200">
+                              <iconify-icon icon="mdi:file-excel-outline" width="18"
+                                class="shrink-0 text-emerald-700"></iconify-icon>
+                              <span class="min-w-0 flex-1 truncate text-xs font-medium text-slate-800"
+                                x-text="file.name"></span>
+                              <span class="shrink-0 text-xs text-slate-500" x-text="file.size"></span>
+                              <button type="button" @click.stop="removeImportFile(index)"
+                                class="shrink-0 text-slate-500 hover:text-rose-600"
+                                :aria-label="`Hapus ${file.name}`">
+                                <iconify-icon icon="mdi:close-circle-outline" width="18"></iconify-icon>
+                              </button>
+                            </li>
+                          </template>
+                        </ul>
+                      </div>
+                    </template>
                   </div>
 
-                  <!-- Input ZIP Gambar (Opsional) -->
-                  <div>
-                    <label for="barang-import-zip" class="mb-1 block text-sm font-medium text-slate-700">File ZIP
-                      Gambar <span class="text-xs text-slate-400">(Opsional)</span></label>
-                    <input id="barang-import-zip" x-ref="barangImportZip" name="images_zip" type="file"
-                      accept=".zip" @change="selectImportZip($event.target.files)" class="hidden">
-                    <div role="button" tabindex="0" @click="$refs.barangImportZip.click()"
-                      class="group cursor-pointer rounded-lg border-2 border-dashed p-4 text-left transition"
-                      :class="importZipName ? 'border-sky-300 bg-sky-50/70' : 'border-slate-300 bg-slate-50 text-center'">
-                      <template x-if="!importZipName">
-                        <div>
-                          <p class="text-sm font-semibold text-slate-800">Pilih ZIP foto; nama file dicocokkan tanpa
-                            membedakan huruf besar/kecil
-                          </p>
-                        </div>
-                      </template>
-                      <template x-if="importZipName">
-                        <div class="flex items-center justify-between">
-                          <span class="text-xs font-semibold text-sky-800"
-                            x-text="importZipName + ' (' + importZipSize + ')'"></span>
-                          <button type="button" @click.stop="clearImportZip()"
-                            class="text-rose-600 text-xs">Ganti</button>
-                        </div>
-                      </template>
+                  <input id="barang-import-zip" x-ref="barangImportZip" name="images_zip" type="file" accept=".zip"
+                    aria-label="Pilih ZIP gambar (opsional)" @change="selectImportZip($event.target.files)"
+                    class="hidden">
+                  <div role="button" tabindex="0" @click="openImportZipPicker()"
+                    @keydown="handleImportZipKeydown($event)" @dragover.prevent
+                    @drop.prevent="handleImportZipDrop($event)"
+                    class="group cursor-pointer rounded-lg border-2 border-dashed p-5 text-left transition focus:outline-none focus-visible:ring-2 focus-visible:ring-[#08A9D6] focus-visible:ring-offset-2"
+                    :class="importZipName ? 'border-sky-300 bg-sky-50/70 hover:border-sky-400 hover:bg-sky-50' :
+                        'border-slate-300 bg-slate-50 text-center hover:border-[#08A9D6] hover:bg-[#F0FDFA]'">
+                    <template x-if="!importZipName">
+                      <div class="flex flex-col items-center">
+                        <span
+                          class="mb-3 flex h-14 w-14 items-center justify-center rounded-2xl bg-sky-100 text-sky-700 transition group-hover:bg-sky-200">
+                          <iconify-icon icon="mdi:folder-zip-outline" width="32"></iconify-icon>
+                        </span>
+                        <p class="text-sm font-semibold text-slate-800">Seret ZIP gambar ke sini</p>
+                        <p class="mt-1 text-sm text-slate-600">atau klik area ini untuk memilih arsip</p>
+                        <p
+                          class="mt-3 rounded-full bg-white px-3 py-1 text-xs font-medium text-slate-500 ring-1 ring-slate-200">
+                          .zip · Opsional · Maks. 20 MB
+                        </p>
+                      </div>
+                    </template>
+                    <template x-if="importZipName">
+                      <div class="flex items-center gap-3">
+                        <span
+                          class="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-white text-sky-700 shadow-sm ring-1 ring-sky-200">
+                          <iconify-icon icon="mdi:folder-zip" width="26"></iconify-icon>
+                        </span>
+                        <span class="min-w-0 flex-1">
+                          <span class="block truncate text-sm font-semibold text-slate-800"
+                            x-text="importZipName"></span>
+                          <span class="mt-1 block text-xs text-sky-800">
+                            ZIP gambar siap diimpor <span class="text-sky-700" x-text="importZipSize"></span>
+                          </span>
+                          <span class="mt-1 block text-xs font-medium text-[#087F70]">Klik untuk mengganti file</span>
+                        </span>
+                        <button type="button" @click.stop="clearImportZip()"
+                          class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-slate-500 transition hover:bg-white hover:text-rose-600 focus:outline-none focus:ring-2 focus:ring-rose-400"
+                          aria-label="Hapus ZIP gambar yang dipilih">
+                          <iconify-icon icon="mdi:close-circle-outline" width="20"></iconify-icon>
+                        </button>
+                      </div>
+                    </template>
+                  </div>
+
+                  <div class="rounded-md border border-blue-200 bg-blue-50 p-3 text-xs text-blue-800">
+                    <div class="flex gap-2">
+                      <iconify-icon icon="mdi:information" class="mt-0.5 shrink-0" width="16"></iconify-icon>
+                      <div class="space-y-2">
+                        <p class="font-semibold">Format import barang</p>
+                        <p>Isi kolom <span class="font-semibold">gambar_barang</span> dengan nama file gambar di
+                          dalam ZIP. Nama file dicocokkan tanpa membedakan huruf besar/kecil.</p>
+                        <a href="{{ asset('import-templates/format-import-barang.xlsx') }}" download
+                          class="inline-flex items-center gap-1 font-semibold text-[#087E78] hover:text-[#065f59] focus:outline-none focus:ring-2 focus:ring-[#08A9D6]">
+                          <iconify-icon icon="mdi:download" width="16" aria-hidden="true"></iconify-icon>
+                          Unduh format-import-barang.xlsx
+                        </a>
+                      </div>
                     </div>
                   </div>
 
@@ -941,10 +1405,36 @@
                     role="alert">
                     <span x-text="importError"></span>
                   </div>
-                  <div x-cloak x-show="importResult" class="rounded-lg border px-3 py-2 text-sm"
-                    :class="importErrors.length ? 'border-amber-200 bg-amber-50 text-amber-900' :
-                        'border-emerald-200 bg-emerald-50 text-emerald-800'">
+                  <div x-cloak x-show="importResult" class="rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-sm text-sky-800">
                     <p x-text="importResult"></p>
+                    <ul x-show="importJobs.length" class="mt-3 space-y-2">
+                      <template x-for="job in importJobs" :key="job.log_id">
+                        <li class="rounded-md bg-white px-3 py-2 ring-1 ring-sky-100">
+                          <div class="flex flex-wrap items-center justify-between gap-2">
+                            <span class="min-w-0 flex-1 truncate font-medium text-slate-800" x-text="job.file_name"></span>
+                            <span class="shrink-0 text-xs font-semibold"
+                              :class="job.status === 'proses' ? 'text-sky-700' : (job.status === 'selesai' ? 'text-emerald-700' : (job.status === 'sebagian' ? 'text-amber-700' : 'text-rose-700'))"
+                              x-text="job.status === 'proses' ? 'Dalam antrean / diproses' : (job.message || job.status)"></span>
+                          </div>
+                          <ul x-show="job.errors?.length" class="mt-2 list-inside list-disc space-y-1 text-xs text-amber-900">
+                            <template x-for="(error, index) in job.errors" :key="index">
+                              <li>
+                                <span x-text="error.row ? 'Baris ' + error.row + ': ' : ''"></span>
+                                <span x-text="error.message || 'Baris gagal diproses.'"></span>
+                              </li>
+                            </template>
+                          </ul>
+                        </li>
+                      </template>
+                    </ul>
+                    <button x-show="importPollTimedOut" type="button" @click="retryBarangImportStatus()"
+                      class="mt-3 inline-flex items-center gap-1 font-semibold underline">
+                      Periksa status lagi
+                    </button>
+                    <button x-show="importReloadAvailable" type="button" @click="window.location.reload()"
+                      class="mt-3 inline-flex items-center gap-1 font-semibold underline">
+                      Muat ulang daftar barang
+                    </button>
                   </div>
                 </div>
 
@@ -953,10 +1443,313 @@
                     class="rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700">
                     Batal
                   </button>
-                  <button type="submit" :disabled="importLoading || !importFileName"
+                  <button type="submit" :disabled="importLoading || importQueued || !importFiles.length || importFiles.length > 10"
                     class="inline-flex items-center justify-center rounded-md border border-[#009F91] bg-[#00B19C] px-4 py-2 text-sm font-semibold text-white">
-                    <span x-show="!importLoading">Mulai impor</span>
-                    <span x-show="importLoading">Memproses...</span>
+                    <span x-show="!importLoading && !importQueued">Simpan Import</span>
+                    <span x-show="importLoading">Mengunggah...</span>
+                    <span x-show="importQueued">Dalam antrean...</span>
+                  </button>
+                </div>
+              </form>
+            </section>
+          </div>
+          <div x-cloak x-show="modalOpen" x-transition.opacity
+            class="fixed inset-0 z-[80] flex items-center justify-center overflow-y-auto overscroll-contain p-4 sm:p-6"
+            @click.self="closeModal()" role="presentation">
+            <div class="absolute inset-0 bg-slate-950/65 backdrop-blur-sm" @click="closeModal()"></div>
+            <section x-show="modalOpen" x-transition
+              class="relative z-10 my-auto w-full max-w-3xl overflow-hidden rounded-xl border border-[#08A9D6] bg-white shadow-[0_24px_80px_rgba(2,25,41,0.4)]"
+              role="dialog" aria-modal="true" aria-labelledby="barang-modal-title">
+              <form :action="formAction" method="POST" enctype="multipart/form-data" @submit="formSubmitting = true">
+                @csrf
+                <input type="hidden" name="_method" value="PUT" :disabled="modalMode !== 'edit'">
+                <input type="hidden" name="barang_form" :value="modalMode">
+                <input type="hidden" name="barang_id" x-model="currentItem.barang_id">
+                <input type="hidden" name="kode_barang" x-model="currentItem.kode_barang"
+                  :disabled="modalMode !== 'edit'">
+                <input type="hidden" name="kondisi" x-model="currentItem.kondisi" :disabled="modalMode !== 'edit'">
+                <input type="hidden" name="kelayakan" x-model="currentItem.kelayakan" :disabled="modalMode !== 'edit'">
+
+                <div class="flex items-center justify-between border-b border-slate-200 px-5 py-4">
+                  <div class="flex items-center gap-3">
+                    <span class="flex h-10 w-10 items-center justify-center rounded-lg bg-sky-50 text-sky-700">
+                      <iconify-icon :icon="modalMode === 'create' ? 'mdi:package-variant-plus' : 'mdi:package-variant'"
+                        width="22" aria-hidden="true"></iconify-icon>
+                    </span>
+                    <h2 id="barang-modal-title" class="text-base font-semibold text-slate-800"
+                      x-text="modalMode === 'create' ? 'Tambah Barang' : 'Edit Barang'"></h2>
+                  </div>
+                  <button type="button" @click="closeModal()"
+                    class="rounded-md p-1 text-slate-500 transition hover:bg-slate-100 hover:text-slate-700"
+                    aria-label="Tutup formulir">
+                    <iconify-icon icon="mdi:close" width="20" aria-hidden="true"></iconify-icon>
+                  </button>
+                </div>
+
+                <div class="grid max-h-[calc(100dvh-12rem)] grid-cols-1 gap-4 overflow-y-auto px-5 py-4 sm:grid-cols-2">
+                  <label class="text-xs font-medium text-slate-700">
+                    Nama Barang
+                    <input name="nama_barang" type="text" maxlength="150" required x-model="currentItem.nama_barang"
+                      class="mt-1 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 focus:border-[#08A9D6] focus:outline-none focus:ring-2 focus:ring-[#08A9D6]/20"
+                      placeholder="Nama barang">
+                    @error('nama_barang')
+                      <span class="mt-1 block text-xs text-rose-700">{{ $message }}</span>
+                    @enderror
+                  </label>
+
+                  <label class="text-xs font-medium text-slate-700">
+                    Kategori
+                    <select name="kategori_id" x-model="currentItem.kategori_id" required
+                      class="mt-1 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 focus:border-[#08A9D6] focus:outline-none focus:ring-2 focus:ring-[#08A9D6]/20">
+                      <option value="">Pilih kategori</option>
+                      @foreach ($kategoris as $kategori)
+                        <option value="{{ $kategori->kategori_id }}">{{ $kategori->nama_kategori }}</option>
+                      @endforeach
+                    </select>
+                    @error('kategori_id')
+                      <span class="mt-1 block text-xs text-rose-700">{{ $message }}</span>
+                    @enderror
+                  </label>
+
+                  <label x-show="modalMode === 'create'" class="text-xs font-medium text-slate-700">
+                    Kondisi
+                    <select name="kondisi" x-model="currentItem.kondisi" :disabled="modalMode !== 'create'" required
+                      class="mt-1 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 focus:border-[#08A9D6] focus:outline-none focus:ring-2 focus:ring-[#08A9D6]/20">
+                      <option value="baru">Baru</option>
+                      <option value="lama">Lama</option>
+                    </select>
+                  </label>
+
+                  <label x-show="modalMode === 'create'" class="text-xs font-medium text-slate-700">
+                    Kelayakan
+                    <select name="kelayakan" x-model="currentItem.kelayakan" :disabled="modalMode !== 'create'" required
+                      class="mt-1 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 focus:border-[#08A9D6] focus:outline-none focus:ring-2 focus:ring-[#08A9D6]/20">
+                      <option value="layak">Layak</option>
+                      <option value="tidak_layak">Tidak layak</option>
+                    </select>
+                  </label>
+
+                  <div class="grid grid-cols-1 gap-4 sm:col-span-2 sm:grid-cols-2">
+                    <label class="text-xs font-medium text-slate-700">
+                      Jumlah total
+                      <input name="stok_total" type="number" min="0" step="1" required
+                        x-model.number="currentItem.stok_total" @input="syncStockTotals('total')"
+                        class="mt-1 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 focus:border-[#08A9D6] focus:outline-none focus:ring-2 focus:ring-[#08A9D6]/20"
+                        placeholder="0">
+                      @error('stok_total')
+                        <span class="mt-1 block text-xs text-rose-700">{{ $message }}</span>
+                      @enderror
+                    </label>
+
+                    <label class="text-xs font-medium text-slate-700">
+                      Satuan
+                      <input name="satuan" type="text" maxlength="20" required x-model="currentItem.satuan"
+                        class="mt-1 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 focus:border-[#08A9D6] focus:outline-none focus:ring-2 focus:ring-[#08A9D6]/20"
+                        placeholder="unit">
+                      @error('satuan')
+                        <span class="mt-1 block text-xs text-rose-700">{{ $message }}</span>
+                      @enderror
+                    </label>
+                  </div>
+
+                  <div class="sm:col-span-2">
+                    <span class="text-xs font-medium text-slate-700">
+                      Gambar Barang <span class="font-normal text-slate-500">(opsional, JPG/PNG/WEBP, maks. 5 MB)</span>
+                    </span>
+                    <input x-ref="barangImageInput" name="image" type="file" accept=".jpg,.jpeg,.png,.webp"
+                      @change="previewBarangImage($event)" class="hidden">
+                    <div role="button" tabindex="0" @click="openBarangImagePicker()"
+                      @keydown.enter.prevent="openBarangImagePicker()" @keydown.space.prevent="openBarangImagePicker()"
+                      @dragover.prevent @drop.prevent="handleBarangImageDrop($event)"
+                      class="mt-1 flex min-h-28 cursor-pointer items-center gap-4 rounded-lg border-2 border-dashed border-slate-300 bg-slate-50 p-4 transition hover:border-[#08A9D6] hover:bg-[#F0FDFA] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#08A9D6] focus-visible:ring-offset-2">
+                      <img x-show="imagePreview" :src="imagePreview" alt="Pratinjau gambar barang"
+                        class="h-20 w-20 shrink-0 rounded-md border border-slate-200 bg-white object-cover">
+                      <span x-show="!imagePreview"
+                        class="flex h-14 w-14 shrink-0 items-center justify-center rounded-lg bg-emerald-100 text-emerald-700">
+                        <iconify-icon icon="mdi:image-plus-outline" width="28" aria-hidden="true"></iconify-icon>
+                      </span>
+                      <span class="min-w-0 flex-1">
+                        <span class="block text-sm font-semibold text-slate-800"
+                          x-text="imagePreviewName || (imagePreview ? 'Gambar saat ini' : 'Pilih atau seret gambar ke sini')"></span>
+                        <span class="mt-1 block text-xs text-slate-500">Klik area ini atau seret satu gambar ke sini.</span>
+                      </span>
+                      <button x-show="imagePreviewName" type="button" @click.stop="removeBarangImage()"
+                        class="shrink-0 rounded-md px-2 py-1 text-xs font-semibold text-rose-700 hover:bg-rose-50">
+                        Batalkan gambar baru
+                      </button>
+                    </div>
+                    @error('image')
+                      <span class="mt-1 block text-xs text-rose-700">{{ $message }}</span>
+                    @enderror
+                  </div>
+
+                  <label class="text-xs font-medium text-slate-700 sm:col-span-2">
+                    Spesifikasi
+                    <textarea name="spesifikasi" maxlength="255" rows="2" x-model="currentItem.spesifikasi"
+                      class="mt-1 w-full resize-y rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 focus:border-[#08A9D6] focus:outline-none focus:ring-2 focus:ring-[#08A9D6]/20"
+                      placeholder="Keterangan teknis barang"></textarea>
+                    @error('spesifikasi')
+                      <span class="mt-1 block text-xs text-rose-700">{{ $message }}</span>
+                    @enderror
+                  </label>
+
+                  <section class="sm:col-span-2" aria-label="Lokasi stok barang">
+                    <div class="mb-2 flex items-center justify-between gap-3">
+                      <p class="text-xs font-semibold text-slate-700">Stok per lokasi</p>
+                      <button type="button" @click="addStockLocation()" :disabled="currentItem.locations.length >= 50"
+                        class="inline-flex items-center gap-1 rounded-md border border-[#B9DED4] px-3 py-1.5 text-xs font-semibold text-[#007f70] transition hover:bg-emerald-50 disabled:cursor-not-allowed disabled:opacity-50">
+                        <iconify-icon icon="mdi:plus" aria-hidden="true"></iconify-icon>
+                        Tambah lokasi
+                      </button>
+                    </div>
+                    <input type="hidden" name="stok_tersedia" :value="currentItem.stok_tersedia">
+                    <div class="space-y-2">
+                      <template x-for="(location, index) in currentItem.locations" :key="index">
+                        <div class="grid gap-2 rounded-lg border border-slate-200 bg-slate-50 p-3 sm:grid-cols-2 lg:grid-cols-[minmax(9rem,1fr)_minmax(9rem,1fr)_minmax(9rem,1fr)_8rem_auto]">
+                          <input type="hidden" :name="`locations[${index}][stok_total]`"
+                            :value="location.stok_total">
+                          <label class="text-[11px] font-semibold text-slate-600">
+                            Ruangan
+                            <select :name="`locations[${index}][ruangan_id]`" x-model="location.ruangan_id"
+                              @change="setStockLocationRoom(location, $event.target.value)" required
+                              class="mt-1 block w-full rounded-md border border-slate-300 bg-white px-2.5 py-2 text-xs font-normal text-slate-800">
+                              <option value="">Pilih ruangan</option>
+                              @foreach ($ruangans as $ruangan)
+                                <option value="{{ $ruangan->ruangan_id }}">{{ $ruangan->nama_ruangan }}</option>
+                              @endforeach
+                            </select>
+                          </label>
+                          <label class="text-[11px] font-semibold text-slate-600">
+                            Lemari
+                            <select :name="`locations[${index}][lemari_id]`" x-model="location.lemari_id"
+                              :disabled="!location.ruangan_id"
+                              class="mt-1 block w-full rounded-md border border-slate-300 bg-white px-2.5 py-2 text-xs font-normal text-slate-800 disabled:bg-slate-100">
+                              <option value="">Tanpa lemari</option>
+                              <template x-for="cabinet in lemariOptions.filter((item) => item.ruangan_id === location.ruangan_id)"
+                                :key="cabinet.lemari_id">
+                                <option :value="cabinet.lemari_id" x-text="cabinet.nama_lemari"></option>
+                              </template>
+                            </select>
+                          </label>
+                          <label class="text-[11px] font-semibold text-slate-600">
+                            Wadah
+                            <select :name="`locations[${index}][toolbox_id]`" x-model="location.toolbox_id"
+                              class="mt-1 block w-full rounded-md border border-slate-300 bg-white px-2.5 py-2 text-xs font-normal text-slate-800">
+                              <option value="">Tanpa wadah</option>
+                              <template x-for="toolbox in toolboxOptions" :key="toolbox.toolbox_id">
+                                <option :value="toolbox.toolbox_id"
+                                  x-text="`${toolbox.kode_toolbox} · ${toolbox.nama_toolbox}`"></option>
+                              </template>
+                            </select>
+                          </label>
+                          <label class="text-[11px] font-semibold text-slate-600">
+                            Jumlah tersedia
+                            <input type="number" min="0" step="1" required
+                              :name="`locations[${index}][stok_tersedia]`" x-model.number="location.stok_tersedia"
+                              @input="syncStockTotals('location')"
+                              class="mt-1 block w-full rounded-md border border-slate-300 bg-white px-2.5 py-2 text-xs font-normal text-slate-800">
+                          </label>
+                          <button type="button" @click="removeStockLocation(index)" :disabled="currentItem.locations.length <= 1"
+                            class="flex h-8 items-center justify-center self-end rounded-md px-2 text-slate-500 transition hover:bg-rose-50 hover:text-rose-600 disabled:cursor-not-allowed disabled:opacity-30"
+                            aria-label="Hapus lokasi">
+                            <iconify-icon icon="mdi:trash-can-outline" width="17" aria-hidden="true"></iconify-icon>
+                          </button>
+                        </div>
+                      </template>
+                    </div>
+                    @error('locations')
+                      <p class="mt-1 text-xs text-rose-700">{{ $message }}</p>
+                    @enderror
+                    @error('locations.*.ruangan_id')
+                      <p class="mt-1 text-xs text-rose-700">{{ $message }}</p>
+                    @enderror
+                    @error('locations.*.lemari_id')
+                      <p class="mt-1 text-xs text-rose-700">{{ $message }}</p>
+                    @enderror
+                    @error('locations.*.toolbox_id')
+                      <p class="mt-1 text-xs text-rose-700">{{ $message }}</p>
+                    @enderror
+                    @error('locations.*.stok_total')
+                      <p class="mt-1 text-xs text-rose-700">{{ $message }}</p>
+                    @enderror
+                    @error('locations.*.stok_tersedia')
+                      <p class="mt-1 text-xs text-rose-700">{{ $message }}</p>
+                    @enderror
+                  </section>
+                </div>
+
+                <div class="flex justify-end gap-2 border-t border-slate-200 bg-slate-50 px-5 py-3">
+                  <button type="button" @click="closeModal()"
+                    class="rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-100">
+                    Batal
+                  </button>
+                  <button type="submit" :disabled="formSubmitting"
+                    class="inline-flex items-center justify-center rounded-md border border-[#009F91] bg-[#00B19C] px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-[#009A87] disabled:cursor-not-allowed disabled:opacity-70">
+                    <span x-show="!formSubmitting" x-text="modalMode === 'create' ? 'Simpan Barang' : 'Simpan Perubahan'"></span>
+                    <span x-show="formSubmitting">Menyimpan...</span>
+                  </button>
+                </div>
+              </form>
+            </section>
+          </div>
+          <div x-cloak x-show="toolboxModalOpen" x-transition.opacity
+            class="fixed inset-0 z-[100] flex items-center justify-center overflow-y-auto overscroll-contain p-4 sm:p-6"
+            @click.self="toolboxModalOpen = false" role="presentation">
+            <div class="absolute inset-0 bg-slate-950/65 backdrop-blur-sm" @click="toolboxModalOpen = false"></div>
+            <section x-show="toolboxModalOpen" x-transition
+              class="relative z-10 my-auto w-full max-w-lg overflow-hidden rounded-xl border border-[#08A9D6] bg-white shadow-[0_24px_80px_rgba(2,25,41,0.4)]"
+              role="dialog" aria-modal="true" aria-labelledby="toolbox-modal-title">
+              <form action="{{ route('admin.toolbox.store') }}" method="POST" @submit="toolboxSubmitting = true">
+                @csrf
+                <input type="hidden" name="toolbox_form" value="store">
+                <div class="flex items-center justify-between border-b border-slate-200 px-5 py-4">
+                  <div class="flex items-center gap-3">
+                    <span class="flex h-10 w-10 items-center justify-center rounded-lg bg-emerald-50 text-emerald-700">
+                      <iconify-icon icon="mdi:archive-plus-outline" width="22" aria-hidden="true"></iconify-icon>
+                    </span>
+                    <div>
+                      <h2 id="toolbox-modal-title" class="text-base font-semibold text-slate-800">Tambah Wadah</h2>
+                      <p class="mt-1 text-xs text-slate-500">Wadah baru dapat dipilih sebagai lokasi stok barang.</p>
+                    </div>
+                  </div>
+                  <button type="button" @click="toolboxModalOpen = false"
+                    class="rounded-md p-1 text-slate-500 transition hover:bg-slate-100 hover:text-slate-700"
+                    aria-label="Tutup formulir wadah">
+                    <iconify-icon icon="mdi:close" width="20" aria-hidden="true"></iconify-icon>
+                  </button>
+                </div>
+                <div class="space-y-4 px-5 py-4">
+                  <p class="rounded-md bg-emerald-50 px-3 py-2 text-xs text-emerald-800">
+                    Kode wadah akan dibuat otomatis saat disimpan.
+                  </p>
+                  <label class="block text-xs font-medium text-slate-700">
+                    Nama Wadah
+                    <input name="nama_toolbox" type="text" maxlength="100" required value="{{ old('nama_toolbox') }}"
+                      class="mt-1 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 focus:border-[#08A9D6] focus:outline-none focus:ring-2 focus:ring-[#08A9D6]/20"
+                      placeholder="Nama wadah">
+                    @error('nama_toolbox')
+                      <span class="mt-1 block text-xs text-rose-700">{{ $message }}</span>
+                    @enderror
+                  </label>
+                  <label class="block text-xs font-medium text-slate-700">
+                    Keterangan <span class="font-normal text-slate-500">(opsional)</span>
+                    <textarea name="keterangan" maxlength="255" rows="2"
+                      class="mt-1 w-full resize-y rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 focus:border-[#08A9D6] focus:outline-none focus:ring-2 focus:ring-[#08A9D6]/20"
+                      placeholder="Keterangan wadah">{{ old('keterangan') }}</textarea>
+                    @error('keterangan')
+                      <span class="mt-1 block text-xs text-rose-700">{{ $message }}</span>
+                    @enderror
+                  </label>
+                </div>
+                <div class="flex justify-end gap-2 border-t border-slate-200 bg-slate-50 px-5 py-3">
+                  <button type="button" @click="toolboxModalOpen = false"
+                    class="rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-100">
+                    Batal
+                  </button>
+                  <button type="submit" :disabled="toolboxSubmitting"
+                    class="inline-flex items-center justify-center rounded-md border border-[#009F91] bg-[#00B19C] px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-[#009A87] disabled:cursor-not-allowed disabled:opacity-70">
+                    <span x-show="!toolboxSubmitting">Simpan Wadah</span>
+                    <span x-show="toolboxSubmitting">Menyimpan...</span>
                   </button>
                 </div>
               </form>

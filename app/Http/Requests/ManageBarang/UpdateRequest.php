@@ -16,13 +16,13 @@ class UpdateRequest extends FormRequest
 
     public function rules(): array
     {
-        // ASVS 2.2.2/2.2.3: Validate location references and their room-cabinet relationship at the server boundary.
+        // ASVS 2.2.2/2.2.3: Validate location references and combinations at the server boundary.
         $barangId = $this->route('barang')->barang_id;
 
         return [
             'barang_form' => ['required', Rule::in(['edit', 'status'])],
             'locations' => ['required_if:barang_form,edit', 'array', 'min:1', 'max:50'],
-            'locations.*' => ['required', 'array:ruangan_id,lemari_id,stok_total,stok_tersedia'],
+            'locations.*' => ['required', 'array:ruangan_id,lemari_id,toolbox_id,stok_total,stok_tersedia'],
             'locations.*.ruangan_id' => [
                 'required',
                 'uuid',
@@ -32,6 +32,11 @@ class UpdateRequest extends FormRequest
                 'nullable',
                 'uuid',
                 Rule::exists('lemari', 'lemari_id')->where(fn ($query) => $query->whereNull('deleted_at')),
+            ],
+            'locations.*.toolbox_id' => [
+                'nullable',
+                'uuid',
+                Rule::exists('toolbox', 'toolbox_id')->where(fn ($query) => $query->whereNull('deleted_at')),
             ],
             'locations.*.stok_total' => ['required', 'integer', 'min:0'],
             'locations.*.stok_tersedia' => ['required', 'integer', 'min:0'],
@@ -53,6 +58,8 @@ class UpdateRequest extends FormRequest
             'kondisi' => ['required', Rule::in(['baru', 'lama'])],
             'kelayakan' => ['required', Rule::in(['layak', 'tidak_layak'])],
             'spesifikasi' => ['nullable', 'string', 'max:255'],
+            // ASVS 2.2.1/2.2.2: Validate uploaded image content and size at the request boundary.
+            'image' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:5120'],
         ];
     }
 
@@ -84,10 +91,11 @@ class UpdateRequest extends FormRequest
                 foreach ($locations as $index => $location) {
                     $roomId = $location['ruangan_id'];
                     $cabinetId = $location['lemari_id'] ?? null;
-                    $locationKey = $roomId.'|'.($cabinetId ?? '');
+                    $toolboxId = $location['toolbox_id'] ?? null;
+                    $locationKey = $roomId.'|'.($cabinetId ?? '').'|'.($toolboxId ?? '');
 
                     if (isset($locationKeys[$locationKey])) {
-                        $validator->errors()->add("locations.{$index}.lemari_id", 'Lokasi barang yang sama tidak dapat dipilih lebih dari sekali.');
+                        $validator->errors()->add("locations.{$index}.toolbox_id", 'Lokasi barang yang sama tidak dapat dipilih lebih dari sekali.');
                     }
 
                     $locationKeys[$locationKey] = true;
@@ -127,6 +135,7 @@ class UpdateRequest extends FormRequest
             'locations.*.ruangan_id.required' => 'Ruangan wajib dipilih untuk setiap lokasi.',
             'locations.*.ruangan_id.exists' => 'Ruangan tidak ditemukan atau sudah tidak aktif.',
             'locations.*.lemari_id.exists' => 'Lemari tidak ditemukan atau sudah tidak aktif.',
+            'locations.*.toolbox_id.exists' => 'Wadah tidak ditemukan atau sudah tidak aktif.',
             'locations.*.stok_total.required' => 'Jumlah stok lokasi wajib diisi.',
             'locations.*.stok_total.integer' => 'Jumlah stok lokasi harus berupa bilangan bulat.',
             'locations.*.stok_total.min' => 'Jumlah stok lokasi tidak boleh kurang dari nol.',
@@ -144,6 +153,9 @@ class UpdateRequest extends FormRequest
             'stok_tersedia.lte' => 'Stok tersedia tidak boleh melebihi jumlah barang.',
             'kondisi.in' => 'Kondisi barang tidak valid.',
             'kelayakan.in' => 'Status kelayakan tidak valid.',
+            'image.image' => 'File barang harus berupa gambar.',
+            'image.mimes' => 'Gambar barang harus berformat JPG, PNG, atau WEBP.',
+            'image.max' => 'Ukuran gambar barang maksimal 5 MB.',
         ];
     }
 }

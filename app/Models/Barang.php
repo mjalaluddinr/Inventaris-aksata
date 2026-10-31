@@ -9,95 +9,105 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
-use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 
 class Barang extends Model
 {
-  use HasFactory, HasUuids, SoftDeletes;
+    use HasFactory, HasUuids, SoftDeletes;
 
-  protected $table = 'barang';
+    protected $table = 'barang';
 
-  protected $primaryKey = 'barang_id';
+    protected $primaryKey = 'barang_id';
 
-  public $incrementing = false;
+    public $incrementing = false;
 
-  protected $keyType = 'string';
+    protected $keyType = 'string';
 
-  protected $fillable = [
-    'kategori_id',
-    'kode_barang',
-    'image_path',
-    'nama_barang',
-    'satuan',
-    'stok_total',
-    'stok_tersedia',
-    'kondisi',
-    'kelayakan',
-    'spesifikasi',
-  ];
-
-  /**
-   * The accessors to append to the model's array form.
-   *
-   * @var array<int, string>
-   */
-  protected $appends = [
-    'image_url',
-  ];
-
-  protected function casts(): array
-  {
-    return [
-      'stok_total' => 'integer',
-      'stok_tersedia' => 'integer',
-      'created_at' => 'datetime',
-      'updated_at' => 'datetime',
-      'deleted_at' => 'datetime',
+    protected $fillable = [
+        'kategori_id',
+        'kode_barang',
+        'image_path',
+        'nama_barang',
+        'satuan',
+        'stok_total',
+        'stok_tersedia',
+        'kondisi',
+        'kelayakan',
+        'spesifikasi',
     ];
-  }
 
-  /**
-   * Interact with the barang's image url.
-   */
-  protected function imageUrl(): Attribute
-  {
-    return Attribute::make(
-      get: fn() => $this->image_path ? Storage::disk('public')->url($this->image_path) : null,
-    );
-  }
+    /**
+     * The accessors to append to the model's array form.
+     *
+     * @var array<int, string>
+     */
+    protected $appends = [
+        'image_url',
+    ];
 
-  public static function normalizeImageReference(string $filename): string
-  {
-    $normalized = str_replace('\\', '/', trim($filename));
-    $normalized = preg_replace('#/+#', '/', $normalized) ?? $normalized;
-    $normalized = preg_replace('#^(?:\./)+#', '', $normalized) ?? $normalized;
+    protected function casts(): array
+    {
+        return [
+            'stok_total' => 'integer',
+            'stok_tersedia' => 'integer',
+            'created_at' => 'datetime',
+            'updated_at' => 'datetime',
+            'deleted_at' => 'datetime',
+        ];
+    }
 
-    return Str::lower($normalized);
-  }
+    /**
+     * Interact with the barang's image url.
+     */
+    protected function imageUrl(): Attribute
+    {
+        return Attribute::make(get: function (): ?string {
+            $imagePath = $this->image_path;
+            if (! is_string($imagePath) || ! str_starts_with($imagePath, 'barang_img/')) {
+                return null;
+            }
 
-  public function kategori(): BelongsTo
-  {
-    return $this->belongsTo(Kategori::class, 'kategori_id', 'kategori_id');
-  }
+            $pathSegments = explode('/', $imagePath);
+            if (in_array('', $pathSegments, true) || in_array('.', $pathSegments, true) || in_array('..', $pathSegments, true)) {
+                return null;
+            }
 
-  public function lokasiBarangs(): HasMany
-  {
-    return $this->hasMany(LokasiBarang::class, 'barang_id', 'barang_id');
-  }
+            // ASVS 1.2.1/1.2.2: Keep image requests on the page's origin and encode each URL path segment.
+            return '/storage/'.implode('/', array_map('rawurlencode', $pathSegments));
+        });
+    }
 
-  public function detailPeminjamans(): HasMany
-  {
-    return $this->hasMany(DetailPeminjaman::class, 'barang_id', 'barang_id');
-  }
+    public static function normalizeImageReference(string $filename): string
+    {
+        $normalized = str_replace('\\', '/', trim($filename));
+        $normalized = preg_replace('#/+#', '/', $normalized) ?? $normalized;
+        $normalized = preg_replace('#^(?:\./)+#', '', $normalized) ?? $normalized;
 
-  public function barangDipakais(): HasMany
-  {
-    return $this->hasMany(BarangDipakai::class, 'barang_id', 'barang_id');
-  }
+        return Str::lower($normalized);
+    }
 
-  public function logMutasiBarangs(): HasMany
-  {
-    return $this->hasMany(LogMutasiBarang::class, 'barang_id', 'barang_id');
-  }
+    public function kategori(): BelongsTo
+    {
+        return $this->belongsTo(Kategori::class, 'kategori_id', 'kategori_id');
+    }
+
+    public function lokasiBarangs(): HasMany
+    {
+        return $this->hasMany(LokasiBarang::class, 'barang_id', 'barang_id');
+    }
+
+    public function detailPeminjamans(): HasMany
+    {
+        return $this->hasMany(DetailPeminjaman::class, 'barang_id', 'barang_id');
+    }
+
+    public function barangDipakais(): HasMany
+    {
+        return $this->hasMany(BarangDipakai::class, 'barang_id', 'barang_id');
+    }
+
+    public function logMutasiBarangs(): HasMany
+    {
+        return $this->hasMany(LogMutasiBarang::class, 'barang_id', 'barang_id');
+    }
 }

@@ -53,6 +53,12 @@
                     @elseif($log->status === 'sebagian')
                       <span
                         class="inline-flex rounded-md px-2 py-1 text-xs font-medium bg-yellow-100 text-yellow-800">Sebagian</span>
+                    @elseif($log->status === 'proses')
+                      <span
+                        class="inline-flex items-center gap-1 rounded-md bg-sky-100 px-2 py-1 text-xs font-medium text-sky-800">
+                        <iconify-icon icon="mdi:loading" class="animate-spin" width="14"></iconify-icon>
+                        Dalam antrean / Diproses
+                      </span>
                     @else
                       <span
                         class="inline-flex rounded-md px-2 py-1 text-xs font-medium bg-rose-100 text-rose-800">Gagal</span>
