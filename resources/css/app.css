@@ -1,4 +1,12 @@
-@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@100;200;300;400;500;600;700;800;900&display=swap');
+@import '@fontsource/poppins/latin-100.css';
+@import '@fontsource/poppins/latin-200.css';
+@import '@fontsource/poppins/latin-300.css';
+@import '@fontsource/poppins/latin-400.css';
+@import '@fontsource/poppins/latin-500.css';
+@import '@fontsource/poppins/latin-600.css';
+@import '@fontsource/poppins/latin-700.css';
+@import '@fontsource/poppins/latin-800.css';
+@import '@fontsource/poppins/latin-900.css';
 @import 'tailwindcss';
 
 @plugin '@tailwindcss/forms';
@@ -14,12 +22,45 @@
     --color-sidebar-text: #ffffff;
     --color-sidebar-text-muted: rgba(255, 255, 255, 0.7);
 
-    --font-sans: 'Poppins', 'Instrument Sans', ui-sans-serif, system-ui, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji',
+    --font-sans: 'Poppins', ui-sans-serif, system-ui, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji',
         'Segoe UI Symbol', 'Noto Color Emoji';
 }
 
 @utility bg-sidebar-gradient {
     background: linear-gradient(180deg, #00B19C 0%, #00385A 100%);
+}
+
+@keyframes admin-nav-arrive {
+    from {
+        opacity: 0;
+        transform: translate3d(-6px, 0, 0);
+    }
+
+    to {
+        opacity: 1;
+        transform: translate3d(0, 0, 0);
+    }
+}
+
+@keyframes admin-sidebar-copy-arrive {
+    from {
+        opacity: 0;
+        transform: translate3d(-4px, 0, 0);
+    }
+
+    to {
+        opacity: 1;
+        transform: translate3d(0, 0, 0);
+    }
+}
+
+.admin-sidebar-copy {
+    animation: admin-sidebar-copy-arrive 360ms both cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.admin-nav-link {
+    animation: admin-nav-arrive 420ms both cubic-bezier(0.22, 1, 0.36, 1);
+    animation-delay: calc(var(--nav-index, 0) * 35ms);
 }
 
 @keyframes admin-page-arrive {
@@ -34,30 +75,14 @@
     }
 }
 
-@keyframes admin-nav-arrive {
-    from {
-        opacity: 0;
-        transform: translate3d(-8px, 0, 0);
-    }
-
-    to {
-        opacity: 1;
-        transform: translate3d(0, 0, 0);
-    }
-}
-
 .admin-page-enter {
     animation: admin-page-arrive 360ms both cubic-bezier(0.22, 1, 0.36, 1);
 }
 
-.admin-nav-item {
-    animation: admin-nav-arrive 320ms both cubic-bezier(0.22, 1, 0.36, 1);
-    animation-delay: calc(var(--nav-index, 0) * 35ms);
-}
-
 @media (prefers-reduced-motion: reduce) {
     .admin-page-enter,
-    .admin-nav-item {
+    .admin-sidebar-copy,
+    .admin-nav-link {
         animation: none;
     }
 }

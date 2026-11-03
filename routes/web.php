@@ -38,6 +38,7 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'permission:admin-pa
 
         Route::prefix('ruangan')->name('ruangan.')->group(function () {
             Route::get('/', [ManageRuangan::class, 'index'])->name('index');
+            Route::get('/{ruangan}', [ManageRuangan::class, 'show'])->name('show');
         });
 
         Route::prefix('rak')->name('rak.')->group(function () {

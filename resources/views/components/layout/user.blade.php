@@ -38,7 +38,7 @@
     }
 
     .user-card-enter {
-      animation: user-card-enter 650ms both cubic-bezier(0.2, 0.7, 0.2, 1);
+      animation: user-card-enter 240ms both cubic-bezier(0.2, 0.7, 0.2, 1);
       transition: box-shadow 220ms ease, filter 220ms ease;
     }
 

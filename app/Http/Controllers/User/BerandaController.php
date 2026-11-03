@@ -136,7 +136,7 @@ class BerandaController extends Controller
                 $occurredAt = $loan->tanggal_pinjam;
                 $notifications->push([
                     'type' => 'confirmed',
-                    'icon' => 'mdi:qrcode-check',
+                    'icon' => 'mdi:qrcode-scan',
                     'title' => "Pengajuan {$loan->kode_peminjaman} dikonfirmasi, QR sudah tersedia",
                     'time' => $this->formatNotificationTime($occurredAt),
                     'url' => route('user.beranda', ['page' => 'history', 'status' => 'active']),

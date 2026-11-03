@@ -1386,7 +1386,7 @@
                 </button>
                 <button type="submit"
                   class="inline-flex items-center justify-center gap-2 rounded-lg bg-[#007f78] px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-[#006b70] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#00385a]">
-                  <iconify-icon icon="mdi:content-save-lock-outline" class="text-lg" aria-hidden="true"></iconify-icon>
+                  <iconify-icon icon="mdi:content-save-edit-outline" class="text-lg" aria-hidden="true"></iconify-icon>
                   Simpan password baru
                 </button>
               </div>

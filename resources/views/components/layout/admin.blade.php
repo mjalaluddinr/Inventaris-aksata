@@ -12,6 +12,72 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <link rel="icon" type="image/svg+xml" href="{{ asset('assets/icon.svg') }}">
   <title>{{ $title }}</title>
+  <script>
+    try {
+      document.documentElement.dataset.adminSidebarCollapsed =
+        localStorage.getItem('sidebarOpen') === 'false' ? 'true' : 'false';
+    } catch (error) {
+      document.documentElement.dataset.adminSidebarCollapsed = 'false';
+      console.error('Unable to restore the admin sidebar state.', error);
+    }
+
+    window.addEventListener('load', () => {
+      document.documentElement.dataset.adminSidebarReady = 'true';
+    }, { once: true });
+  </script>
+  <style>
+    [x-cloak] {
+      display: none !important;
+    }
+
+    html:not([data-admin-sidebar-ready='true']) #admin-sidebar,
+    html:not([data-admin-sidebar-ready='true']) #admin-sidebar * {
+      animation: none !important;
+      transition: none !important;
+    }
+
+    html:not([data-admin-sidebar-ready='true']) #admin-sidebar .admin-sidebar-copy {
+      visibility: hidden;
+    }
+
+    @media (min-width: 1024px) {
+      html[data-admin-sidebar-collapsed='true'] #admin-sidebar {
+        width: 5rem;
+      }
+
+      html[data-admin-sidebar-collapsed='false'] #admin-sidebar {
+        width: 16rem;
+      }
+
+      html[data-admin-sidebar-collapsed='true'] #admin-sidebar .admin-sidebar-logo-section {
+        padding: 0.5rem;
+      }
+
+      html[data-admin-sidebar-collapsed='true'] #admin-sidebar .admin-sidebar-logo-card {
+        width: 4rem;
+        justify-content: center;
+      }
+
+      html[data-admin-sidebar-collapsed='true'] #admin-sidebar .admin-sidebar-copy,
+      html[data-admin-sidebar-collapsed='true'] #admin-sidebar .admin-sidebar-collapse {
+        display: none;
+      }
+
+      html[data-admin-sidebar-collapsed='true'] #admin-sidebar .admin-sidebar-expand {
+        display: flex;
+      }
+
+      html[data-admin-sidebar-collapsed='false'] #admin-sidebar .admin-sidebar-expand {
+        display: none;
+      }
+
+      html[data-admin-sidebar-collapsed='true'] #admin-sidebar .admin-nav-link {
+        justify-content: center;
+        padding-right: 0;
+        padding-left: 0;
+      }
+    }
+  </style>
   @vite(['resources/css/app.css', 'resources/js/app.js'])
 </head>
 

@@ -257,6 +257,7 @@
 
           const link = target?.closest('a');
           if (!link || !this.$refs.ruanganResults.contains(link)) return;
+          if (!link.closest('[data-room-pagination]')) return;
           event.preventDefault();
           this.filterRuangan(link.href);
       },
@@ -396,27 +397,38 @@
         @fragment('ruangan-results')
       <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
         @forelse ($ruangans as $ruangan)
-          <div data-ruangan-card data-searchable="{{ strtolower($ruangan->kode_ruangan . ' ' . $ruangan->nama_ruangan) }}" class="ruangan-card p-5">
-            <div class="flex items-start justify-between">
-              <div class="flex items-start gap-3">
-                <div class="flex h-12 w-12 items-center justify-center rounded-lg bg-[#E0F7F4]">
-                  <iconify-icon icon="mdi:office-building" class="text-[#00b19c]" width="24"></iconify-icon>
+          <div data-ruangan-card data-searchable="{{ strtolower($ruangan->kode_ruangan . ' ' . $ruangan->nama_ruangan) }}"
+            class="ruangan-card p-5">
+            <a href="{{ route('admin.ruangan.show', $ruangan->ruangan_id) }}"
+              aria-label="Buka detail {{ $ruangan->nama_ruangan }}"
+              class="group/room block rounded-lg text-slate-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#00785F] focus-visible:ring-offset-2">
+              <div class="flex items-start justify-between gap-3">
+                <div class="flex min-w-0 items-start gap-3">
+                  <span class="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-[#e6f4f0] text-[#00785F] transition duration-200 group-hover/room:scale-105 group-hover/room:bg-[#00785F] group-hover/room:text-white">
+                      <iconify-icon icon="mdi:door-open" width="28" aria-hidden="true"></iconify-icon>
+                  </span>
+                  <span class="min-w-0 pt-1">
+                    <span class="block truncate text-base font-semibold transition-colors group-hover/room:text-[#00785F]">{{ $ruangan->nama_ruangan }}</span>
+                    <span class="mt-1 block text-xs text-slate-500">{{ $ruangan->kode_ruangan }}</span>
+                  </span>
                 </div>
-                <div>
-                  <h3 class="text-base font-semibold text-slate-800">{{ $ruangan->nama_ruangan }}</h3>
-                  <p class="text-xs text-slate-500 mt-0.5">{{ $ruangan->kode_ruangan }}</p>
-                </div>
+                <iconify-icon icon="mdi:arrow-right" width="18"
+                  class="mt-1 shrink-0 text-slate-300 transition group-hover/room:-translate-y-0.5 group-hover/room:translate-x-0.5 group-hover/room:text-[#00785F]"
+                  aria-hidden="true"></iconify-icon>
               </div>
-            </div>
 
-            <div class="mt-4 flex items-center gap-2 text-xs text-slate-600">
-              <iconify-icon icon="mdi:shelf" width="16" class="text-slate-400"></iconify-icon>
-              <span>{{ $ruangan->lemaris_count }} lemari</span>
-            </div>
-
-            @if ($ruangan->keterangan)
-              <p class="mt-3 text-xs text-slate-500 line-clamp-2">{{ $ruangan->keterangan }}</p>
-            @endif
+              <div class="mt-5 flex items-center gap-2 border-t border-slate-100 pt-4 text-sm">
+                <span class="flex h-8 w-8 items-center justify-center rounded-lg bg-[#e6f4f0] text-[#00785F]">
+                  <iconify-icon icon="mdi:bookshelf" width="20" aria-hidden="true"></iconify-icon>
+                </span>
+                <span class="font-semibold text-[#00785F]">{{ $ruangan->lemaris_count }} lemari</span>
+                @if ($ruangan->keterangan)
+                  <span class="ml-auto line-clamp-1 max-w-[55%] text-right text-xs text-slate-500">
+                    {{ $ruangan->keterangan }}
+                  </span>
+                @endif
+              </div>
+            </a>
 
             @if(auth()->user()?->canManageInventory())
             <div class="mt-4 flex justify-end gap-2 pt-3 border-t border-slate-100">
@@ -470,7 +482,7 @@
             $paginationStart = max(1, min($ruangans->currentPage() - 1, $ruangans->lastPage() - 2));
             $paginationEnd = min($ruangans->lastPage(), $paginationStart + 2);
           @endphp
-          <nav aria-label="Navigasi halaman ruangan" class="flex items-center justify-end gap-2">
+          <nav data-room-pagination aria-label="Navigasi halaman ruangan" class="flex items-center justify-end gap-2">
             @if (!$ruangans->onFirstPage())
               <a href="{{ $ruangans->previousPageUrl() }}" aria-label="Halaman sebelumnya"
                 class="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-[#00BFA5] bg-white text-slate-900 shadow-[0_4px_10px_rgba(0,177,156,0.12)] transition hover:bg-emerald-50 focus:outline-none focus:ring-2 focus:ring-[#00BFA5] focus:ring-offset-2">
@@ -528,7 +540,7 @@
             <div class="flex items-center gap-3">
               <span class="flex h-10 w-10 items-center justify-center rounded-lg bg-sky-50 text-sky-700">
                 <iconify-icon
-                  :icon="modalMode === 'create' ? 'mdi:office-building-plus-outline' : 'mdi:office-building-edit-outline'"
+                  :icon="modalMode === 'create' ? 'mdi:office-building-plus-outline' : 'mdi:office-building-outline'"
                   width="22" aria-hidden="true"></iconify-icon>
               </span>
               <h2 class="text-base font-semibold text-slate-800"

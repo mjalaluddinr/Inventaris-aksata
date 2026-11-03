@@ -55,9 +55,21 @@
           </div>
         @endif
         @if ($catalogItems->isNotEmpty())
-          <div class="grid min-w-0 grid-cols-[repeat(auto-fill,minmax(min(100%,18rem),18rem))] justify-between gap-x-6 gap-y-6">
+          <div class="grid min-w-0 grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
             @foreach ($catalogItems as $item)
               <article class="flex min-h-44 flex-col overflow-hidden rounded-xl border border-[#c7e4dc] border-t-[5px] border-t-[#00b19c] bg-white shadow-[0_2px_4px_rgba(20,55,48,0.14)]">
+                <div class="aspect-[16/10] w-full overflow-hidden bg-gradient-to-br from-[#dff7ef] to-[#f2fbf8]">
+                  @if ($item->image_url)
+                    <img src="{{ $item->image_url }}" alt="Foto {{ $item->nama_barang }}" loading="lazy"
+                      decoding="async" class="h-full w-full object-cover">
+                  @else
+                    <div class="flex h-full flex-col items-center justify-center gap-2 text-[#538b7d]" role="img"
+                      aria-label="Foto {{ $item->nama_barang }} belum tersedia">
+                      <iconify-icon icon="mdi:image-outline" class="text-4xl" aria-hidden="true"></iconify-icon>
+                      <span class="text-xs font-medium">Foto belum tersedia</span>
+                    </div>
+                  @endif
+                </div>
                 <div class="flex flex-1 flex-col p-3.5">
                   <div class="flex items-center justify-between gap-2">
                     <span class="max-w-[65%] truncate rounded-full bg-slate-100 px-2 py-1 text-[10px] font-medium text-slate-700">{{ $item->kategori?->nama_kategori ?? 'Tanpa kategori' }}</span>

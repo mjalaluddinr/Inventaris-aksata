@@ -42,6 +42,7 @@
       'akun' => 'Akun',
       'log-import' => 'Log Import',
   ];
+  $roomDetail = request()->routeIs('admin.ruangan.show') ? request()->route('ruangan') : null;
 @endphp
 
 <header class="sticky top-0 z-30 -mx-8 mb-8 border-b border-[#D8E6E2] bg-white px-5 py-5 sm:px-8">
@@ -56,13 +57,18 @@
         @foreach ($segments as $index => $segment)
           @php
             $path = implode('/', array_slice($segments, 0, $index + 1));
-            $label = $slugLabels[$segment] ?? ucfirst(str_replace(['-', '_'], ' ', $segment));
+            $label = $roomDetail && $index === array_key_last($segments)
+                ? $roomDetail->nama_ruangan
+                : ($slugLabels[$segment] ?? ucfirst(str_replace(['-', '_'], ' ', $segment)));
             $href = $segment === 'admin' ? route('admin.dashboard') : url($path);
           @endphp
           @if ($index > 0)
             <span class="text-slate-300" aria-hidden="true">/</span>
           @endif
-          <a href="{{ $href }}" class="font-medium text-[#8AA39E] transition hover:text-[#007F6B]">
+          <a href="{{ $href }}"
+            class="transition {{ $roomDetail && $index === array_key_last($segments)
+                ? 'font-semibold text-[#00785F]'
+                : 'font-medium text-[#8AA39E] hover:text-[#007F6B]' }}">
             {{ $label }}
           </a>
         @endforeach

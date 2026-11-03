@@ -9,9 +9,19 @@ use Illuminate\Validation\Validator;
 
 class UpdateRequest extends FormRequest
 {
+    use CompletesStockAllocation;
+
     public function authorize(): bool
     {
         return true;
+    }
+
+    protected function prepareForValidation(): void
+    {
+        if ($this->input('barang_form') === 'edit') {
+            // ASVS 2.2.2: Complete omitted allocations at the trusted request boundary.
+            $this->completeStockLocationAllocation();
+        }
     }
 
     public function rules(): array

@@ -43,8 +43,7 @@
         <div class="grid grid-cols-[repeat(auto-fit,minmax(min(100%,18rem),1fr))] gap-3">
           @foreach ([['number' => 1, 'title' => 'Pilih Barang', 'description' => 'Cari barang pada katalog dan pastikan stoknya tersedia.'], ['number' => 2, 'title' => 'Ajukan peminjaman', 'description' => 'Sampaikan keperluan dan rencana tanggal pengembalian kepada petugas.'], ['number' => 3, 'title' => 'Ambil barang', 'description' => 'Tunggu konfirmasi petugas sebelum mengambil barang yang diajukan.']] as $step)
             <article
-              class="user-card-enter flex min-h-24 items-start gap-3 rounded-xl bg-white p-4 shadow-[0_2px_4px_rgba(20,55,48,0.18)]"
-              style="animation-delay: {{ $loop->index * 80 }}ms">
+              class="user-card-enter flex min-h-24 items-start gap-3 rounded-xl bg-white p-4 shadow-[0_2px_4px_rgba(20,55,48,0.18)]">
               <span
                 class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#00d69f] font-bold text-[#004d43]">{{ $step['number'] }}</span>
               <div class="min-w-0">
@@ -57,14 +56,14 @@
       </section>
 
       <section id="riwayat"
-        class="grid w-full grid-cols-[repeat(auto-fit,minmax(min(100%,14rem),1fr))] gap-4 px-5 py-6 sm:px-10 lg:px-16"
+        class="grid w-full grid-cols-2 gap-3 px-5 py-6 sm:grid-cols-4 sm:gap-4 sm:px-10 lg:px-16"
         aria-label="Ringkasan peminjaman">
         @foreach ([['count' => $loanCounts['dipinjam'], 'label' => 'Sedang dipinjam', 'color' => '#0bb6a6'], ['count' => $loanCounts['pending'], 'label' => 'Menunggu konfirmasi', 'color' => '#087f65'], ['count' => $loanCounts['dikembalikan'], 'label' => 'Riwayat selesai', 'color' => '#5975d5'], ['count' => $loanCounts['closed'], 'label' => 'Ditolak / dibatalkan', 'color' => '#66716f']] as $summary)
           <article
-            class="user-card-enter flex min-h-24 max-w-[22rem] flex-col justify-center rounded-2xl border-l-[7px] bg-white px-6 py-4 shadow-[0_3px_5px_rgba(20,55,48,0.18)]"
-            style="border-color: {{ $summary['color'] }}; animation-delay: {{ $loop->index * 80 }}ms">
-            <strong class="text-3xl font-bold leading-none">{{ number_format($summary['count']) }}</strong>
-            <span class="mt-1.5 text-sm text-slate-500">{{ $summary['label'] }}</span>
+            class="user-card-enter flex min-h-24 min-w-0 flex-col justify-center rounded-2xl border-l-4 bg-white px-3 py-4 shadow-[0_3px_5px_rgba(20,55,48,0.18)] sm:border-l-[7px] sm:px-6"
+            style="border-color: {{ $summary['color'] }}">
+            <strong class="text-2xl font-bold leading-none sm:text-3xl">{{ number_format($summary['count']) }}</strong>
+            <span class="mt-1.5 break-words text-xs leading-4 text-slate-500 sm:text-sm">{{ $summary['label'] }}</span>
           </article>
         @endforeach
       </section>
@@ -100,8 +99,7 @@
                     <div class="flex gap-4 pr-4" @if ($copy === 1) aria-hidden="true" @endif>
                       @foreach ($categories as $category)
                         <a href="#katalog" tabindex="{{ $copy === 1 ? '-1' : '0' }}"
-                          class="user-card-enter w-64 shrink-0 rounded-2xl bg-white px-8 py-5 shadow-[0_2px_4px_rgba(20,55,48,0.2)] transition hover:-translate-y-0.5 hover:shadow-lg sm:w-72"
-                          style="animation-delay: {{ $loop->index * 60 }}ms">
+                          class="user-card-enter w-64 shrink-0 rounded-2xl bg-white px-8 py-5 shadow-[0_2px_4px_rgba(20,55,48,0.2)] transition hover:-translate-y-0.5 hover:shadow-lg sm:w-72">
                           <strong
                             class="block text-4xl font-bold leading-none text-[#00866f]">{{ number_format($category->barangs_count) }}</strong>
                           <span
@@ -117,8 +115,7 @@
               <div class="grid grid-cols-[repeat(auto-fill,minmax(min(100%,18rem),18rem))] gap-4 lg:gap-6">
                 @foreach ($categories as $category)
                   <a href="#katalog"
-                    class="user-card-enter w-[min(78vw,18rem)] rounded-2xl bg-white px-6 py-5 shadow-[0_2px_4px_rgba(20,55,48,0.2)] transition hover:-translate-y-0.5 hover:shadow-lg"
-                    style="animation-delay: {{ $loop->index * 70 }}ms">
+                    class="user-card-enter w-[min(78vw,18rem)] rounded-2xl bg-white px-6 py-5 shadow-[0_2px_4px_rgba(20,55,48,0.2)] transition hover:-translate-y-0.5 hover:shadow-lg">
                     <strong
                       class="block text-4xl font-bold leading-none text-[#00866f]">{{ number_format($category->barangs_count) }}</strong>
                     <span
@@ -139,11 +136,23 @@
           <h2 id="featured-heading" class="text-lg font-bold">Sering dipinjam</h2>
         </div>
         @if ($featuredItems->isNotEmpty())
-          <div class="grid min-w-0 grid-cols-[repeat(auto-fill,minmax(min(100%,18rem),18rem))] justify-between gap-x-6 gap-y-6">
+          <div class="grid min-w-0 grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
             @foreach ($featuredItems as $item)
               <article
                 class="user-card-enter flex min-h-44 flex-col overflow-hidden rounded-xl border border-[#c7e4dc] border-t-[5px] border-t-[#00b19c] bg-white shadow-[0_2px_4px_rgba(20,55,48,0.14)]"
-                style="animation-delay: {{ $loop->index * 70 }}ms">
+              >
+                <div class="aspect-[16/10] w-full overflow-hidden bg-gradient-to-br from-[#dff7ef] to-[#f2fbf8]">
+                  @if ($item->image_url)
+                    <img src="{{ $item->image_url }}" alt="Foto {{ $item->nama_barang }}" loading="lazy"
+                      decoding="async" class="h-full w-full object-cover">
+                  @else
+                    <div class="flex h-full flex-col items-center justify-center gap-2 text-[#538b7d]" role="img"
+                      aria-label="Foto {{ $item->nama_barang }} belum tersedia">
+                      <iconify-icon icon="mdi:image-outline" class="text-4xl" aria-hidden="true"></iconify-icon>
+                      <span class="text-xs font-medium">Foto belum tersedia</span>
+                    </div>
+                  @endif
+                </div>
                 <div class="flex flex-1 flex-col p-3.5">
                   <div class="flex items-center justify-between gap-2">
                     <span

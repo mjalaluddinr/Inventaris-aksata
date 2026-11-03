@@ -60,7 +60,7 @@
                 };
                 $progressSteps = ['Diajukan', 'Dikonfirmasi', 'Dipinjam', 'Dikembalikan'];
               @endphp
-              <article data-loan-state="{{ $loan->peminjaman_id }}:{{ $loanStatus }}:{{ $loan->detailPeminjamans->pluck('status')->implode(',') }}:{{ $isOverdue ? '1' : '0' }}" x-data="{ qrOpen: false, cancellationOpen: false }" @keydown.escape.window="qrOpen = false; cancellationOpen = false" class="user-card-enter overflow-hidden rounded-xl border border-[#d1e6e1] bg-white shadow-[0_2px_5px_rgba(20,55,48,0.12)]" style="animation-delay: {{ $loop->index * 70 }}ms">
+              <article data-loan-state="{{ $loan->peminjaman_id }}:{{ $loanStatus }}:{{ $loan->detailPeminjamans->pluck('status')->implode(',') }}:{{ $isOverdue ? '1' : '0' }}" x-data="{ qrOpen: false, cancellationOpen: false }" @keydown.escape.window="qrOpen = false; cancellationOpen = false" class="user-card-enter overflow-hidden rounded-xl border border-[#d1e6e1] bg-white shadow-[0_2px_5px_rgba(20,55,48,0.12)]">
                 <div class="flex flex-wrap items-start justify-between gap-3 border-b border-slate-100 px-4 py-3.5 sm:px-5">
                   <div class="min-w-0">
                     <h2 class="text-sm font-bold tracking-wide text-slate-900 sm:text-base">Pesanan peminjaman</h2>

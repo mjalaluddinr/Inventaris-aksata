@@ -1,6 +1,37 @@
 import Alpine from 'alpinejs';
 import QRCode from 'qrcode';
 import jsQR from 'jsqr';
+import 'iconify-icon';
+import { addCollection, setCustomIconLoader } from 'iconify-icon';
+import mdiIcons from './icons/mdi.json';
+
+addCollection(mdiIcons);
+addCollection({
+    prefix: 'material-symbols',
+    icons: {
+        shelves: {
+            width: 24,
+            height: 24,
+            body: '<path fill="currentColor" d="M3 23V1h2v2h14V1h2v22h-2v-2H5v2zm2-12h2V7h6v4h6V5H5zm0 8h6v-4h6v4h2v-6H5z"/>',
+        },
+    },
+});
+addCollection({
+    prefix: 'boxicons',
+    icons: {
+        'door-open-alt-filled': {
+            width: 24,
+            height: 24,
+            body: '<path fill="currentColor" d="m20.2 4.02l-10-2c-.29-.06-.6.02-.83.21S9 2.7 9 3v1H4c-.55 0-1 .45-1 1v14c0 .55.45 1 1 1h5v1c0 .3.13.58.37.77c.18.15.4.23.63.23c.07 0 .13 0 .2-.02l10-2c.47-.09.8-.5.8-.98V5c0-.48-.34-.89-.8-.98M5 18V6h4v12zm8-5c-.55 0-1-.45-1-1s.45-1 1-1s1 .45 1 1s-.45 1-1 1"/>',
+        },
+    },
+});
+for (const prefix of ['mdi', 'material-symbols', 'boxicons']) {
+    setCustomIconLoader((iconName) => {
+        console.error(`Icon is missing from the bundled ${prefix} collection: ${prefix}:${iconName}`);
+        return null;
+    }, prefix);
+}
 
 window.Alpine = Alpine;
 
@@ -631,13 +662,3 @@ const loanQrObserver = new MutationObserver((mutations) => {
 });
 loanQrObserver.observe(document.body, { childList: true, subtree: true });
 renderLoanQrs(document.body);
-
-const iconifyScript = document.createElement('script');
-iconifyScript.src = 'https://code.iconify.design/iconify-icon/2.1.0/iconify-icon.min.js';
-iconifyScript.async = true;
-iconifyScript.dataset.iconifyRuntime = 'true';
-iconifyScript.addEventListener('error', () => {
-    console.error('Failed to load the Iconify icon runtime.');
-});
-
-document.head.append(iconifyScript);

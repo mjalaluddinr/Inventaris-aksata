@@ -60,11 +60,12 @@ class ManageBarang extends Controller
         'ruangan' => ['ruangan', 'nama_ruangan'],
         'kode_lemari' => ['kode_lemari'],
         'lemari' => ['lemari', 'nama_lemari'],
+        'nomor_barang' => ['no', 'nomor', 'nomor_barang'],
         'kode_barang' => ['kode_barang', 'kode'],
         'nama_barang' => ['nama_barang', 'nama'],
         'satuan' => ['satuan'],
-        'stok_total' => ['stok_total', 'jumlah_total', 'jumlah'],
-        'stok_tersedia' => ['stok_tersedia', 'jumlah_tersedia'],
+        'stok_total' => ['stok_total', 'jumlah_total', 'jumlah_total_lokasi', 'jumlah'],
+        'stok_tersedia' => ['stok_tersedia', 'jumlah_tersedia', 'jumlah_tersedia_lokasi'],
         'kondisi' => ['kondisi'],
         'kelayakan' => ['kelayakan'],
         'spesifikasi' => ['spesifikasi'],
@@ -466,7 +467,12 @@ class ManageBarang extends Controller
                 );
             }
 
-            Bus::chain($jobs)->dispatch();
+            // ASVS 2.2.2: ImportRequest validates each upload before dispatch.
+            // Windows cannot reliably spawn Laravel's separate background PHP process.
+            $queueConnection = PHP_OS_FAMILY === 'Windows' ? 'deferred' : 'background';
+            Bus::chain($jobs)
+                ->onConnection($queueConnection)
+                ->dispatch();
         } catch (\Throwable $exception) {
             foreach ($uploadDirectories as $uploadDirectory) {
                 $localDisk->deleteDirectory($uploadDirectory);
@@ -478,7 +484,7 @@ class ManageBarang extends Controller
                     'status' => 'gagal',
                     'detail_error' => [
                         $log->nama_file,
-                        'Import gagal dimasukkan ke antrean. Silakan coba kembali.',
+                        'Import gagal disiapkan untuk diproses. Silakan coba kembali.',
                         [],
                     ],
                     'selesai_at' => now(),
@@ -487,7 +493,7 @@ class ManageBarang extends Controller
 
             return response()->json([
                 'success' => false,
-                'message' => 'File gagal dimasukkan ke antrean import. Silakan coba kembali.',
+                'message' => 'File gagal disiapkan untuk proses import. Silakan coba kembali.',
             ], 503);
         }
 
@@ -505,7 +511,7 @@ class ManageBarang extends Controller
             'status' => 'proses',
             'log_id' => count($imports) === 1 ? $imports[0]['log_id'] : null,
             'imports' => $imports,
-            'message' => count($imports).' file berhasil diterima. Antrean akan memprosesnya satu per satu.',
+            'message' => count($imports).' file berhasil diterima dan sedang diproses.',
         ], 202);
     }
 
@@ -646,6 +652,59 @@ class ManageBarang extends Controller
             true,
         );
         $importedItems = [];
+        $existingItems = Barang::query()
+            ->with([
+                'kategori' => fn ($query) => $query->withTrashed(),
+                'lokasiBarangs' => fn ($query) => $query->with([
+                    'ruangan' => fn ($query) => $query->withTrashed(),
+                    'lemari' => fn ($query) => $query->withTrashed(),
+                    'toolbox' => fn ($query) => $query->withTrashed(),
+                ]),
+            ])
+            ->get([
+                'barang_id',
+                'kategori_id',
+                'nama_barang',
+                'satuan',
+                'stok_total',
+                'stok_tersedia',
+                'kondisi',
+                'kelayakan',
+                'spesifikasi',
+            ]);
+        foreach ($existingItems as $existingItem) {
+            $existingData = [
+                'kategori' => $existingItem->kategori?->nama_kategori ?? '',
+                'nama_barang' => $existingItem->nama_barang,
+                'satuan' => $existingItem->satuan,
+                'stok_total' => $existingItem->stok_total,
+                'stok_tersedia' => $existingItem->stok_tersedia,
+                'kondisi' => $existingItem->kondisi,
+                'kelayakan' => $existingItem->kelayakan,
+                'spesifikasi' => $existingItem->spesifikasi,
+            ];
+            $locations = $existingItem->lokasiBarangs;
+
+            if ($locations->isEmpty()) {
+                $importedItems[$this->importItemFingerprint($existingData, null, null)] = true;
+
+                continue;
+            }
+
+            foreach ($locations as $location) {
+                $locationData = [
+                    ...$existingData,
+                    'stok_total' => $location->stok_total,
+                    'stok_tersedia' => $location->stok_tersedia,
+                ];
+                $importedItems[$this->importItemFingerprint(
+                    $locationData,
+                    $location->ruangan?->nama_ruangan,
+                    $location->lemari?->nama_lemari,
+                    $location->toolbox?->nama_toolbox,
+                )] = true;
+            }
+        }
         $nextCodeNumber = 0;
         foreach (array_keys($usedCodes) as $code) {
             if (preg_match('/^BRG-(\d+)$/i', $code, $matches) === 1) {
@@ -658,6 +717,7 @@ class ManageBarang extends Controller
         $failedRows = 0;
         $rowErrors = [];
         $previousValues = [];
+        $importGroups = [];
 
         $imageReferences = [];
         if (isset($mapping['image'])) {
@@ -738,15 +798,31 @@ class ManageBarang extends Controller
 
                 $roomName = $mappedRow['ruangan'] ?? null;
                 $cabinetName = $mappedRow['lemari'] ?? null;
-                $code = $mappedRow['kode_barang'] ?? null;
+                $sourceCode = $mappedRow['kode_barang'] ?? null;
+                $sourceGroupNumber = $mappedRow['nomor_barang'] ?? null;
+                $imageReference = filled($mappedRow['image'] ?? null)
+                    ? Barang::normalizeImageReference($mappedRow['image'])
+                    : null;
+                $groupKey = $sourceGroupNumber !== null
+                    ? 'number:'.Str::lower(trim((string) $sourceGroupNumber))
+                    : ($sourceCode !== null && ! is_numeric($sourceCode)
+                        ? 'code:'.Str::upper(trim((string) $sourceCode))
+                        : 'row:'.$rowNumber);
+                $existingGroup = $importGroups[$groupKey] ?? null;
+                $code = $existingGroup['kode_barang'] ?? $sourceCode;
 
                 if ($code === null || is_numeric($code)) {
                     do {
                         $code = sprintf('BRG-%03d', ++$nextCodeNumber);
-                    } while (isset($usedCodes[Str::upper($code)]));
+                    } while (isset($usedCodes[Str::upper($code)]) || in_array(
+                        Str::upper($code),
+                        array_column($importGroups, 'kode_barang'),
+                        true,
+                    ));
                 }
 
                 $data = [
+                    'nomor_barang' => $sourceGroupNumber,
                     'kategori' => $mappedRow['kategori'] ?? null,
                     'kode_barang' => $code,
                     'nama_barang' => $mappedRow['nama_barang'] ?? null,
@@ -760,13 +836,18 @@ class ManageBarang extends Controller
                     'lemari' => $cabinetName,
                 ];
 
+                // ASVS V2.2.1/V2.2.2/V2.2.3: Validate each row and keep grouped location rows consistent.
                 $validator = Validator::make($data, [
+                    'nomor_barang' => ['nullable', 'string', 'max:30'],
                     'kategori' => ['required', 'string', 'max:100'],
                     'kode_barang' => ['required', 'string', 'max:30'],
                     'nama_barang' => ['required', 'string', 'max:150'],
                     'satuan' => ['required', 'string', 'max:20'],
                     'stok_total' => ['required', 'integer', 'min:0'],
-                    'stok_tersedia' => ['required', 'integer', 'min:0'],
+                    'stok_tersedia' => ['required', 'integer', 'min:0', 'lte:stok_total'],
+                    'kondisi' => ['required', Rule::in(['baru', 'lama'])],
+                    'kelayakan' => ['required', Rule::in(['layak', 'tidak_layak'])],
+                    'spesifikasi' => ['nullable', 'string', 'max:255'],
                 ]);
 
                 if ($validator->fails()) {
@@ -776,12 +857,74 @@ class ManageBarang extends Controller
                     continue;
                 }
 
+                $normalizedCode = Str::upper($code);
+                if (isset($usedCodes[$normalizedCode]) && $existingGroup === null) {
+                    $failedRows++;
+                    $rowErrors[] = ['row' => $rowNumber, 'code' => 'duplicate_code'];
+
+                    continue;
+                }
+
+                if (
+                    $existingGroup !== null
+                    && filled($existingGroup['source_code'])
+                    && filled($sourceCode)
+                    && Str::upper(trim((string) $existingGroup['source_code'])) !== Str::upper(trim((string) $sourceCode))
+                ) {
+                    $failedRows++;
+                    $rowErrors[] = ['row' => $rowNumber, 'code' => 'inconsistent_group'];
+
+                    continue;
+                }
+
+                $validated = $validator->validated();
+                $masterFingerprint = $this->importGroupFingerprint($validated);
+                if (
+                    $existingGroup !== null
+                    && $existingGroup['master_fingerprint'] !== $masterFingerprint
+                ) {
+                    $failedRows++;
+                    $rowErrors[] = ['row' => $rowNumber, 'code' => 'inconsistent_group'];
+
+                    continue;
+                }
+
+                $itemFingerprint = $this->importItemFingerprint($validated, $roomName, $cabinetName);
+                if (isset($importedItems[$itemFingerprint])) {
+                    $failedRows++;
+                    $rowErrors[] = ['row' => $rowNumber, 'code' => 'duplicate_item'];
+
+                    continue;
+                }
+
+                $locationKey = Str::lower(trim((string) $roomName)).'|'
+                    .Str::lower(trim((string) $cabinetName));
+                if ($existingGroup !== null && isset($existingGroup['locations'][$locationKey])) {
+                    $failedRows++;
+                    $rowErrors[] = ['row' => $rowNumber, 'code' => 'duplicate_location'];
+
+                    continue;
+                }
+
+                if (
+                    $existingGroup !== null
+                    && $existingGroup['image_reference'] !== null
+                    && $imageReference !== null
+                    && $existingGroup['image_reference'] !== $imageReference
+                ) {
+                    $failedRows++;
+                    $rowErrors[] = ['row' => $rowNumber, 'code' => 'inconsistent_group'];
+
+                    continue;
+                }
+
                 $imagePathStored = null;
+                $groupedBarangId = null;
                 try {
                     // 3. Pencocokan nama file gambar dari Excel dengan file di dalam ZIP
                     $imageColumnValue = $mappedRow['image'] ?? null;
-                    if ($imageColumnValue) {
-                        $cleanImageName = Barang::normalizeImageReference($imageColumnValue);
+                    if ($imageReference !== null && ($existingGroup === null || $existingGroup['image_reference'] === null)) {
+                        $cleanImageName = $imageReference;
                         if (isset($extractedImages[$cleanImageName])) {
                             $imgData = $extractedImages[$cleanImageName];
                             $storageFileName = Str::uuid().'.'.$imgData['ext'];
@@ -807,6 +950,8 @@ class ManageBarang extends Controller
                         $roomName,
                         $cabinetName,
                         $imagePathStored,
+                        $existingGroup,
+                        &$groupedBarangId,
                     ): void {
                         $validated = $validator->validated();
                         $kategori = $this->resolveKategori($validated['kategori'], $kategoriByName);
@@ -815,25 +960,42 @@ class ManageBarang extends Controller
                           ? $this->resolveLemari($ruangan, $cabinetName, null, $lemariByRoomAndName)
                           : null;
 
-                        $barang = Barang::create([
-                            'kategori_id' => $kategori->kategori_id,
-                            'kode_barang' => $validated['kode_barang'],
-                            'image_path' => $imagePathStored,
-                            'nama_barang' => $validated['nama_barang'],
-                            'satuan' => $validated['satuan'],
-                            'stok_total' => $validated['stok_total'],
-                            'stok_tersedia' => $validated['stok_tersedia'],
-                            'kondisi' => $validated['kondisi'] ?? 'baru',
-                            'kelayakan' => $validated['kelayakan'] ?? 'layak',
-                            'spesifikasi' => $validated['spesifikasi'] ?? null,
-                        ]);
+                        if ($existingGroup !== null) {
+                            $barang = Barang::query()
+                                ->whereKey($existingGroup['barang_id'])
+                                ->lockForUpdate()
+                                ->firstOrFail();
+                            $groupedBarangId = $barang->barang_id;
+                            $stockBefore = $barang->stok_tersedia;
+                            if ($imagePathStored !== null && $barang->image_path === null) {
+                                $barang->image_path = $imagePathStored;
+                                $barang->save();
+                            }
+                            $barang->increment('stok_total', (int) $validated['stok_total']);
+                            $barang->increment('stok_tersedia', (int) $validated['stok_tersedia']);
+                        } else {
+                            $barang = Barang::create([
+                                'kategori_id' => $kategori->kategori_id,
+                                'kode_barang' => $validated['kode_barang'],
+                                'image_path' => $imagePathStored,
+                                'nama_barang' => $validated['nama_barang'],
+                                'satuan' => $validated['satuan'],
+                                'stok_total' => $validated['stok_total'],
+                                'stok_tersedia' => $validated['stok_tersedia'],
+                                'kondisi' => $validated['kondisi'] ?? 'baru',
+                                'kelayakan' => $validated['kelayakan'] ?? 'layak',
+                                'spesifikasi' => $validated['spesifikasi'] ?? null,
+                            ]);
+                            $groupedBarangId = $barang->barang_id;
+                            $stockBefore = 0;
+                        }
 
                         if ($ruangan instanceof Ruangan) {
                             $barang->lokasiBarangs()->create([
                                 'ruangan_id' => $ruangan->ruangan_id,
                                 'lemari_id' => $lemari?->lemari_id,
-                                'stok_total' => $barang->stok_total,
-                                'stok_tersedia' => $barang->stok_tersedia,
+                                'stok_total' => $validated['stok_total'],
+                                'stok_tersedia' => $validated['stok_tersedia'],
                             ]);
                         }
 
@@ -843,8 +1005,8 @@ class ManageBarang extends Controller
                             $ruangan?->ruangan_id,
                             $lemari?->lemari_id,
                             (int) $validated['stok_total'],
-                            0,
-                            $barang->stok_tersedia,
+                            $stockBefore,
+                            $stockBefore + (int) $validated['stok_tersedia'],
                             $log->log_input_id,
                             "Barang diimpor dari {$fileName}.",
                         );
@@ -864,6 +1026,21 @@ class ManageBarang extends Controller
                 }
 
                 $successRows++;
+                if ($existingGroup === null) {
+                    $usedCodes[$normalizedCode] = true;
+                    $importGroups[$groupKey] = [
+                        'barang_id' => $groupedBarangId,
+                        'kode_barang' => $code,
+                        'source_code' => $sourceCode,
+                        'master_fingerprint' => $masterFingerprint,
+                        'image_reference' => $imageReference,
+                        'locations' => [$locationKey => true],
+                    ];
+                } else {
+                    $importGroups[$groupKey]['locations'][$locationKey] = true;
+                    $importGroups[$groupKey]['image_reference'] ??= $imageReference;
+                }
+                $importedItems[$itemFingerprint] = true;
             }
 
             $this->completeImport($log, $fileName, $totalRows, $successRows, $failedRows, $rowErrors);
@@ -878,24 +1055,10 @@ class ManageBarang extends Controller
     {
         abort_unless($logInput->jenis_input === 'barang', 404);
 
-        $details = is_array($logInput->detail_error) ? $logInput->detail_error : [];
-        $storedRowErrors = is_array($details[2] ?? null) ? $details[2] : [];
-        // ASVS 16.5.1: Return safe row summaries rather than stored exception details.
-        $rowErrors = array_map(
-            static function (mixed $error): array {
-                $row = is_array($error) ? ($error['row'] ?? $error[0] ?? null) : null;
-
-                return [
-                    'row' => is_int($row) ? $row : null,
-                    'message' => 'Baris gagal diproses. Periksa data wajib dan pastikan kode barang belum digunakan.',
-                ];
-            },
-            array_slice($storedRowErrors, 0, 20),
-        );
         $status = $logInput->status;
 
         $message = match ($status) {
-            'proses' => 'Import masih dalam antrean atau sedang diproses.',
+            'proses' => 'Import sedang diproses.',
             'selesai' => "Import selesai. Berhasil: {$logInput->baris_berhasil}, gagal: {$logInput->baris_gagal}.",
             'sebagian' => "Import selesai sebagian. Berhasil: {$logInput->baris_berhasil}, gagal: {$logInput->baris_gagal}.",
             default => 'Import gagal diproses. Periksa format file, kolom wajib, dan arsip ZIP.',
@@ -908,8 +1071,6 @@ class ManageBarang extends Controller
             'success_rows' => $logInput->baris_berhasil,
             'failed_rows' => $logInput->baris_gagal,
             'message' => $message,
-            'errors' => $rowErrors,
-            'errors_truncated' => count($storedRowErrors) > 20,
         ]);
     }
 
@@ -1081,11 +1242,15 @@ class ManageBarang extends Controller
         $unallocatedTotal = $barang->stok_total - $existingTotal;
         $unallocatedAvailable = $barang->stok_tersedia - $existingAvailable;
 
-        if ($unallocatedTotal < 0 || $unallocatedAvailable < 0 || $unallocatedTotal !== $unallocatedAvailable) {
+        if ($unallocatedTotal < 0 || $unallocatedAvailable < 0 || $unallocatedAvailable > $unallocatedTotal) {
             throw ValidationException::withMessages([
                 'locations' => 'Stok lama memiliki jumlah yang belum terpetakan atau sedang dipinjam. Periksa riwayat stok sebelum mengubah lokasi.',
             ]);
         }
+
+        // ASVS 2.3.3/2.3.4: Map unallocated reserved stock without moving reserved stock between existing locations.
+        $unallocatedReserved = $unallocatedTotal - $unallocatedAvailable;
+        $newlyAllocatedReserved = 0;
 
         foreach ($existingLocations as $key => $location) {
             $reservedQuantity = $location->stok_total - $location->stok_tersedia;
@@ -1097,19 +1262,29 @@ class ManageBarang extends Controller
                 ]);
             }
 
-            if ($desired !== null && $reservedQuantity !== $desired['stok_total'] - $desired['stok_tersedia']) {
+            $desiredReservedQuantity = $desired === null
+                ? 0
+                : $desired['stok_total'] - $desired['stok_tersedia'];
+
+            if ($desired !== null && $desiredReservedQuantity < $reservedQuantity) {
                 throw ValidationException::withMessages([
                     'locations' => 'Stok yang sedang dipinjam atau dipakai harus tetap berada di lokasi asal.',
                 ]);
             }
+
+            $newlyAllocatedReserved += max(0, $desiredReservedQuantity - $reservedQuantity);
         }
 
         foreach ($desiredLocations as $key => $desired) {
-            if (! $existingLocations->has($key) && $desired['stok_total'] !== $desired['stok_tersedia']) {
-                throw ValidationException::withMessages([
-                    'locations' => 'Lokasi baru hanya dapat menerima stok yang tersedia.',
-                ]);
+            if (! $existingLocations->has($key)) {
+                $newlyAllocatedReserved += $desired['stok_total'] - $desired['stok_tersedia'];
             }
+        }
+
+        if ($newlyAllocatedReserved !== $unallocatedReserved) {
+            throw ValidationException::withMessages([
+                'locations' => 'Stok yang sedang dipinjam atau dipakai harus tetap berada di lokasi asal, dan stok sisa harus sesuai dengan jumlah barang.',
+            ]);
         }
 
         $roomIds = collect($desiredLocations)
@@ -1426,6 +1601,47 @@ class ManageBarang extends Controller
         ]);
     }
 
+    private function importItemFingerprint(
+        array $data,
+        ?string $roomName,
+        ?string $cabinetName,
+        ?string $toolboxName = null,
+    ): string {
+        // ASVS V2.2.1: Compare all inventory and location fields because item names may legitimately repeat.
+        $normalized = [
+            Str::lower(trim((string) ($data['kategori'] ?? ''))),
+            Str::lower(trim((string) ($data['nama_barang'] ?? ''))),
+            Str::lower(trim((string) ($data['satuan'] ?? ''))),
+            (int) ($data['stok_total'] ?? 0),
+            (int) ($data['stok_tersedia'] ?? 0),
+            Str::lower(trim((string) ($data['kondisi'] ?? ''))),
+            Str::lower(trim((string) ($data['kelayakan'] ?? ''))),
+            Str::lower(trim((string) ($data['spesifikasi'] ?? ''))),
+            $roomName === null ? null : Str::lower(trim($roomName)),
+            $cabinetName === null ? null : Str::lower(trim($cabinetName)),
+            $toolboxName === null ? null : Str::lower(trim($toolboxName)),
+        ];
+
+        return hash('sha256', serialize($normalized));
+    }
+
+    /**
+     * @param  array<string, mixed>  $data
+     */
+    private function importGroupFingerprint(array $data): string
+    {
+        $normalized = [
+            Str::lower(trim((string) ($data['kategori'] ?? ''))),
+            Str::lower(trim((string) ($data['nama_barang'] ?? ''))),
+            Str::lower(trim((string) ($data['satuan'] ?? ''))),
+            Str::lower(trim((string) ($data['kondisi'] ?? ''))),
+            Str::lower(trim((string) ($data['kelayakan'] ?? ''))),
+            Str::lower(trim((string) ($data['spesifikasi'] ?? ''))),
+        ];
+
+        return hash('sha256', serialize($normalized));
+    }
+
     private function extractImportImages(?string $zipPath, array $imageReferences, ?string &$temporaryDirectory): array
     {
         if ($zipPath === null || $imageReferences === []) {
@@ -1579,6 +1795,7 @@ class ManageBarang extends Controller
         $requiredFields = array_diff(
             array_keys(self::IMPORT_COLUMNS),
             [
+                'nomor_barang',
                 'kode_barang',
                 'kode_ruangan',
                 'ruangan',

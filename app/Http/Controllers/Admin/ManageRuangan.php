@@ -41,6 +41,41 @@ class ManageRuangan extends Controller
         return $renderedView->fragmentIf($request->ajax(), 'ruangan-results');
     }
 
+    public function show(Ruangan $ruangan): View
+    {
+        $ruangan->load([
+            'lemaris' => fn ($query) => $query
+                ->select(['lemari_id', 'ruangan_id', 'kode_lemari', 'nama_lemari'])
+                ->with([
+                    'lokasiBarangs' => fn ($query) => $query
+                        ->select([
+                            'lokasi_barang_id',
+                            'barang_id',
+                            'ruangan_id',
+                            'lemari_id',
+                            'stok_total',
+                            'stok_tersedia',
+                        ])
+                        ->whereHas('barang')
+                        ->with('barang:barang_id,nama_barang,kode_barang,satuan'),
+                ]),
+            'lokasiBarangs' => fn ($query) => $query
+                ->whereNull('lemari_id')
+                ->whereHas('barang')
+                ->select([
+                    'lokasi_barang_id',
+                    'barang_id',
+                    'ruangan_id',
+                    'lemari_id',
+                    'stok_total',
+                    'stok_tersedia',
+                ])
+                ->with('barang:barang_id,nama_barang,kode_barang,satuan'),
+        ]);
+
+        return view('pages.admin.ruangan-detail', compact('ruangan'));
+    }
+
     public function store(StoreRequest $request)
     {
         $validated = $request->validated();
