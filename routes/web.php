@@ -12,9 +12,12 @@ use App\Http\Controllers\Admin\ManageUser;
 use App\Http\Controllers\Auth\ChangePasswordController;
 use App\Http\Controllers\Auth\LoginController;
 use App\Http\Controllers\Auth\PasswordRecoveryController;
+use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\User\BerandaController;
 use App\Http\Controllers\User\PeminjamanController;
 use App\Http\Middleware\MustChangePassword;
+use App\Models\User;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', function () {
@@ -139,9 +142,20 @@ Route::middleware(['auth', MustChangePassword::class])->group(function () {
 });
 
 Route::middleware('auth')->group(function () {
-    Route::get('/dashboard', function () {
-        return match (auth()->user()->role) {
-            'admin', 'laboran' => redirect()->route('admin.dashboard'),
+    Route::get('/notifications/count', [NotificationController::class, 'count'])
+        ->name('notifications.count');
+    Route::post('/notifications/read', [NotificationController::class, 'read'])
+        ->name('notifications.read');
+
+    Route::get('/dashboard', function (Request $request) {
+        $user = $request->user();
+        abort_unless($user instanceof User, 403);
+
+        return match ($user->role) {
+            'admin' => redirect()->route('admin.dashboard'),
+            'laboran' => $user->canProcessLoans() && ! $user->canViewInventory()
+                ? redirect()->route('admin.peminjaman')
+                : redirect()->route('admin.dashboard'),
             'user', 'dosen', 'peminjam' => redirect()->route('user.beranda'),
             default => abort(403),
         };

@@ -545,7 +545,7 @@
                 ])
                 @if ($errors->has('password')) aria-invalid="true" aria-describedby="password-error" @endif>
               <button type="button" id="togglePassword"
-                class="absolute right-3 top-1/2 -translate-y-1/2 rounded-lg p-2 text-slate-400 transition hover:text-[#00385a] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-[#008f82]"
+                class="absolute inset-y-0 right-1 my-auto flex h-9 w-9 items-center justify-center rounded-lg text-slate-400 transition hover:text-[#00385a] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-[#008f82] hidden"
                 aria-label="Tampilkan password">
                 <iconify-icon icon="mdi:eye-outline" id="eyeIcon" class="text-xl" aria-hidden="true"></iconify-icon>
               </button>
@@ -578,6 +578,21 @@
     const togglePassword = document.getElementById('togglePassword');
     const passwordInput = document.getElementById('password');
     const eyeIcon = document.getElementById('eyeIcon');
+
+    const updatePasswordToggleVisibility = () => {
+      const hasPassword = passwordInput.value.length > 0;
+      togglePassword.classList.toggle('hidden', !hasPassword);
+
+      if (!hasPassword && passwordInput.type === 'text') {
+        passwordInput.type = 'password';
+        togglePassword.setAttribute('aria-label', 'Tampilkan password');
+        eyeIcon.setAttribute('icon', 'mdi:eye-outline');
+      }
+    };
+
+    passwordInput.addEventListener('input', updatePasswordToggleVisibility);
+    passwordInput.addEventListener('change', updatePasswordToggleVisibility);
+    updatePasswordToggleVisibility();
 
     togglePassword.addEventListener('click', () => {
       const isVisible = passwordInput.type === 'text';

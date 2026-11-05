@@ -63,6 +63,16 @@ class LoginController extends Controller
             return redirect()->route('password.change')->with('info', 'Wajib ganti password.');
         }
 
+        // ASVS V8.2: Direct loan-only staff to a queue protected by server-side permission middleware.
+        if (
+            $user->role === 'laboran'
+            && $accessFlags['can_meminjamkan']
+            && ! $accessFlags['can_melihat']
+            && ! $accessFlags['can_manajemen']
+        ) {
+            return redirect()->route('admin.peminjaman')->with('success', 'Login berhasil!');
+        }
+
         if (in_array($user->role, ['admin', 'laboran'], true)) {
             return redirect()->route('admin.dashboard')->with('success', 'Login berhasil!');
         }

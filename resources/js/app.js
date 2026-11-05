@@ -142,6 +142,124 @@ Alpine.data('globalToast', () => ({
     },
 }));
 
+Alpine.data('notificationDropdown', () => ({
+    open: false,
+    count: 0,
+    notificationAvailable: true,
+    notifications: [],
+    loading: false,
+    error: '',
+    countUrl: '',
+    readUrl: '',
+    csrfToken: '',
+    pollTimer: null,
+    visibilityListener: null,
+    init() {
+        this.countUrl = this.$el.dataset.countUrl || '';
+        this.readUrl = this.$el.dataset.readUrl || '';
+        this.csrfToken = this.$el.dataset.csrfToken || '';
+        this.refreshCount();
+        this.pollTimer = window.setInterval(() => {
+            this.refreshCount();
+        }, 30000);
+        this.visibilityListener = () => {
+            if (!document.hidden) {
+                this.refreshCount();
+            }
+        };
+        document.addEventListener('visibilitychange', this.visibilityListener);
+    },
+    destroy() {
+        window.clearInterval(this.pollTimer);
+        document.removeEventListener('visibilitychange', this.visibilityListener);
+    },
+    async refreshCount() {
+        if (document.hidden || !this.countUrl) {
+            return;
+        }
+
+        try {
+            const response = await fetch(this.countUrl, {
+                headers: { Accept: 'application/json' },
+                credentials: 'same-origin',
+            });
+            if (!response.ok) {
+                if (response.status === 503) {
+                    this.notificationAvailable = false;
+                    this.error = 'Layanan notifikasi sedang tidak tersedia. Coba lagi nanti.';
+                    return;
+                }
+
+                throw new Error(`Notification count request failed (${response.status}).`);
+            }
+
+            const payload = await response.json();
+            if (!Number.isInteger(payload.count) || payload.count < 0) {
+                throw new Error('Notification count response is invalid.');
+            }
+
+            this.count = payload.count;
+            this.notificationAvailable = true;
+            this.error = '';
+        } catch (error) {
+            console.error('Failed to refresh notification count.', error);
+            this.notificationAvailable = false;
+            this.error = 'Notifikasi tidak dapat dimuat. Coba lagi nanti.';
+        }
+    },
+    async toggle() {
+        if (this.open) {
+            this.open = false;
+            return;
+        }
+
+        this.open = true;
+        this.loading = true;
+        this.error = '';
+
+        try {
+            const response = await fetch(this.readUrl, {
+                method: 'POST',
+                headers: {
+                    Accept: 'application/json',
+                    'X-CSRF-TOKEN': this.csrfToken,
+                },
+                credentials: 'same-origin',
+            });
+            if (!response.ok) {
+                if (response.status === 503) {
+                    this.notificationAvailable = false;
+                    this.error = 'Layanan notifikasi sedang tidak tersedia. Coba lagi nanti.';
+                    return;
+                }
+
+                throw new Error(`Notification read request failed (${response.status}).`);
+            }
+
+            const payload = await response.json();
+            if (!Array.isArray(payload.notifications)) {
+                throw new Error('Notification list response is invalid.');
+            }
+
+            this.notifications = payload.notifications;
+            this.count = 0;
+            this.notificationAvailable = true;
+        } catch (error) {
+            console.error('Failed to read notifications.', error);
+            this.notificationAvailable = false;
+            this.error = 'Notifikasi tidak dapat dimuat. Coba lagi nanti.';
+        } finally {
+            this.loading = false;
+        }
+    },
+    formattedDate(value) {
+        return new Intl.DateTimeFormat('id-ID', {
+            dateStyle: 'medium',
+            timeStyle: 'short',
+        }).format(new Date(value));
+    },
+}));
+
 Alpine.data('loanQrScanner', () => ({
     loanListRequest: null,
     loanListLoading: false,
@@ -547,8 +665,11 @@ const updateAdminFieldIndicator = (field) => {
         indicator = Array.from(label.children).find((child) => (
             child.dataset.adminFieldIndicator !== undefined
             || child.textContent.trim() === '*'
-            || child.textContent.trim() === '(opsional)'
         ));
+
+        if (!indicator && !required) {
+            return;
+        }
 
         if (!indicator) {
             indicator = document.createElement('span');
@@ -565,19 +686,17 @@ const updateAdminFieldIndicator = (field) => {
         adminFieldIndicators.set(field, indicator);
     }
 
-    const indicatorText = required ? '*' : '(opsional)';
+    const indicatorText = required ? '*' : '';
     if (indicator.textContent !== indicatorText) {
         indicator.textContent = indicatorText;
     }
 
-    const indicatorClass = required
-        ? 'ml-1 text-rose-500'
-        : 'ml-1 font-normal text-slate-400';
+    const indicatorClass = 'ml-1 text-rose-500';
     if (indicator.className !== indicatorClass) {
         indicator.className = indicatorClass;
     }
 
-    indicator.hidden = field.disabled || (required && adminFieldHasValue(field));
+    indicator.hidden = field.disabled || !required || adminFieldHasValue(field);
 };
 
 const updateAdminFieldsetIndicators = () => {

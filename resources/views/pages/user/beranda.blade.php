@@ -1,5 +1,4 @@
 <x-layout.user
-  :notifications="$notifications"
   title="{{ match ($page) {'catalog' => 'Katalog Barang','apply' => 'Ajukan Peminjaman','history' => 'Riwayat Peminjaman',default => 'Beranda'} }} - InvenTrack">
   @if ($page === 'home')
     <x-auth.login-welcome />

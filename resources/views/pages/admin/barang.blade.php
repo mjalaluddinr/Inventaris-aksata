@@ -940,9 +940,9 @@
                           <p class="mt-0.5 text-xs text-slate-500">{{ $barang->kode_barang }}</p>
                         </button>
                       </td>
-                      <td class="max-w-64 px-4 py-3 text-xs leading-5 text-slate-600">
+                      <td class="max-w-64 whitespace-nowrap px-4 py-3 text-xs leading-5 text-slate-600">
                         @if ($barang->spesifikasi)
-                          <p class="line-clamp-2">{{ $barang->spesifikasi }}</p>
+                          <p class="max-w-64 truncate" title="{{ $barang->spesifikasi }}">{{ $barang->spesifikasi }}</p>
                         @else
                           <span class="text-slate-400">-</span>
                         @endif
@@ -973,7 +973,7 @@
                             <input type="hidden" name="kondisi" data-next-status
                               value="{{ $barangCondition === 'baru' ? 'lama' : 'baru' }}">
                             <button type="submit"
-                              class="inline-flex w-24 cursor-pointer items-center justify-center gap-2 whitespace-nowrap rounded-md px-2 py-1 text-xs font-medium transition-colors duration-200 hover:opacity-80 focus:outline-none focus:ring-2 focus:ring-[#08A9D6] disabled:cursor-wait disabled:opacity-60 {{ $barangCondition === 'baru' ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800' }}">
+                              class="inline-flex cursor-pointer items-center justify-center gap-2 whitespace-nowrap rounded-md px-2 py-1 text-xs font-medium transition-colors duration-200 hover:opacity-80 focus:outline-none focus:ring-2 focus:ring-[#08A9D6] disabled:cursor-wait disabled:opacity-60 {{ $barangCondition === 'baru' ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800' }}">
                               <span class="relative flex h-2 w-2 shrink-0">
                                 <span data-status-ping
                                   class="absolute inline-flex h-full w-full animate-ping rounded-full opacity-75 {{ $barangCondition === 'baru' ? 'bg-emerald-400' : 'bg-rose-400' }}"></span>
@@ -985,7 +985,9 @@
                           </form>
                         @else
                           <span
-                            class="inline-flex w-24 items-center justify-center rounded-md px-2 py-1 text-xs font-medium {{ $barangCondition === 'baru' ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800' }}">
+                            class="inline-flex items-center gap-2 whitespace-nowrap rounded-md px-2 py-1 text-xs font-medium {{ $barangCondition === 'baru' ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800' }}">
+                            <span class="h-2 w-2 shrink-0 rounded-full {{ $barangCondition === 'baru' ? 'bg-emerald-500' : 'bg-rose-500' }}"
+                              aria-hidden="true"></span>
                             {{ ucfirst($barangCondition) }}
                           </span>
                         @endif
@@ -1009,7 +1011,7 @@
                             <input type="hidden" name="kelayakan" data-next-status
                               value="{{ $barangEligibility === 'layak' ? 'tidak_layak' : 'layak' }}">
                             <button type="submit"
-                              class="ml-1 inline-flex w-28 cursor-pointer items-center justify-center gap-2 whitespace-nowrap rounded-md px-3 py-1 text-xs font-medium transition-colors duration-200 hover:opacity-80 focus:outline-none focus:ring-2 focus:ring-[#08A9D6] disabled:cursor-wait disabled:opacity-60 {{ $barangEligibility === 'layak' ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800' }}">
+                              class="ml-1 inline-flex cursor-pointer items-center justify-center gap-2 whitespace-nowrap rounded-md px-2 py-1 text-xs font-medium transition-colors duration-200 hover:opacity-80 focus:outline-none focus:ring-2 focus:ring-[#08A9D6] disabled:cursor-wait disabled:opacity-60 {{ $barangEligibility === 'layak' ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800' }}">
                               <span class="relative flex h-2 w-2 shrink-0">
                                 <span data-status-ping
                                   class="absolute inline-flex h-full w-full animate-ping rounded-full opacity-75 {{ $barangEligibility === 'layak' ? 'bg-emerald-400' : 'bg-rose-400' }}"></span>
@@ -1022,7 +1024,9 @@
                           </form>
                         @else
                           <span
-                            class="ml-1 inline-flex w-28 items-center justify-center rounded-md px-3 py-1 text-xs font-medium {{ $barangEligibility === 'layak' ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800' }}">
+                            class="ml-1 inline-flex items-center gap-2 whitespace-nowrap rounded-md px-2 py-1 text-xs font-medium {{ $barangEligibility === 'layak' ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800' }}">
+                            <span class="h-2 w-2 shrink-0 rounded-full {{ $barangEligibility === 'layak' ? 'bg-emerald-500' : 'bg-rose-500' }}"
+                              aria-hidden="true"></span>
                             {{ $barangEligibility === 'layak' ? 'Layak' : 'Tidak Layak' }}
                           </span>
                         @endif
@@ -1121,99 +1125,9 @@
             <p class="text-xs text-slate-500">
               Menampilkan {{ $barangs->firstItem() ?? 0 }}-{{ $barangs->lastItem() ?? 0 }} dari {{ $barangs->total() }} barang
             </p>
-            @if ($barangs->hasPages())
-              @php
-                $lastBarangPage = $barangs->lastPage();
-                $pageWindowSize = 5;
-                $pageWindowStart = max(1, min($barangs->currentPage() - 2, $lastBarangPage - $pageWindowSize + 1));
-                $pageWindowEnd = min($lastBarangPage, $pageWindowStart + $pageWindowSize - 1);
-              @endphp
-              <nav aria-label="Navigasi halaman barang"
-                class="flex w-full min-w-0 items-center justify-start gap-2 overflow-x-auto overscroll-x-contain touch-pan-x sm:w-auto sm:justify-end">
-                @if (!$barangs->onFirstPage())
-                  <a href="{{ $barangs->url(1) }}" aria-label="Halaman pertama" data-barang-pagination
-                    class="inline-flex h-10 shrink-0 items-center justify-center rounded-xl border border-[#00BFA5] bg-white px-3 text-sm font-semibold text-slate-900 shadow-[0_4px_10px_rgba(0,177,156,0.12)] transition hover:bg-emerald-50 focus:outline-none focus:ring-2 focus:ring-[#00BFA5] focus:ring-offset-2">
-                    &lt;&lt;
-                  </a>
-                @else
-                  <span aria-label="Halaman pertama" aria-disabled="true"
-                    class="inline-flex h-10 shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-slate-100 px-3 text-sm font-semibold text-slate-400">
-                    &lt;&lt;
-                  </span>
-                @endif
-                @if (!$barangs->onFirstPage())
-                  <a href="{{ $barangs->previousPageUrl() }}" aria-label="Halaman sebelumnya" data-barang-pagination
-                    class="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-[#00BFA5] bg-white text-slate-900 shadow-[0_4px_10px_rgba(0,177,156,0.12)] transition hover:bg-emerald-50 focus:outline-none focus:ring-2 focus:ring-[#00BFA5] focus:ring-offset-2">
-                    <iconify-icon icon="mdi:chevron-left" width="22" aria-hidden="true"></iconify-icon>
-                  </a>
-                @else
-                  <span aria-label="Halaman sebelumnya" aria-disabled="true"
-                    class="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-slate-100 text-slate-400">
-                    <iconify-icon icon="mdi:chevron-left" width="22" aria-hidden="true"></iconify-icon>
-                  </span>
-                @endif
-                @if ($pageWindowStart > 1)
-                  <a href="{{ $barangs->url(1) }}" aria-label="Halaman 1" data-barang-pagination
-                    class="inline-flex h-10 min-w-10 shrink-0 items-center justify-center rounded-xl border border-[#00BFA5] bg-white px-3 text-sm font-semibold text-slate-900 shadow-[0_4px_10px_rgba(0,177,156,0.12)] transition hover:bg-emerald-50 focus:outline-none focus:ring-2 focus:ring-[#00BFA5] focus:ring-offset-2">
-                    1
-                  </a>
-                  @if ($pageWindowStart > 2)
-                    <span aria-hidden="true" class="shrink-0 px-1 text-slate-500">...</span>
-                  @endif
-                @endif
-                @for ($page = $pageWindowStart; $page <= $pageWindowEnd; $page++)
-                  @if ($page === $barangs->currentPage())
-                    <span aria-label="Halaman {{ $page }}" aria-current="page"
-                      class="inline-flex h-10 min-w-10 shrink-0 items-center justify-center rounded-xl border border-[#00BFA5] bg-[#00CFA8] px-3 text-sm font-semibold text-slate-950 shadow-[0_4px_10px_rgba(0,177,156,0.2)]">
-                      {{ $page }}
-                    </span>
-                  @else
-                    <a href="{{ $barangs->url($page) }}" aria-label="Halaman {{ $page }}" data-barang-pagination
-                      class="inline-flex h-10 min-w-10 shrink-0 items-center justify-center rounded-xl border border-[#00BFA5] bg-white px-3 text-sm font-semibold text-slate-900 shadow-[0_4px_10px_rgba(0,177,156,0.12)] transition hover:bg-emerald-50 focus:outline-none focus:ring-2 focus:ring-[#00BFA5] focus:ring-offset-2">
-                      {{ $page }}
-                    </a>
-                  @endif
-                @endfor
-                @if ($pageWindowEnd < $lastBarangPage - 1)
-                  <span aria-hidden="true" class="shrink-0 px-1 text-slate-500">...</span>
-                @endif
-                @if ($pageWindowEnd < $lastBarangPage)
-                  @if ($barangs->currentPage() === $lastBarangPage)
-                    <span aria-label="Halaman {{ $lastBarangPage }}" aria-current="page"
-                      class="inline-flex h-10 min-w-10 shrink-0 items-center justify-center rounded-xl border border-[#00BFA5] bg-[#00CFA8] px-3 text-sm font-semibold text-slate-950 shadow-[0_4px_10px_rgba(0,177,156,0.2)]">
-                      {{ $lastBarangPage }}
-                    </span>
-                  @else
-                    <a href="{{ $barangs->url($lastBarangPage) }}" aria-label="Halaman {{ $lastBarangPage }}" data-barang-pagination
-                      class="inline-flex h-10 min-w-10 shrink-0 items-center justify-center rounded-xl border border-[#00BFA5] bg-white px-3 text-sm font-semibold text-slate-900 shadow-[0_4px_10px_rgba(0,177,156,0.12)] transition hover:bg-emerald-50 focus:outline-none focus:ring-2 focus:ring-[#00BFA5] focus:ring-offset-2">
-                      {{ $lastBarangPage }}
-                    </a>
-                  @endif
-                @endif
-                @if ($barangs->hasMorePages())
-                  <a href="{{ $barangs->nextPageUrl() }}" aria-label="Halaman berikutnya" data-barang-pagination
-                    class="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-[#00BFA5] bg-white text-slate-900 shadow-[0_4px_10px_rgba(0,177,156,0.12)] transition hover:bg-emerald-50 focus:outline-none focus:ring-2 focus:ring-[#00BFA5] focus:ring-offset-2">
-                    <iconify-icon icon="mdi:chevron-right" width="22" aria-hidden="true"></iconify-icon>
-                  </a>
-                @else
-                  <span aria-label="Halaman berikutnya" aria-disabled="true"
-                    class="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-slate-100 text-slate-400">
-                    <iconify-icon icon="mdi:chevron-right" width="22" aria-hidden="true"></iconify-icon>
-                  </span>
-                @endif
-                @if ($barangs->currentPage() < $lastBarangPage)
-                  <a href="{{ $barangs->url($lastBarangPage) }}" aria-label="Halaman terakhir" data-barang-pagination
-                    class="inline-flex h-10 shrink-0 items-center justify-center rounded-xl border border-[#00BFA5] bg-white px-3 text-sm font-semibold text-slate-900 shadow-[0_4px_10px_rgba(0,177,156,0.12)] transition hover:bg-emerald-50 focus:outline-none focus:ring-2 focus:ring-[#00BFA5] focus:ring-offset-2">
-                    &gt;&gt;
-                  </a>
-                @else
-                  <span aria-label="Halaman terakhir" aria-disabled="true"
-                    class="inline-flex h-10 shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-slate-100 px-3 text-sm font-semibold text-slate-400">
-                    &gt;&gt;
-                  </span>
-                @endif
-              </nav>
-            @endif
+            <x-pagination :paginator="$barangs" label="Navigasi halaman barang"
+              link-attribute="data-barang-pagination"
+              nav-class="flex w-full min-w-0 items-center justify-start gap-2 overflow-x-auto overscroll-x-contain touch-pan-x sm:w-auto sm:justify-end" />
           </div>
         @endfragment
       </div>
@@ -1295,15 +1209,9 @@
                         class="w-full rounded-md border border-slate-300 bg-[#F4F5F5] px-3 py-2 text-sm text-slate-800 focus:border-[#008b7a] focus:outline-none focus:ring-2 focus:ring-[#008b7a]/20">
                         <option value="">Pilih ruangan</option>
                         @foreach ($usageLocations as $usageLocation)
-                          <option value="{{ $usageLocation['ruangan']->ruangan_id }}">
-                            {{ $usageLocation['ruangan']->nama_ruangan }} · tersedia
-                            {{ $usageLocation['stok_tersedia'] }}
-                          </option>
+                          <option value="{{ $usageLocation->ruangan_id }}">{{ $usageLocation->nama_ruangan }}</option>
                         @endforeach
                       </select>
-                      @if ($usageLocations->isEmpty())
-                        <p class="mt-1 text-xs text-amber-700">Barang belum memiliki stok di ruangan mana pun.</p>
-                      @endif
                     </div>
                     <div>
                       <label for="usage-admin" class="mb-1 block text-[11px] font-semibold text-slate-600">Dipakai oleh
@@ -1340,10 +1248,15 @@
                     <div class="flex flex-wrap items-center gap-2 sm:col-span-2">
                       <button type="submit"
                         :disabled="usageSubmitting ||
-                            {{ $usageLocations->isEmpty() || $adminAccounts->isEmpty() ? 'true' : 'false' }}"
+                            {{ $usageLocations->isEmpty() || $adminAccounts->isEmpty() || $selectedBarang->stok_tersedia < 1 ? 'true' : 'false' }}"
                         class="inline-flex min-h-9 items-center justify-center rounded-md bg-[#00BFA5] px-4 py-2 text-xs font-bold text-white transition hover:bg-[#009E89] disabled:cursor-not-allowed disabled:opacity-50">
                         Catat Pemakaian
                       </button>
+                      @if ($selectedBarang->stok_tersedia < 1)
+                        <span class="text-xs text-amber-700">Tidak ada stok tersedia di lokasi penyimpanan.</span>
+                      @elseif ($usageLocations->isEmpty())
+                        <span class="text-xs text-amber-700">Tidak ada ruangan aktif untuk lokasi pemakaian.</span>
+                      @endif
                       @if ($adminAccounts->isEmpty())
                         <span class="text-xs text-amber-700">Tidak ada akun admin aktif untuk dicatat.</span>
                       @endif
@@ -1453,6 +1366,18 @@
                             Dari
                             {{ $mutation->lemariAsal?->nama_lemari ?? ($mutation->ruangan?->nama_ruangan ?? 'lokasi belum diketahui') }}
                             ke {{ $mutation->lemariTujuan?->nama_lemari ?? 'lokasi tujuan' }} ·
+                          @elseif ($mutation->tipe === 'dipakai')
+                            Stok diambil dari {{ $mutation->ruangan?->nama_ruangan ?? 'lokasi penyimpanan' }}
+                            @if ($mutation->lemariAsal)
+                              › {{ $mutation->lemariAsal->nama_lemari }}
+                            @endif
+                            untuk dipakai di {{ $mutation->barangDipakai?->ruangan?->nama_ruangan ?? 'lokasi pemakaian' }} ·
+                          @elseif ($mutation->tipe === 'ditarik')
+                            Stok dikembalikan ke {{ $mutation->ruangan?->nama_ruangan ?? 'lokasi penyimpanan' }}
+                            @if ($mutation->lemariTujuan)
+                              › {{ $mutation->lemariTujuan->nama_lemari }}
+                            @endif
+                            ·
                           @elseif ($mutation->ruangan)
                             {{ $mutation->ruangan->nama_ruangan }} ·
                           @endif
@@ -1467,6 +1392,15 @@
                     <li class="py-8 text-center text-xs text-slate-500">Belum ada riwayat mutasi untuk barang ini.</li>
                   @endforelse
                 </ol>
+                @if ($mutationLogs->hasPages())
+                  <div class="flex flex-col gap-3 border-t border-[#E3EEEA] px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-6">
+                    <p class="text-xs text-slate-500">
+                      Menampilkan {{ $mutationLogs->firstItem() }}-{{ $mutationLogs->lastItem() }} dari
+                      {{ $mutationLogs->total() }} mutasi
+                    </p>
+                    <x-pagination :paginator="$mutationLogs" label="Navigasi riwayat mutasi" />
+                  </div>
+                @endif
               </section>
             @else
               <div class="rounded-xl border border-[#B9DED4] bg-white px-5 py-8 text-center">
@@ -1579,7 +1513,7 @@
                           </template>
                         </ul>
                         <p x-show="!importFiles.some(file => !file.isZip)" class="text-xs text-amber-700">
-                          Pilih minimal satu file Excel atau CSV; ZIP gambar bersifat opsional.
+                          Pilih minimal satu file Excel atau CSV. ZIP gambar dapat disertakan.
                         </p>
                       </div>
                     </template>
@@ -1590,13 +1524,13 @@
                       <iconify-icon icon="mdi:information" class="mt-0.5 shrink-0" width="16"></iconify-icon>
                       <div class="space-y-2">
                         <p class="font-semibold">Format import barang</p>
-                        <p>Isi kolom <span class="font-semibold">gambar_barang</span> dengan nama file gambar di
+                        <p>Isi kolom <span class="font-semibold">GAMBAR BARANG</span> dengan nama file gambar di
                           dalam ZIP. Nama file dicocokkan tanpa membedakan huruf besar/kecil.</p>
-                        <p>Jika satu barang berada di beberapa ruangan, ulangi nilai <span
-                            class="font-semibold">NO</span>
-                          dan data barang yang sama pada setiap baris. Isi ruangan serta stok total/tersedia untuk
-                          masing-masing lokasi; total stok barang akan dijumlahkan otomatis. Contoh pada template:
-                          NO 23, lokasi A 12/10 dan lokasi B 8/4 menghasilkan total barang 20/14.</p>
+                        <p>Kode barang, kode ruangan, dan kode lemari boleh dikosongkan; sistem akan membuat kode
+                          secara berurutan. Ruangan wajib diisi pada setiap baris.</p>
+                        <p>Jika barang yang sama berada di beberapa ruangan, ulangi nama dan data barang pada setiap
+                          baris lalu isi ruangan serta stok lokasi masing-masing. Stok barang dijumlahkan otomatis.
+                          Kondisi barang dengan nama yang sama harus konsisten; baris yang tidak konsisten ditolak.</p>
                         <a href="{{ asset('import-templates/format-import-barang.xlsx') }}" download
                           class="inline-flex items-center gap-1 font-semibold text-[#087E78] hover:text-[#065f59] focus:outline-none focus:ring-2 focus:ring-[#08A9D6]">
                           <iconify-icon icon="mdi:download" width="16" aria-hidden="true"></iconify-icon>
@@ -1624,8 +1558,9 @@
                   </button>
                   <button type="submit"
                     :disabled="importLoading || importQueued || importError || !importFiles.some(file => !file.isZip)"
+                    :aria-busy="(importLoading || importQueued).toString()"
                     :aria-label="importLoading || importQueued ? 'Sedang mengimpor barang' : 'Simpan Import'"
-                    class="akun-primary-button inline-flex items-center justify-center gap-2 rounded-md border border-[#009F91] bg-[#00B19C] px-4 py-2 text-sm font-semibold text-white shadow-sm transition focus:outline-none focus:ring-2 focus:ring-[#00B19C] focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50">
+                    class="admin-submit-button akun-primary-button inline-flex items-center justify-center gap-2 rounded-md border border-[#009F91] bg-[#00B19C] px-4 py-2 text-sm font-semibold text-white shadow-sm transition focus:outline-none focus:ring-2 focus:ring-[#00B19C] focus:ring-offset-2 disabled:cursor-not-allowed">
                     <iconify-icon x-show="importLoading || importQueued" icon="mdi:loading"
                       class="animate-spin text-lg" aria-hidden="true"></iconify-icon>
                     <iconify-icon x-show="!importLoading && !importQueued" icon="mdi:upload" width="16"
@@ -1874,7 +1809,7 @@
 
                   <div class="sm:col-span-2">
                     <span class="text-xs font-medium text-slate-700">
-                      Foto Barang <span class="font-normal text-slate-500">(opsional, JPG/PNG/WEBP, maks. 5 MB)</span>
+                      Foto Barang <span class="font-normal text-slate-500">(JPG/PNG/WEBP, maks. 5 MB)</span>
                     </span>
                     <input x-ref="barangImageInput" name="image" type="file" accept=".jpg,.jpeg,.png,.webp"
                       @change="previewBarangImage($event)" class="hidden">
@@ -1910,8 +1845,8 @@
                     class="rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-100">
                     Batal
                   </button>
-                  <button type="submit" :disabled="formSubmitting"
-                    class="inline-flex items-center justify-center rounded-md border border-[#009F91] bg-[#00B19C] px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-[#009A87] disabled:cursor-not-allowed disabled:opacity-70">
+                  <button type="submit" :disabled="formSubmitting" :aria-busy="formSubmitting.toString()"
+                    class="admin-submit-button inline-flex items-center justify-center rounded-md border border-[#009F91] bg-[#00B19C] px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-[#009A87] disabled:cursor-not-allowed">
                     <span x-show="!formSubmitting"
                       x-text="modalMode === 'create' ? 'Simpan Barang' : 'Simpan Perubahan'"></span>
                     <span x-show="formSubmitting">Menyimpan...</span>
@@ -1958,7 +1893,7 @@
                     @enderror
                   </label>
                   <label class="block text-xs font-medium text-slate-700">
-                    Keterangan <span class="font-normal text-slate-500">(opsional)</span>
+                    Keterangan
                     <textarea name="keterangan" maxlength="255" rows="2"
                       class="mt-1 w-full resize-y rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 focus:border-[#08A9D6] focus:outline-none focus:ring-2 focus:ring-[#08A9D6]/20"
                       placeholder="Keterangan wadah">{{ old('keterangan') }}</textarea>
@@ -1972,8 +1907,8 @@
                     class="rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-100">
                     Batal
                   </button>
-                  <button type="submit" :disabled="toolboxSubmitting"
-                    class="inline-flex items-center justify-center rounded-md border border-[#009F91] bg-[#00B19C] px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-[#009A87] disabled:cursor-not-allowed disabled:opacity-70">
+                  <button type="submit" :disabled="toolboxSubmitting" :aria-busy="toolboxSubmitting.toString()"
+                    class="admin-submit-button inline-flex items-center justify-center rounded-md border border-[#009F91] bg-[#00B19C] px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-[#009A87] disabled:cursor-not-allowed">
                     <span x-show="!toolboxSubmitting">Simpan Wadah</span>
                     <span x-show="toolboxSubmitting">Menyimpan...</span>
                   </button>

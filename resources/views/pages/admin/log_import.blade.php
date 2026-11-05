@@ -92,7 +92,7 @@
           </table>
         </div>
         <div class="border-t border-[#E2ECE9] bg-[#F7FBFA] px-4 py-3">
-          {{ $logs->links() }}
+          <x-pagination :paginator="$logs" label="Navigasi halaman log import" />
         </div>
       </div>
     </div>
@@ -236,11 +236,20 @@
 
             const rowLabel = document.createElement('p');
             rowLabel.className = 'text-sm font-semibold text-gray-800';
-            rowLabel.textContent = Array.isArray(error) ? error[0] : 'Baris tidak diketahui';
+            const rowNumber = Array.isArray(error) ? error[0] : error?.row;
+            rowLabel.textContent = rowNumber ? `Baris ${rowNumber}` : 'Baris tidak diketahui';
 
             const rowMessage = document.createElement('p');
             rowMessage.className = 'mt-1 whitespace-pre-wrap break-words text-sm font-mono text-rose-600';
-            const message = Array.isArray(error) ? String(error[1] ?? '') : String(error);
+            const errorMessages = {
+              inconsistent_group: 'Data barang dengan nama sama harus memiliki kategori, satuan, spesifikasi, kondisi, dan kode yang konsisten.',
+              duplicate_code: 'Kode barang sudah digunakan.',
+              duplicate_item: 'Data barang dan lokasi ini sudah pernah diimpor.',
+              duplicate_location: 'Lokasi barang yang sama tercantum lebih dari sekali.'
+            };
+            const message = Array.isArray(error) ?
+              String(error[1] ?? '') :
+              String(error?.message ?? errorMessages[error?.code] ?? error);
             rowMessage.textContent = message.includes('SQLSTATE[') ?
               'Kesalahan database saat memproses baris ini. Periksa data wajib dan format file.' :
               message;

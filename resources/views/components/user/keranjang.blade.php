@@ -1,6 +1,6 @@
-<div x-cloak x-show="cartOpen" x-transition.opacity class="fixed inset-0 z-[100] flex justify-end" role="presentation" @keydown.escape.window="cartOpen = false">
-  <button type="button" class="absolute inset-0 bg-slate-950/20" @click="cartOpen = false" aria-label="Tutup keranjang"></button>
-  <aside x-show="cartOpen" x-transition:enter="transition ease-out duration-200" x-transition:enter-start="translate-x-full" x-transition:enter-end="translate-x-0" x-transition:leave="transition ease-in duration-150" x-transition:leave-start="translate-x-0" x-transition:leave-end="translate-x-full" class="relative my-0.5 mr-0.5 flex h-[calc(100dvh-0.25rem)] w-full max-w-[33rem] flex-col rounded-2xl bg-white shadow-2xl" role="dialog" aria-modal="true" aria-labelledby="cart-title">
+<div x-cloak x-show="cartOpen" x-transition.opacity.duration.200ms class="fixed inset-0 z-[100] flex justify-end" role="presentation" @keydown.escape.window="cartOpen = false">
+  <button type="button" class="absolute inset-0 bg-slate-950/20 transition-colors duration-200" @click="cartOpen = false" aria-label="Tutup keranjang"></button>
+  <aside x-show="cartOpen" x-transition:enter="transition ease-out duration-[240ms]" x-transition:enter-start="translate-x-full" x-transition:enter-end="translate-x-0" x-transition:leave="transition ease-in duration-200" x-transition:leave-start="translate-x-0" x-transition:leave-end="translate-x-full" class="relative my-0.5 mr-0.5 flex h-[calc(100dvh-0.25rem)] w-full max-w-[33rem] flex-col rounded-2xl bg-white shadow-2xl" role="dialog" aria-modal="true" aria-labelledby="cart-title">
     <header class="flex items-center justify-between border-b border-slate-200 px-5 py-4">
       <h2 id="cart-title" class="text-lg font-bold text-slate-900 sm:text-xl">Keranjang Peminjaman</h2>
       <button type="button" @click="cartOpen = false" class="rounded-md p-2 text-slate-500 transition hover:bg-slate-100" aria-label="Tutup"><iconify-icon icon="mdi:close" aria-hidden="true"></iconify-icon></button>
@@ -22,7 +22,7 @@
         </div>
       </template>
       <template x-for="item in cart" :key="item.id">
-        <article class="border-b border-slate-200 py-3.5" :class="isCartItemSelected(item.id) ? 'bg-emerald-50/50' : ''">
+        <article class="border-b border-slate-200 py-3.5 transition-colors duration-200" :class="isCartItemSelected(item.id) ? 'bg-emerald-50/50' : ''">
           <div class="flex items-start justify-between gap-3">
             <label class="flex min-w-0 flex-1 items-start gap-2.5">
               <input type="checkbox" :checked="isCartItemSelected(item.id)" @change="toggleCartItem(item.id, $event.target.checked)" :aria-label="`Pilih ${item.name} untuk diajukan`" class="mt-0.5 h-4 w-4 shrink-0 rounded border-slate-300 text-[#008f7a] focus:ring-[#008f7a]">

@@ -13,6 +13,7 @@ use App\Models\LogMutasiBarang;
 use App\Models\LokasiBarang;
 use App\Models\Peminjaman;
 use App\Models\User;
+use App\Services\RedisNotificationService;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Http\JsonResponse;
@@ -29,6 +30,8 @@ use Symfony\Component\HttpFoundation\BinaryFileResponse;
 class ManagePeminjaman extends Controller
 {
     private const RESERVATION_NOTE = 'Reservasi QR peminjaman';
+
+    public function __construct(private RedisNotificationService $notifications) {}
 
     public function index(Request $request): View|string
     {
@@ -193,7 +196,7 @@ class ManagePeminjaman extends Controller
         abort_unless($admin instanceof User, 403);
         $reason = $request->validated('reason');
 
-        DB::transaction(function () use ($admin, $peminjaman, $reason): void {
+        $loan = DB::transaction(function () use ($admin, $peminjaman, $reason): Peminjaman {
             $loan = Peminjaman::query()
                 ->whereKey($peminjaman->peminjaman_id)
                 ->lockForUpdate()
@@ -212,7 +215,14 @@ class ManagePeminjaman extends Controller
             $loan->diproses_akun_id = $admin->akun_id;
             $loan->clearCancellationRequest();
             $loan->save();
+
+            return $loan;
         }, 3);
+
+        $this->notifyBorrower(
+            $loan->akun_id,
+            "Peminjaman {$loan->kode_peminjaman} ditolak. Alasan: {$reason}",
+        );
 
         return redirect()
             ->route('admin.peminjaman', ['tab' => 'pending'])
@@ -296,6 +306,17 @@ class ManagePeminjaman extends Controller
         $hasRemainingItems = $peminjaman->detailPeminjamans()
             ->where('status', 'dipinjam')
             ->exists();
+        $this->notifications->notifyLoanProcessors(
+            "Barang dari peminjaman {$peminjaman->kode_peminjaman} telah dicatat kembali.",
+        );
+
+        if (! $hasRemainingItems) {
+            $this->notifications->clearLoanReminderMarkers(
+                $peminjaman->peminjaman_id,
+                $peminjaman->akun_id,
+            );
+        }
+
         $returnMessage = $hasRemainingItems
             ? "Peminjaman {$peminjaman->kode_peminjaman} berhasil dikembalikan sebagian."
             : "Peminjaman {$peminjaman->kode_peminjaman} berhasil dikembalikan sepenuhnya.";
@@ -357,7 +378,26 @@ class ManagePeminjaman extends Controller
             $loan->tanggal_pinjam = now();
             $loan->diproses_akun_id = $admin->akun_id;
             $loan->save();
+
+            DB::afterCommit(function () use ($loan): void {
+                $this->notifyBorrower(
+                    $loan->akun_id,
+                    "Peminjaman {$loan->kode_peminjaman} telah disetujui.",
+                );
+            });
         }, 3);
+    }
+
+    private function notifyBorrower(string $borrowerId, string $message): void
+    {
+        $borrower = User::query()
+            ->whereKey($borrowerId)
+            ->where('is_active', true)
+            ->first();
+
+        if ($borrower instanceof User) {
+            $this->notifications->notifyUser($borrower, $message);
+        }
     }
 
     /**

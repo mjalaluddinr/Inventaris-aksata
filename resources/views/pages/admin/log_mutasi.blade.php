@@ -211,39 +211,7 @@
           <p class="text-xs text-slate-500">
             Menampilkan {{ $logs->count() }} dari {{ $logs->total() }} mutasi
           </p>
-          @if ($logs->hasPages())
-            @php
-              $paginationStart = max(1, min($logs->currentPage() - 1, $logs->lastPage() - 2));
-              $paginationEnd = min($logs->lastPage(), $paginationStart + 2);
-            @endphp
-            <nav aria-label="Navigasi halaman mutasi" class="flex items-center justify-end gap-2">
-              @if (!$logs->onFirstPage())
-                <a href="{{ $logs->previousPageUrl() }}" rel="prev" aria-label="Halaman sebelumnya"
-                  class="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-[#00BFA5] bg-white text-slate-900 shadow-[0_4px_10px_rgba(0,177,156,0.12)] transition hover:bg-emerald-50 focus:outline-none focus:ring-2 focus:ring-[#00BFA5] focus:ring-offset-2">
-                  <iconify-icon icon="mdi:chevron-left" width="22" aria-hidden="true"></iconify-icon>
-                </a>
-              @endif
-              @for ($page = $paginationStart; $page <= $paginationEnd; $page++)
-                @if ($page === $logs->currentPage())
-                  <span aria-current="page"
-                    class="inline-flex h-10 min-w-10 items-center justify-center rounded-xl border border-[#00BFA5] bg-[#00CFA8] px-3 text-sm font-semibold text-slate-950 shadow-[0_4px_10px_rgba(0,177,156,0.2)]">
-                    {{ $page }}
-                  </span>
-                @else
-                  <a href="{{ $logs->url($page) }}" aria-label="Halaman {{ $page }}"
-                    class="inline-flex h-10 min-w-10 items-center justify-center rounded-xl border border-[#00BFA5] bg-white px-3 text-sm font-semibold text-slate-900 shadow-[0_4px_10px_rgba(0,177,156,0.12)] transition hover:bg-emerald-50 focus:outline-none focus:ring-2 focus:ring-[#00BFA5] focus:ring-offset-2">
-                    {{ $page }}
-                  </a>
-                @endif
-              @endfor
-              @if ($logs->hasMorePages())
-                <a href="{{ $logs->nextPageUrl() }}" rel="next" aria-label="Halaman berikutnya"
-                  class="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-[#00BFA5] bg-white text-slate-900 shadow-[0_4px_10px_rgba(0,177,156,0.12)] transition hover:bg-emerald-50 focus:outline-none focus:ring-2 focus:ring-[#00BFA5] focus:ring-offset-2">
-                  <iconify-icon icon="mdi:chevron-right" width="22" aria-hidden="true"></iconify-icon>
-                </a>
-              @endif
-            </nav>
-          @endif
+          <x-pagination :paginator="$logs" label="Navigasi halaman mutasi" />
         </div>
       </div>
         @endfragment

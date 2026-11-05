@@ -26,6 +26,12 @@
       cursor: not-allowed;
     }
 
+    .akun-primary-button:disabled[aria-busy="true"] {
+      background: #00b19c;
+      border-color: #009f91;
+      color: #fff;
+    }
+
     .akun-modal-backdrop {
       background: linear-gradient(135deg, rgba(7, 59, 86, .84), rgba(2, 6, 23, .76), rgba(6, 78, 72, .78));
       backdrop-filter: blur(9px);
@@ -711,7 +717,8 @@
             <thead class="bg-[#F1F8F6]">
               <tr>
                 <th class="px-4 py-3 text-left text-xs font-semibold text-slate-600">No</th>
-                <th class="px-4 py-3 text-left text-xs font-semibold text-slate-600">Nama & Username</th>
+                <th class="px-4 py-3 text-left text-xs font-semibold text-slate-600">Nama</th>
+                <th class="px-4 py-3 text-left text-xs font-semibold text-slate-600">Username</th>
                 <th class="px-4 py-3 text-left text-xs font-semibold text-slate-600">Role</th>
                 <th class="px-4 py-3 text-left text-xs font-semibold text-slate-600">Status</th>
                 <th class="px-4 py-3 text-left text-xs font-semibold text-slate-600">Login Terakhir</th>
@@ -725,16 +732,18 @@
                   data-searchable="{{ strtolower(trim($user->first_name . ' ' . $user->last_name . ' ' . $user->username)) }}"
                   x-show="matchesAccount($el.dataset.searchable)" class="transition-colors hover:bg-[#F7FBFA]">
                   <td class="whitespace-nowrap px-4 py-3 text-sm text-slate-500">{{ $users->firstItem() + $index }}</td>
-                  <td class="whitespace-nowrap px-4 py-3">
+                  <td class="whitespace-nowrap px-4 py-3 text-sm font-medium text-slate-800">
                     <div class="text-sm font-medium text-slate-800">{{ $user->first_name }} {{ $user->last_name }}
                     </div>
-                    <div class="text-xs text-slate-500">{{ $user->username }}</div>
                     @if ($user->must_change_password)
                       <span class="mt-1 inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-800">
                         <iconify-icon icon="mdi:lock-reset" width="13" aria-hidden="true"></iconify-icon>
                         Perlu ganti password
                       </span>
                     @endif
+                  </td>
+                  <td class="whitespace-nowrap px-4 py-3 text-sm text-slate-600">
+                    <div class="text-xs text-slate-500">{{ $user->username }}</div>
                   </td>
                   <td class="whitespace-nowrap px-4 py-3 text-sm text-slate-700">
                     @php $roleColors = ['admin' => 'bg-rose-100 text-rose-800', 'laboran' => 'bg-blue-100 text-blue-800', 'peminjam' => 'bg-emerald-100 text-emerald-800']; @endphp
@@ -810,7 +819,7 @@
                 </tr>
               @empty
                 <tr>
-                  <td colspan="6" class="px-6 py-12 text-center"><iconify-icon icon="mdi:account-off-outline"
+                  <td colspan="7" class="px-6 py-12 text-center"><iconify-icon icon="mdi:account-off-outline"
                       class="mb-2 text-slate-300" width="42"></iconify-icon>
                     @if (filled($filters['search'] ?? null))
                       <p class="text-sm font-medium text-slate-600">
@@ -832,39 +841,7 @@
             x-text="searchPreviewCount === null ? 'Menampilkan {{ $users->count() }} dari {{ $users->total() }} akun' : `Menampilkan ${searchPreviewCount} hasil sementara`">
             Menampilkan {{ $users->count() }} dari {{ $users->total() }} akun
           </p>
-          @if ($users->hasPages())
-            @php
-              $paginationStart = max(1, min($users->currentPage() - 1, $users->lastPage() - 2));
-              $paginationEnd = min($users->lastPage(), $paginationStart + 2);
-            @endphp
-            <nav aria-label="Navigasi halaman akun" class="flex items-center justify-end gap-2">
-              @if (!$users->onFirstPage())
-                <a href="{{ $users->previousPageUrl() }}" aria-label="Halaman sebelumnya"
-                  class="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-[#00BFA5] bg-white text-slate-900 shadow-[0_4px_10px_rgba(0,177,156,0.12)] transition hover:bg-emerald-50 focus:outline-none focus:ring-2 focus:ring-[#00BFA5] focus:ring-offset-2">
-                  <iconify-icon icon="mdi:chevron-left" width="22"></iconify-icon>
-                </a>
-              @endif
-              @for ($page = $paginationStart; $page <= $paginationEnd; $page++)
-                @if ($page === $users->currentPage())
-                  <span aria-current="page"
-                    class="inline-flex h-10 min-w-10 items-center justify-center rounded-xl border border-[#00BFA5] bg-[#00CFA8] px-3 text-sm font-semibold text-slate-950 shadow-[0_4px_10px_rgba(0,177,156,0.2)]">
-                    {{ $page }}
-                  </span>
-                @else
-                  <a href="{{ $users->url($page) }}" aria-label="Halaman {{ $page }}"
-                    class="inline-flex h-10 min-w-10 items-center justify-center rounded-xl border border-[#00BFA5] bg-white px-3 text-sm font-semibold text-slate-900 shadow-[0_4px_10px_rgba(0,177,156,0.12)] transition hover:bg-emerald-50 focus:outline-none focus:ring-2 focus:ring-[#00BFA5] focus:ring-offset-2">
-                    {{ $page }}
-                  </a>
-                @endif
-              @endfor
-              @if ($users->hasMorePages())
-                <a href="{{ $users->nextPageUrl() }}" aria-label="Halaman berikutnya"
-                  class="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-[#00BFA5] bg-white text-slate-900 shadow-[0_4px_10px_rgba(0,177,156,0.12)] transition hover:bg-emerald-50 focus:outline-none focus:ring-2 focus:ring-[#00BFA5] focus:ring-offset-2">
-                  <iconify-icon icon="mdi:chevron-right" width="22"></iconify-icon>
-                </a>
-              @endif
-            </nav>
-          @endif
+          <x-pagination :paginator="$users" label="Navigasi halaman akun" />
         </div>
           @endfragment
         </div>
@@ -1023,7 +1000,7 @@
                 class="rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-slate-400">Batal</button>
               <button type="submit" :aria-busy="accountBusy.toString()"
                 :disabled="accountBusy || (currentUser.role === 'laboran' && currentUser.privileges.length + (currentUser.legacyPrivileges || []).length === 0)"
-                class="akun-primary-button inline-flex items-center justify-center rounded-md border border-[#009F91] bg-sidebar-start px-4 py-2 text-sm font-semibold text-white shadow-sm transition focus:outline-none focus:ring-2 focus:ring-sidebar-start focus:ring-offset-2">
+                class="admin-submit-button akun-primary-button inline-flex items-center justify-center rounded-md border border-[#009F91] bg-sidebar-start px-4 py-2 text-sm font-semibold text-white shadow-sm transition focus:outline-none focus:ring-2 focus:ring-sidebar-start focus:ring-offset-2">
                 <iconify-icon x-show="accountBusy" icon="mdi:loading" class="animate-spin text-lg" aria-hidden="true"></iconify-icon>
                 <iconify-icon x-show="!accountBusy"
                   :icon="modalMode === 'create' ? 'mdi:content-save-plus-outline' : 'mdi:content-save-edit-outline'"
@@ -1112,11 +1089,6 @@
                   </label>
                 </template>
               </div>
-              <p x-show="roleDialogDraft.privileges.includes('meminjamkan') ||
-                  roleDialogDraft.privileges.includes('manajemen')"
-                class="mb-3 text-xs text-amber-800">
-                Hak akses Melihat otomatis aktif jika Meminjamkan atau Manajemen dipilih.
-              </p>
               <div x-show="roleDialogDraft.privileges.length + (currentUser.legacyPrivileges || []).length === 0"
                 class="flex items-start gap-2 rounded-md border border-rose-200 bg-rose-50 p-2 text-xs text-rose-700">
                 <iconify-icon icon="mdi:alert-circle" width="16" class="mt-0.5 shrink-0"
@@ -1134,7 +1106,7 @@
             <button type="button" @click="applyRoleDialog()" :aria-busy="accountBusy.toString()"
               :disabled="accountBusy || (roleDialogDraft.role === 'laboran' &&
                   roleDialogDraft.privileges.length + (currentUser.legacyPrivileges || []).length === 0)"
-              class="akun-primary-button inline-flex items-center justify-center rounded-md border border-[#009F91] bg-sidebar-start px-4 py-2 text-sm font-semibold text-white shadow-sm transition focus:outline-none focus:ring-2 focus:ring-sidebar-start focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60">
+              class="admin-submit-button akun-primary-button inline-flex items-center justify-center rounded-md border border-[#009F91] bg-sidebar-start px-4 py-2 text-sm font-semibold text-white shadow-sm transition focus:outline-none focus:ring-2 focus:ring-sidebar-start focus:ring-offset-2 disabled:cursor-not-allowed">
               <iconify-icon x-show="accountBusy" icon="mdi:loading" class="animate-spin text-lg" aria-hidden="true"></iconify-icon>
               <span x-show="!accountBusy" x-text="roleDialogSavesAccount ? 'Simpan Role' : 'Terapkan'"></span>
               <span x-show="accountBusy" class="sr-only">Sedang menyimpan...</span>

@@ -186,7 +186,8 @@
             @endforeach
           </div>
           @if ($historyLoans instanceof \Illuminate\Contracts\Pagination\Paginator || $historyLoans instanceof \Illuminate\Contracts\Pagination\LengthAwarePaginator)
-            <nav class="mt-5" aria-label="Navigasi halaman riwayat">{{ $historyLoans->links() }}</nav>
+            <x-pagination :paginator="$historyLoans" label="Navigasi halaman riwayat" variant="user"
+              nav-class="mt-5 flex flex-wrap items-center justify-center gap-1.5" />
           @endif
         @else
           <div class="rounded-xl border border-[#d1e6e1] bg-white px-6 py-10 text-center shadow-sm">

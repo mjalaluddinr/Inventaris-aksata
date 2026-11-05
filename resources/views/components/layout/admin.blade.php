@@ -21,23 +21,10 @@
       console.error('Unable to restore the admin sidebar state.', error);
     }
 
-    window.addEventListener('load', () => {
-      document.documentElement.dataset.adminSidebarReady = 'true';
-    }, { once: true });
   </script>
   <style>
     [x-cloak] {
       display: none !important;
-    }
-
-    html:not([data-admin-sidebar-ready='true']) #admin-sidebar,
-    html:not([data-admin-sidebar-ready='true']) #admin-sidebar * {
-      animation: none !important;
-      transition: none !important;
-    }
-
-    html:not([data-admin-sidebar-ready='true']) #admin-sidebar .admin-sidebar-copy {
-      visibility: hidden;
     }
 
     @media (min-width: 1024px) {

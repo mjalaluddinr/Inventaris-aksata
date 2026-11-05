@@ -10,6 +10,7 @@ use App\Models\LogMutasiBarang;
 use App\Models\LokasiBarang;
 use App\Models\Peminjaman;
 use App\Models\User;
+use App\Services\RedisNotificationService;
 use Illuminate\Database\Eloquent\Collection as EloquentCollection;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Http\RedirectResponse;
@@ -24,6 +25,8 @@ class PeminjamanController extends Controller
     private const CANCELLATION_NOTE = 'Peminjaman dibatalkan oleh peminjam.';
 
     private const CANCELLATION_MUTATION_NOTE = 'Reservasi dipulihkan karena peminjaman dibatalkan oleh peminjam.';
+
+    public function __construct(private RedisNotificationService $notifications) {}
 
     public function store(StorePeminjamanRequest $request): RedirectResponse
     {
@@ -129,6 +132,15 @@ class PeminjamanController extends Controller
                 }
             }
         } while (true);
+
+        $this->notifications->notifyUser(
+            $user,
+            "Pengajuan peminjaman {$loan->kode_peminjaman} berhasil dikirim dan menunggu konfirmasi admin.",
+        );
+        $borrowerName = trim($user->first_name.' '.$user->last_name);
+        $this->notifications->notifyLoanProcessors(
+            "Pengajuan peminjaman baru dari {$borrowerName} ({$loan->kode_peminjaman}) menunggu konfirmasi.",
+        );
 
         $redirect = redirect()->route('user.beranda', ['page' => 'history']);
 

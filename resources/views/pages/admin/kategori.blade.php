@@ -393,39 +393,7 @@
             class="text-xs text-slate-500">
             Menampilkan {{ $kategoris->count() }} dari {{ $kategoris->total() }} kategori
           </p>
-          @if ($kategoris->hasPages())
-            @php
-              $paginationStart = max(1, min($kategoris->currentPage() - 1, $kategoris->lastPage() - 2));
-              $paginationEnd = min($kategoris->lastPage(), $paginationStart + 2);
-            @endphp
-            <nav aria-label="Navigasi halaman kategori" class="flex items-center justify-end gap-2">
-              @if (!$kategoris->onFirstPage())
-                <a href="{{ $kategoris->previousPageUrl() }}" aria-label="Halaman sebelumnya"
-                  class="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-[#00BFA5] bg-white text-slate-900 shadow-[0_4px_10px_rgba(0,177,156,0.12)] transition hover:bg-emerald-50 focus:outline-none focus:ring-2 focus:ring-[#00BFA5] focus:ring-offset-2">
-                  <iconify-icon icon="mdi:chevron-left" width="22"></iconify-icon>
-                </a>
-              @endif
-              @for ($page = $paginationStart; $page <= $paginationEnd; $page++)
-                @if ($page === $kategoris->currentPage())
-                  <span aria-current="page"
-                    class="inline-flex h-10 min-w-10 items-center justify-center rounded-xl border border-[#00BFA5] bg-[#00CFA8] px-3 text-sm font-semibold text-slate-950 shadow-[0_4px_10px_rgba(0,177,156,0.2)]">
-                    {{ $page }}
-                  </span>
-                @else
-                  <a href="{{ $kategoris->url($page) }}" aria-label="Halaman {{ $page }}"
-                    class="inline-flex h-10 min-w-10 items-center justify-center rounded-xl border border-[#00BFA5] bg-white px-3 text-sm font-semibold text-slate-900 shadow-[0_4px_10px_rgba(0,177,156,0.12)] transition hover:bg-emerald-50 focus:outline-none focus:ring-2 focus:ring-[#00BFA5] focus:ring-offset-2">
-                    {{ $page }}
-                  </a>
-                @endif
-              @endfor
-              @if ($kategoris->hasMorePages())
-                <a href="{{ $kategoris->nextPageUrl() }}" aria-label="Halaman berikutnya"
-                  class="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-[#00BFA5] bg-white text-slate-900 shadow-[0_4px_10px_rgba(0,177,156,0.12)] transition hover:bg-emerald-50 focus:outline-none focus:ring-2 focus:ring-[#00BFA5] focus:ring-offset-2">
-                  <iconify-icon icon="mdi:chevron-right" width="22"></iconify-icon>
-                </a>
-              @endif
-            </nav>
-          @endif
+          <x-pagination :paginator="$kategoris" label="Navigasi halaman kategori" />
         </div>
       </section>
         @endfragment
@@ -474,8 +442,7 @@
             @enderror
             </div>
             <div>
-              <label for="keterangan" class="mb-1 block text-xs font-medium text-slate-700">Keterangan <span
-                class="font-normal text-slate-400">(opsional)</span></label>
+              <label for="keterangan" class="mb-1 block text-xs font-medium text-slate-700">Keterangan</label>
             <textarea id="keterangan" name="keterangan" maxlength="255" rows="3"
               x-model="currentCategory.keterangan"
               class="block w-full resize-y rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 shadow-sm placeholder:text-slate-400 focus:border-[#08A9D6] focus:outline-none focus:ring-2 focus:ring-[#08A9D6]/20"
@@ -491,7 +458,7 @@
               Batal
             </button>
             <button type="submit" :disabled="categoryBusy" :aria-busy="categoryBusy.toString()"
-              class="inline-flex items-center justify-center rounded-md border border-[#009F91] bg-[#00B19C] px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-[#009A87] focus:outline-none focus:ring-2 focus:ring-[#00B19C] focus:ring-offset-2">
+              class="admin-submit-button inline-flex items-center justify-center rounded-md border border-[#009F91] bg-[#00B19C] px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-[#009A87] focus:outline-none focus:ring-2 focus:ring-[#00B19C] focus:ring-offset-2">
               <iconify-icon x-show="categoryBusy" icon="mdi:loading" class="animate-spin text-lg" aria-hidden="true"></iconify-icon>
               <iconify-icon x-show="!categoryBusy"
                 :icon="modalMode === 'edit' ? 'mdi:content-save-edit-outline' : 'mdi:content-save-plus-outline'"

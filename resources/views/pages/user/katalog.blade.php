@@ -87,53 +87,8 @@
               </article>
             @endforeach
           </div>
-          @if ($catalogItems->hasPages())
-            <nav class="mt-6 flex justify-center" aria-label="Navigasi halaman katalog">
-              <div class="flex items-center gap-1.5">
-                @if ($catalogItems->onFirstPage())
-                  <span class="flex h-9 w-9 items-center justify-center rounded-lg border border-[#b8ddd4] bg-white/70 text-slate-400" aria-disabled="true">
-                    <iconify-icon icon="mdi:chevron-left" aria-hidden="true"></iconify-icon>
-                  </span>
-                @else
-                  <a data-catalog-ajax href="{{ $catalogItems->previousPageUrl() }}" rel="prev" class="flex h-9 w-9 items-center justify-center rounded-lg border border-[#92d9cd] bg-white text-[#007f70] transition hover:bg-emerald-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#008b7a] focus-visible:ring-offset-2" aria-label="Halaman sebelumnya">
-                    <iconify-icon icon="mdi:chevron-left" aria-hidden="true"></iconify-icon>
-                  </a>
-                @endif
-
-                @if ($catalogItems->currentPage() > 2)
-                  <a data-catalog-ajax href="{{ $catalogItems->url(1) }}" class="flex h-9 min-w-9 items-center justify-center rounded-lg border border-[#92d9cd] bg-white px-2 text-sm font-semibold text-[#007f70] transition hover:bg-emerald-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#008b7a] focus-visible:ring-offset-2">1</a>
-                  @if ($catalogItems->currentPage() > 3)
-                    <span class="px-1 text-sm text-slate-500" aria-hidden="true">…</span>
-                  @endif
-                @endif
-
-                @foreach ($catalogItems->getUrlRange(max(1, $catalogItems->currentPage() - 1), min($catalogItems->lastPage(), $catalogItems->currentPage() + 1)) as $page => $url)
-                  @if ($page === $catalogItems->currentPage())
-                    <span class="flex h-9 min-w-9 items-center justify-center rounded-lg border border-[#00a88f] bg-[#00c99c] px-2 text-sm font-bold text-[#004e48] shadow-sm" aria-current="page">{{ $page }}</span>
-                  @else
-                    <a data-catalog-ajax href="{{ $url }}" class="flex h-9 min-w-9 items-center justify-center rounded-lg border border-[#92d9cd] bg-white px-2 text-sm font-semibold text-[#007f70] transition hover:bg-emerald-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#008b7a] focus-visible:ring-offset-2">{{ $page }}</a>
-                  @endif
-                @endforeach
-
-                @if ($catalogItems->currentPage() < $catalogItems->lastPage() - 1)
-                  @if ($catalogItems->currentPage() < $catalogItems->lastPage() - 2)
-                    <span class="px-1 text-sm text-slate-500" aria-hidden="true">…</span>
-                  @endif
-                  <a data-catalog-ajax href="{{ $catalogItems->url($catalogItems->lastPage()) }}" class="flex h-9 min-w-9 items-center justify-center rounded-lg border border-[#92d9cd] bg-white px-2 text-sm font-semibold text-[#007f70] transition hover:bg-emerald-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#008b7a] focus-visible:ring-offset-2">{{ $catalogItems->lastPage() }}</a>
-                @endif
-
-                @if ($catalogItems->hasMorePages())
-                  <a data-catalog-ajax href="{{ $catalogItems->nextPageUrl() }}" rel="next" class="flex h-9 w-9 items-center justify-center rounded-lg border border-[#92d9cd] bg-white text-[#007f70] transition hover:bg-emerald-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#008b7a] focus-visible:ring-offset-2" aria-label="Halaman berikutnya">
-                    <iconify-icon icon="mdi:chevron-right" aria-hidden="true"></iconify-icon>
-                  </a>
-                @else
-                  <span class="flex h-9 w-9 items-center justify-center rounded-lg border border-[#b8ddd4] bg-white/70 text-slate-400" aria-disabled="true">
-                    <iconify-icon icon="mdi:chevron-right" aria-hidden="true"></iconify-icon>
-                  </span>
-                @endif
-              </div>
-            </nav>
-          @endif
+          <x-pagination :paginator="$catalogItems" label="Navigasi halaman katalog" variant="user"
+            link-attribute="data-catalog-ajax" nav-class="mt-6 flex flex-wrap justify-center gap-1.5" />
         @else
           <div class="flex min-h-64 flex-col items-center justify-center gap-3 px-6 py-12 text-center">
             <iconify-icon icon="mdi:package-variant-remove" class="text-4xl text-[#008b7a]" aria-hidden="true"></iconify-icon>

@@ -1,7 +1,6 @@
 @props([
     'title' => 'Dashboard',
     'description' => '',
-    'notificationUrl' => '#',
     'profileUrl' => '#',
 ])
 
@@ -25,7 +24,8 @@
   $routeHeader = $routeHeaders[request()->route()?->getName()] ?? ['title' => 'Dashboard', 'description' => ''];
   $title = $title === 'Dashboard' ? $routeHeader['title'] : $title;
   $description = $description !== '' ? $description : $routeHeader['description'];
-  $profileName = auth()->user()?->username ?? 'Admin';
+  $currentUser = auth()->user();
+  $profileName = $currentUser?->username ?? 'Admin';
   $profileInitial = strtoupper(substr($profileName, 0, 1));
 @endphp
 
@@ -66,7 +66,7 @@
             <span class="text-slate-300" aria-hidden="true">/</span>
           @endif
           <a href="{{ $href }}"
-            class="transition {{ $roomDetail && $index === array_key_last($segments)
+            class="transition {{ $index === array_key_last($segments)
                 ? 'font-semibold text-[#00785F]'
                 : 'font-medium text-[#8AA39E] hover:text-[#007F6B]' }}">
             {{ $label }}
@@ -86,10 +86,7 @@
         class="flex h-11 w-11 items-center justify-center rounded-full border border-[#C6DAD5] bg-[#F7FAF9] text-[#087F70] transition hover:bg-[#E8F4F1] focus:outline-none focus:ring-2 focus:ring-[#00A995] focus:ring-offset-2 lg:hidden">
         <iconify-icon :icon="mobileSidebarOpen ? 'mdi:close' : 'mdi:menu'" width="22" aria-hidden="true"></iconify-icon>
       </button>
-      <a href="{{ $notificationUrl }}" aria-label="Notifikasi" title="Notifikasi"
-        class="flex h-11 w-11 items-center justify-center rounded-full border border-[#C6DAD5] bg-[#F7FAF9] text-[#087F70] transition hover:bg-[#E8F4F1] focus:outline-none focus:ring-2 focus:ring-[#00A995] focus:ring-offset-2">
-        <iconify-icon icon="mdi:bell" width="22" aria-hidden="true"></iconify-icon>
-      </a>
+      <x-user.notifikasi />
       <div class="relative" x-data="{ profileMenuOpen: false }" @keydown.escape.window="profileMenuOpen = false">
         <button type="button" @click.stop="profileMenuOpen = !profileMenuOpen"
           :aria-expanded="profileMenuOpen.toString()" aria-haspopup="menu" aria-label="Buka profil" title="Profil"

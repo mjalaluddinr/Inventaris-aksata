@@ -4,12 +4,15 @@ namespace App\Http\Controllers\Auth;
 
 use App\Http\Controllers\Controller;
 use App\Models\User;
+use App\Services\RedisNotificationService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
 
 class PasswordRecoveryController extends Controller
 {
+    public function __construct(private RedisNotificationService $notifications) {}
+
     public function create(): View
     {
         return view('pages.auth.forgot-password');
@@ -22,11 +25,17 @@ class PasswordRecoveryController extends Controller
             'username' => ['required', 'string', 'max:50'],
         ]);
 
-        User::query()
+        $user = User::query()
             ->where('username', $validated['username'])
             ->where('is_active', true)
-            ->first()
-            ?->update(['must_change_password' => true]);
+            ->first();
+
+        if ($user instanceof User) {
+            $user->update(['must_change_password' => true]);
+            $this->notifications->notifyAdministrators(
+                "Permintaan ganti password dari akun {$user->username}.",
+            );
+        }
 
         // ASVS 16.5.1: Return the same response whether or not the username exists.
         return redirect()

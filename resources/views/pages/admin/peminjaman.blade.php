@@ -379,7 +379,9 @@
             </table>
           </div>
           @if ($peminjamans->hasPages())
-            <div class="border-t border-[#dce7e4] px-4 py-3">{{ $peminjamans->links() }}</div>
+            <div class="border-t border-[#dce7e4] px-4 py-3">
+              <x-pagination :paginator="$peminjamans" label="Navigasi halaman peminjaman" />
+            </div>
           @endif
         @else
           <div class="px-6 py-12 text-center">
@@ -462,7 +464,7 @@
             <label for="manual-loan-code" class="block text-xs font-semibold text-slate-700">Masukkan kode QR secara manual</label>
             <div class="mt-2 flex gap-2">
               <input id="manual-loan-code" x-model="manualCode" type="text" maxlength="30" autocomplete="off" spellcheck="false" class="min-w-0 flex-1 rounded-lg border border-slate-200 px-3 py-2 text-sm uppercase tracking-wide focus:border-[#00a88f] focus:outline-none focus:ring-2 focus:ring-[#00a88f]/20" placeholder="PJM-YYYYMMDD-0001">
-              <button type="submit" :disabled="isSubmitting" :aria-busy="isSubmitting.toString()" class="inline-flex min-w-24 items-center justify-center rounded-lg bg-[#00d69f] px-4 py-2 text-xs font-bold text-[#003f38] hover:bg-[#36e9b3] disabled:opacity-50">
+              <button type="submit" :disabled="isSubmitting" :aria-busy="isSubmitting.toString()" class="admin-submit-button inline-flex min-w-24 items-center justify-center rounded-lg bg-[#00d69f] px-4 py-2 text-xs font-bold text-[#003f38] hover:bg-[#36e9b3]">
                 <iconify-icon x-show="isSubmitting" icon="mdi:loading" class="animate-spin text-lg" aria-hidden="true"></iconify-icon>
                 <span x-show="!isSubmitting">Konfirmasi</span>
                 <span x-show="isSubmitting" class="sr-only">Sedang memproses...</span>

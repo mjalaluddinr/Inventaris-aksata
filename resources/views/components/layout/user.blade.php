@@ -1,4 +1,4 @@
-@props(['title' => 'InvenTrack', 'notifications'])
+@props(['title' => 'InvenTrack'])
 
 <!DOCTYPE html>
 <html lang="id">
@@ -38,7 +38,7 @@
     }
 
     .user-card-enter {
-      animation: user-card-enter 240ms both cubic-bezier(0.2, 0.7, 0.2, 1);
+      animation: user-card-enter 180ms both cubic-bezier(0.2, 0.7, 0.2, 1);
       transition: box-shadow 220ms ease, filter 220ms ease;
     }
 
@@ -88,7 +88,7 @@
 </head>
 
 <body x-data="userPortal()" x-init="initCart(); initCatalogAjax(); initHistoryAjax(); @if (session('cart_cleared')) clearCart() @elseif (session('cart_items_submitted')) removeSubmittedItems(@js(session('cart_items_submitted'))) @endif" class="min-h-screen bg-[#e9faf5] font-sans text-[#153c36] antialiased">
-  <x-user.navbar :notifications="$notifications" />
+  <x-user.navbar />
   {{ $slot }}
   <x-user.keranjang />
   <div

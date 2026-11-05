@@ -447,39 +447,7 @@
             x-text="previewCount === null ? 'Menampilkan {{ $lemaris->count() }} dari {{ $lemaris->total() }} lemari' : `Menampilkan ${previewCount} hasil sementara`">
             Menampilkan {{ $lemaris->count() }} dari {{ $lemaris->total() }} lemari
           </p>
-          @if ($lemaris->hasPages())
-            @php
-              $paginationStart = max(1, min($lemaris->currentPage() - 1, $lemaris->lastPage() - 2));
-              $paginationEnd = min($lemaris->lastPage(), $paginationStart + 2);
-            @endphp
-            <nav aria-label="Navigasi halaman lemari" class="flex items-center justify-end gap-2">
-              @if (!$lemaris->onFirstPage())
-                <a href="{{ $lemaris->previousPageUrl() }}" aria-label="Halaman sebelumnya"
-                  class="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-[#00BFA5] bg-white text-slate-900 shadow-[0_4px_10px_rgba(0,177,156,0.12)] transition hover:bg-emerald-50 focus:outline-none focus:ring-2 focus:ring-[#00BFA5] focus:ring-offset-2">
-                  <iconify-icon icon="mdi:chevron-left" width="22"></iconify-icon>
-                </a>
-              @endif
-              @for ($page = $paginationStart; $page <= $paginationEnd; $page++)
-                @if ($page === $lemaris->currentPage())
-                  <span aria-current="page"
-                    class="inline-flex h-10 min-w-10 items-center justify-center rounded-xl border border-[#00BFA5] bg-[#00CFA8] px-3 text-sm font-semibold text-slate-950 shadow-[0_4px_10px_rgba(0,177,156,0.2)]">
-                    {{ $page }}
-                  </span>
-                @else
-                  <a href="{{ $lemaris->url($page) }}" aria-label="Halaman {{ $page }}"
-                    class="inline-flex h-10 min-w-10 items-center justify-center rounded-xl border border-[#00BFA5] bg-white px-3 text-sm font-semibold text-slate-900 shadow-[0_4px_10px_rgba(0,177,156,0.12)] transition hover:bg-emerald-50 focus:outline-none focus:ring-2 focus:ring-[#00BFA5] focus:ring-offset-2">
-                    {{ $page }}
-                  </a>
-                @endif
-              @endfor
-              @if ($lemaris->hasMorePages())
-                <a href="{{ $lemaris->nextPageUrl() }}" aria-label="Halaman berikutnya"
-                  class="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-[#00BFA5] bg-white text-slate-900 shadow-[0_4px_10px_rgba(0,177,156,0.12)] transition hover:bg-emerald-50 focus:outline-none focus:ring-2 focus:ring-[#00BFA5] focus:ring-offset-2">
-                  <iconify-icon icon="mdi:chevron-right" width="22"></iconify-icon>
-                </a>
-              @endif
-            </nav>
-          @endif
+          <x-pagination :paginator="$lemaris" label="Navigasi halaman lemari" />
         </div>
       </div>
         @endfragment
@@ -556,7 +524,7 @@
             <button type="button" @click="closeLemariModal()"
               class="rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-slate-400">Batal</button>
             <button type="submit" :disabled="formBusy" :aria-busy="formBusy.toString()"
-              class="rak-primary-button inline-flex items-center justify-center rounded-md border border-[#009F91] bg-sidebar-start px-4 py-2 text-sm font-semibold text-white shadow-sm transition focus:outline-none focus:ring-2 focus:ring-sidebar-start focus:ring-offset-2">
+                class="admin-submit-button rak-primary-button inline-flex items-center justify-center rounded-md border border-[#009F91] bg-sidebar-start px-4 py-2 text-sm font-semibold text-white shadow-sm transition focus:outline-none focus:ring-2 focus:ring-sidebar-start focus:ring-offset-2">
               <iconify-icon x-show="formBusy" icon="mdi:loading" class="animate-spin text-lg" aria-hidden="true"></iconify-icon>
               <iconify-icon x-show="!formBusy"
                 :icon="modalMode === 'create' ? 'mdi:content-save-plus-outline' : 'mdi:content-save-edit-outline'"

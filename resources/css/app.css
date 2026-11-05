@@ -30,6 +30,15 @@
     background: linear-gradient(180deg, #00B19C 0%, #00385A 100%);
 }
 
+.admin-submit-button:disabled {
+    opacity: 0.6;
+}
+
+.admin-submit-button:disabled[aria-busy="true"] {
+    cursor: wait;
+    opacity: 1;
+}
+
 @keyframes admin-nav-arrive {
     from {
         opacity: 0;
@@ -55,12 +64,11 @@
 }
 
 .admin-sidebar-copy {
-    animation: admin-sidebar-copy-arrive 360ms both cubic-bezier(0.22, 1, 0.36, 1);
+    animation: admin-sidebar-copy-arrive 220ms both cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .admin-nav-link {
-    animation: admin-nav-arrive 420ms both cubic-bezier(0.22, 1, 0.36, 1);
-    animation-delay: calc(var(--nav-index, 0) * 35ms);
+    animation: admin-nav-arrive 220ms both cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 @keyframes admin-page-arrive {
@@ -76,7 +84,7 @@
 }
 
 .admin-page-enter {
-    animation: admin-page-arrive 360ms both cubic-bezier(0.22, 1, 0.36, 1);
+    animation: admin-page-arrive 180ms both cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 @media (prefers-reduced-motion: reduce) {

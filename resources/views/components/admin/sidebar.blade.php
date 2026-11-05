@@ -35,8 +35,8 @@
       </button>
       <button x-cloak x-show="!open" @click.stop="open = true" aria-expanded="false" aria-label="Perluas sidebar"
         title="Perluas sidebar"
-        class="admin-sidebar-expand absolute inset-1 z-10 hidden cursor-pointer items-center justify-center rounded-xl border border-white/70 bg-gradient-to-br from-white/95 to-[#d7f7ee]/95 text-[#00505B] opacity-0 shadow-inner transition-[opacity,transform] duration-200 group-hover:scale-[1.03] group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-700 lg:flex">
-        <iconify-icon icon="mdi:chevron-double-right" width="23" aria-hidden="true"></iconify-icon>
+        class="admin-sidebar-expand absolute inset-1 z-10 hidden cursor-pointer items-center justify-center rounded-xl border border-white/70 bg-gradient-to-br from-white/95 to-[#d7f7ee]/95 text-[#00505B] opacity-0 shadow-inner transition-[opacity,transform,background-color] duration-200 group-hover:scale-[1.03] group-hover:from-[#b8f5e5] group-hover:to-[#69dfbd] group-hover:opacity-100 group-focus-within:from-[#b8f5e5] group-focus-within:to-[#69dfbd] group-focus-within:opacity-100 focus-visible:opacity-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-700 lg:flex">
+        <iconify-icon icon="mdi:chevron-double-right" width="23" class="text-[#008b7a]" aria-hidden="true"></iconify-icon>
       </button>
     </div>
   </div>

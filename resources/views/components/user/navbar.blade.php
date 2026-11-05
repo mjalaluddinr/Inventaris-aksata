@@ -48,7 +48,7 @@
         <iconify-icon icon="mdi:cart" class="text-xl sm:text-2xl" aria-hidden="true"></iconify-icon>
         <span x-show="itemCount > 0" x-text="itemCount" class="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-rose-500 px-1 text-[10px] font-bold text-white"></span>
       </button>
-      <x-user.notifikasi :notifications="$notifications" />
+      <x-user.notifikasi />
       <div class="relative" x-data="{ profileOpen: false }" @keydown.escape.window="profileOpen = false">
         <button type="button" @click.stop="profileOpen = !profileOpen" :aria-expanded="profileOpen.toString()" aria-haspopup="menu" class="flex h-8 w-8 items-center justify-center rounded-full bg-white/15 text-sm font-medium text-white transition hover:bg-white/25 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white sm:h-10 sm:w-10 sm:text-base" aria-label="Buka profil">
           {{ $userInitial }}
