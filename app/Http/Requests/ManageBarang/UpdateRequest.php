@@ -22,6 +22,12 @@ class UpdateRequest extends FormRequest
             // ASVS 2.2.2: Complete omitted allocations at the trusted request boundary.
             $this->completeStockLocationAllocation();
         }
+
+        $unit = $this->input('satuan');
+
+        if (is_string($unit)) {
+            $this->merge(['satuan' => strtoupper($unit)]);
+        }
     }
 
     public function rules(): array
@@ -31,6 +37,7 @@ class UpdateRequest extends FormRequest
 
         return [
             'barang_form' => ['required', Rule::in(['edit', 'status'])],
+            'status_field' => ['exclude_unless:barang_form,status', 'required', Rule::in(['kondisi', 'kelayakan'])],
             'locations' => ['required_if:barang_form,edit', 'array', 'min:1', 'max:50'],
             'locations.*' => ['required', 'array:ruangan_id,lemari_id,toolbox_id,stok_total,stok_tersedia'],
             'locations.*.ruangan_id' => [
@@ -62,11 +69,11 @@ class UpdateRequest extends FormRequest
                 Rule::unique('barang', 'kode_barang')->ignore($barangId, 'barang_id'),
             ],
             'nama_barang' => ['required', 'string', 'max:150'],
-            'satuan' => ['required', 'string', 'max:20'],
+            'satuan' => ['required', Rule::in(['PCS', 'METER', 'UNIT', 'BUAH', 'ROLL', 'SET', 'LAINNYA'])],
             'stok_total' => ['required', 'integer', 'min:0'],
             'stok_tersedia' => ['required', 'integer', 'min:0', 'lte:stok_total'],
-            'kondisi' => ['required', Rule::in(['baru', 'lama'])],
-            'kelayakan' => ['required', Rule::in(['layak', 'tidak_layak'])],
+            'kondisi' => ['exclude_unless:status_field,kondisi', 'required', Rule::in(['baru', 'lama'])],
+            'kelayakan' => ['exclude_unless:status_field,kelayakan', 'required', Rule::in(['layak', 'tidak_layak'])],
             'spesifikasi' => ['nullable', 'string', 'max:255'],
             // ASVS 2.2.1/2.2.2: Validate uploaded image content and size at the request boundary.
             'image' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:5120'],
@@ -122,12 +129,13 @@ class UpdateRequest extends FormRequest
                     }
                 }
 
-                if ($stockTotal !== (int) $this->input('stok_total')) {
-                    $validator->errors()->add('locations', 'Jumlah stok per lokasi harus sama dengan jumlah total barang.');
+                // ASVS 2.2.1/2.2.3: Keep location allocations within the declared item stock.
+                if ($stockTotal > (int) $this->input('stok_total')) {
+                    $validator->errors()->add('locations', 'Jumlah stok per lokasi tidak boleh melebihi jumlah total barang.');
                 }
 
-                if ($stockAvailable !== (int) $this->input('stok_tersedia')) {
-                    $validator->errors()->add('locations', 'Stok tersedia per lokasi harus sama dengan stok tersedia barang.');
+                if ($stockAvailable > (int) $this->input('stok_tersedia')) {
+                    $validator->errors()->add('locations', 'Stok tersedia per lokasi tidak boleh melebihi stok tersedia barang.');
                 }
             },
         ];
@@ -138,6 +146,8 @@ class UpdateRequest extends FormRequest
         return [
             'barang_form.required' => 'Jenis perubahan barang tidak valid.',
             'barang_form.in' => 'Jenis perubahan barang tidak valid.',
+            'status_field.required' => 'Status barang yang akan diubah tidak valid.',
+            'status_field.in' => 'Status barang yang akan diubah tidak valid.',
             'locations.required_if' => 'Minimal satu lokasi stok harus ditambahkan.',
             'locations.array' => 'Daftar lokasi stok tidak valid.',
             'locations.min' => 'Minimal satu lokasi stok harus ditambahkan.',

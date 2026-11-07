@@ -97,7 +97,7 @@
         :aria-busy="filterLoading.toString()">
         @fragment('mutation-results')
       <div class="overflow-hidden rounded-xl border border-[#D3E3DF] bg-white shadow-sm">
-        <div class="theme-scrollbar overflow-x-auto">
+        <div class="overflow-x-auto">
           <table class="min-w-[1180px] divide-y divide-[#DCE9E6]">
             <thead class="bg-[#F1F8F6]">
               <tr>

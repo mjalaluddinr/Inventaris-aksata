@@ -8,6 +8,7 @@
     <meta name="color-scheme" content="light">
     <link rel="icon" type="image/svg+xml" href="{{ asset('assets/icon.svg') }}">
     <title>Pratinjau Laporan Peminjaman {{ $year }}</title>
+    @fonts('poppins')
     @vite('resources/css/app.css')
     <style>
       @page {

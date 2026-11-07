@@ -73,7 +73,10 @@ class ManageLemari extends Controller
 
         try {
             DB::transaction(function () use ($validated) {
-                Lemari::create($validated);
+                Lemari::query()->create([
+                    ...$validated,
+                    'kode_lemari' => $this->nextLemariCode(),
+                ]);
             });
 
             return redirect()->route('admin.rak.index')
@@ -128,5 +131,26 @@ class ManageLemari extends Controller
 
             return redirect()->back()->with('error', 'Terjadi kesalahan pada sistem.');
         }
+    }
+
+    private function nextLemariCode(): string
+    {
+        $usedCodes = array_fill_keys(
+            array_map('strtoupper', Lemari::withTrashed()->lockForUpdate()->pluck('kode_lemari')->all()),
+            true,
+        );
+        $nextCodeNumber = 0;
+
+        foreach (array_keys($usedCodes) as $code) {
+            if (preg_match('/^LMR-(\d+)$/', $code, $matches) === 1) {
+                $nextCodeNumber = max($nextCodeNumber, (int) $matches[1]);
+            }
+        }
+
+        do {
+            $code = sprintf('LMR-%03d', ++$nextCodeNumber);
+        } while (isset($usedCodes[$code]));
+
+        return $code;
     }
 }

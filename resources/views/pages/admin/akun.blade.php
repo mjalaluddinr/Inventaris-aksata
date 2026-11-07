@@ -114,6 +114,7 @@
       roleDialogSavesAccount: false,
       passwordVisible: false,
       openImport: false,
+      importBusy: false,
       deleteModalOpen: false,
       deleteShaking: false,
       passwordResetOpen: @js($passwordResetUser !== null),
@@ -329,7 +330,7 @@
                   ? 'Import gagal'
                   : '';
 
-          window.showToast(message, type, 2500, title);
+          window.showToast(message, type, 5000, title);
       },
       accountFieldLabel(field) {
           if (field.startsWith('privileges')) return 'Hak akses';
@@ -675,7 +676,7 @@
         <div class="flex flex-wrap gap-2">
           <button type="button" @click="createUser()"
             class="akun-primary-button inline-flex items-center gap-2 rounded-lg border border-[#009F91] bg-sidebar-start px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-[#009a87] focus:outline-none focus:ring-2 focus:ring-sidebar-start focus:ring-offset-2">
-            <iconify-icon icon="mdi:plus" width="18"></iconify-icon> Tambah Akun
+            <iconify-icon icon="mdi:account-plus-outline" width="18" aria-hidden="true"></iconify-icon> Tambah Akun
           </button>
           @if (auth()->user()?->canManageAllAccounts())
           <button type="button" @click="openImport = true"
@@ -1006,7 +1007,7 @@
                   :icon="modalMode === 'create' ? 'mdi:content-save-plus-outline' : 'mdi:content-save-edit-outline'"
                   width="18" aria-hidden="true"></iconify-icon>
                 <span x-show="!accountBusy" class="ml-2" x-text="modalMode === 'create' ? 'Simpan Akun' : 'Simpan Perubahan'"></span>
-                <span x-show="accountBusy" class="sr-only">Sedang menyimpan...</span>
+                <span x-show="accountBusy">Menyimpan...</span>
               </button>
             </div>
           </form>
@@ -1109,7 +1110,7 @@
               class="admin-submit-button akun-primary-button inline-flex items-center justify-center rounded-md border border-[#009F91] bg-sidebar-start px-4 py-2 text-sm font-semibold text-white shadow-sm transition focus:outline-none focus:ring-2 focus:ring-sidebar-start focus:ring-offset-2 disabled:cursor-not-allowed">
               <iconify-icon x-show="accountBusy" icon="mdi:loading" class="animate-spin text-lg" aria-hidden="true"></iconify-icon>
               <span x-show="!accountBusy" x-text="roleDialogSavesAccount ? 'Simpan Role' : 'Terapkan'"></span>
-              <span x-show="accountBusy" class="sr-only">Sedang menyimpan...</span>
+              <span x-show="accountBusy">Menyimpan...</span>
             </button>
           </div>
         </section>
@@ -1123,19 +1124,21 @@
       <div x-show="openImport" x-transition.opacity style="display: none; z-index: 90;"
         class="fixed inset-0 z-[90] flex items-center justify-center overflow-y-auto overscroll-contain p-4 sm:p-6"
         role="dialog" aria-modal="true">
-        <div class="akun-modal-backdrop absolute inset-0 backdrop-blur-md" @click="openImport = false"></div>
+        <div class="akun-modal-backdrop absolute inset-0 backdrop-blur-md"
+          @click="if (!importBusy) openImport = false"></div>
         <div x-show="openImport" x-transition
           class="akun-modal-panel relative z-10 my-auto w-full max-w-lg overflow-hidden rounded-xl border-2 border-[#08A9D6] bg-white shadow-[0_24px_80px_rgba(2,25,41,0.4)]">
 
           <div class="flex items-center justify-between border-b border-slate-200 px-5 py-4">
             <h2 class="text-base font-semibold text-slate-800">Import Data Akun (Excel)</h2>
-            <button type="button" @click="openImport = false"
+            <button type="button" @click="openImport = false" :disabled="importBusy"
               class="rounded-md p-1 text-slate-500 transition hover:bg-rose-50 hover:text-rose-600">
               <iconify-icon icon="mdi:close" width="20"></iconify-icon>
             </button>
           </div>
 
           <form action="{{ route('admin.akun.import') }}" method="POST" enctype="multipart/form-data"
+            @submit="importBusy = true"
             class="px-5 py-4">
             @csrf
             <div class="space-y-4">
@@ -1202,10 +1205,14 @@
             <div class="mt-6 flex justify-end gap-2 border-t border-slate-200 pt-4">
               <button type="button" @click="openImport = false"
                 class="rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-slate-400">Batal</button>
-              <button type="submit"
+              <button type="submit" :aria-busy="importBusy.toString()"
                 class="akun-primary-button rounded-md border border-[#009F91] bg-sidebar-start px-4 py-2 text-sm font-semibold text-white shadow-sm transition focus:outline-none focus:ring-2 focus:ring-sidebar-start focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-                :disabled="!importFileName">
-                <iconify-icon icon="mdi:upload" width="16"></iconify-icon> Simpan Import
+                :disabled="!importFileName || importBusy">
+                <iconify-icon x-show="importBusy" icon="mdi:loading" class="animate-spin text-lg"
+                  aria-hidden="true"></iconify-icon>
+                <iconify-icon x-show="!importBusy" icon="mdi:upload" width="16" aria-hidden="true"></iconify-icon>
+                <span x-show="!importBusy">Simpan Import</span>
+                <span x-show="importBusy">Mengimpor...</span>
               </button>
             </div>
           </form>
@@ -1234,7 +1241,7 @@
               Tindakan ini tidak dapat dibatalkan dan semua hak akses terkait akan ikut terhapus.
             </p>
           </div>
-          <div class="flex justify-center gap-3 border-t border-slate-200 bg-slate-50 px-6 py-4">
+          <div class="flex justify-end gap-3 border-t border-slate-200 bg-slate-50 px-6 py-4">
             <button type="button" @click="cancelDelete()" :disabled="accountBusy"
               class="rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-slate-400">Batal</button>
             <button type="button" @click="submitDelete()" :disabled="accountBusy" :aria-busy="accountBusy.toString()"
@@ -1244,7 +1251,7 @@
               <iconify-icon x-show="!accountBusy" icon="mdi:delete-outline" class="text-lg"
                 aria-hidden="true"></iconify-icon>
               <span x-show="!accountBusy">Ya, Hapus</span>
-              <span x-show="accountBusy" class="sr-only">Sedang menghapus...</span>
+              <span x-show="accountBusy">Menghapus...</span>
             </button>
           </div>
         </div>

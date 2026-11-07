@@ -13,7 +13,7 @@
     :class="(open || mobileSidebarOpen) ? 'px-3 py-4' : 'p-2'">
     <div
       class="admin-sidebar-logo-card group relative flex h-16 shrink-0 items-center rounded-2xl bg-white p-1 shadow-lg transition-[width] duration-300"
-      :class="(open || mobileSidebarOpen) ? 'w-full gap-3' : 'w-16 justify-center'">
+      :class="(open || mobileSidebarOpen) ? 'w-full gap-2' : 'w-16 justify-center'">
       <span
         class="flex h-14 w-14 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-teal-300 to-teal-500">
         <img src="{{ asset('assets/icon.svg') }}" alt="" class="h-10 w-10 translate-x-0.5 object-contain">
@@ -21,14 +21,15 @@
       <div x-cloak x-show="open || mobileSidebarOpen" x-transition:enter="transition ease-out duration-300"
         x-transition:enter-start="opacity-0 -translate-x-2" x-transition:enter-end="opacity-100 translate-x-0"
         x-transition:leave="transition ease-in duration-200" x-transition:leave-start="opacity-100 translate-x-0"
-        x-transition:leave-end="opacity-0 -translate-x-2" class="admin-sidebar-copy min-w-0 overflow-hidden">
-        <h1 class="whitespace-nowrap text-xl font-bold leading-tight tracking-wide text-[#00385A]">InvenTrack</h1>
+        x-transition:leave-end="opacity-0 -translate-x-2"
+        class="admin-sidebar-copy min-w-0 flex-1 overflow-hidden pr-10">
+        <h1 class="whitespace-nowrap text-lg font-bold leading-tight tracking-wide text-[#00385A]">InvenTrack</h1>
         <p class="text-[9px] font-semibold uppercase leading-tight tracking-wider text-[#7f9e9a]">Sistem Inventaris
           Jurusan</p>
       </div>
       <button x-cloak x-show="open" @click.stop="open = false" :aria-expanded="open.toString()"
         aria-label="Ciutkan sidebar" title="Ciutkan sidebar"
-        class="admin-sidebar-collapse group/collapse hidden h-10 w-10 shrink-0 cursor-pointer items-center justify-center rounded-xl border border-white/15 bg-gradient-to-br from-[#008b7a] to-[#00385A] text-white shadow-md shadow-[#00385A]/20 transition-[transform,box-shadow] duration-200 hover:-translate-x-0.5 hover:shadow-lg hover:shadow-[#00385A]/30 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#00bfa5] lg:flex">
+        class="admin-sidebar-collapse group/collapse absolute right-1 top-1/2 z-20 hidden h-8 w-8 -translate-y-1/2 cursor-pointer items-center justify-center rounded-xl border border-transparent bg-transparent text-[#008b7a] transition-[background-color,color] duration-200 hover:border-[#00bfa5] hover:bg-[#b8f5e5] hover:text-[#006b5d] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#00bfa5] lg:flex">
         <iconify-icon icon="mdi:chevron-double-left" width="20"
           class="transition-transform duration-200 group-hover/collapse:-translate-x-0.5"
           aria-hidden="true"></iconify-icon>
@@ -48,6 +49,7 @@
       $menuItems = [
           ['route' => 'admin.dashboard', 'icon' => 'mdi:home', 'label' => 'Dashboard'],
           ['route' => 'admin.barang', 'icon' => 'mdi:package-variant-closed', 'label' => 'Data Barang'],
+          ['route' => 'admin.toolbox.index', 'icon' => 'mdi:archive-outline', 'label' => 'Wadah'],
           ['route' => 'admin.kategori', 'icon' => 'mdi:tag-multiple-outline', 'label' => 'Kategori'],
           ['route' => 'admin.ruangan.index', 'icon' => 'boxicons:door-open-alt-filled', 'label' => 'Ruangan'],
           ['route' => 'admin.rak.index', 'icon' => 'material-symbols:shelves', 'label' => 'Rak Penyimpanan'],
@@ -77,7 +79,7 @@
                   $menuItems,
                   static fn(array $menu): bool => in_array(
                       $menu['route'],
-                      ['admin.dashboard', 'admin.barang', 'admin.kategori', 'admin.ruangan.index', 'admin.rak.index'],
+                      ['admin.dashboard', 'admin.barang', 'admin.toolbox.index', 'admin.kategori', 'admin.ruangan.index', 'admin.rak.index'],
                       true,
                   ),
               );
@@ -102,6 +104,7 @@
         $isActive =
             $currentRouteName === $menu['route'] ||
             ($menu['route'] === 'admin.ruangan.index' && request()->routeIs('admin.ruangan.*')) ||
+            ($menu['route'] === 'admin.toolbox.index' && request()->routeIs('admin.toolbox.*')) ||
             ($menu['route'] === 'admin.rak.index' && request()->routeIs('admin.rak.*'));
       @endphp
       <a href="{{ route($menu['route']) }}" title="{{ $menu['label'] }}"

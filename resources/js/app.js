@@ -78,7 +78,7 @@ const formatToastMessage = (message, type) => {
         : [];
 };
 
-window.showToast = (message, type = 'success', duration = 2500, title = '') => {
+window.showToast = (message, type = 'success', duration = 5000, title = '') => {
     const messageParts = formatToastMessage(message, type);
     const validParts = messageParts.filter((part) => part.text !== '');
 
@@ -94,7 +94,7 @@ window.showToast = (message, type = 'success', duration = 2500, title = '') => {
 
     const durationMs = Number.isFinite(duration)
         ? Math.min(Math.max(duration, 1000), 10000)
-        : 2500;
+        : 5000;
 
     window.dispatchEvent(new CustomEvent('app-toast', {
         detail: {
@@ -111,12 +111,15 @@ Alpine.data('globalToast', () => ({
     message: '',
     type: 'success',
     title: 'Berhasil!',
+    duration: 5000,
     timeout: null,
+    progressAnimation: null,
     toastListener: null,
     init() {
         this.toastListener = (event) => {
             this.message = event.detail.message;
             this.type = event.detail.type;
+            this.duration = event.detail.duration;
             this.title = event.detail.title || ({
                 error: 'Gagal!',
                 warning: 'Perhatian!',
@@ -125,6 +128,14 @@ Alpine.data('globalToast', () => ({
             })[this.type];
             this.visible = true;
             window.clearTimeout(this.timeout);
+            this.progressAnimation?.cancel();
+            this.progressAnimation = null;
+            this.$nextTick(() => {
+                this.progressAnimation = this.$refs.progress.animate(
+                    [{ transform: 'scaleX(1)' }, { transform: 'scaleX(0)' }],
+                    { duration: this.duration, easing: 'linear', fill: 'forwards' },
+                );
+            });
             this.timeout = window.setTimeout(() => {
                 this.visible = false;
             }, event.detail.duration);
@@ -135,10 +146,12 @@ Alpine.data('globalToast', () => ({
     destroy() {
         window.removeEventListener('app-toast', this.toastListener);
         window.clearTimeout(this.timeout);
+        this.progressAnimation?.cancel();
     },
     dismiss() {
         this.visible = false;
         window.clearTimeout(this.timeout);
+        this.progressAnimation?.cancel();
     },
 }));
 

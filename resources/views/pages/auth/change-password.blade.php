@@ -7,6 +7,7 @@
   <meta name="theme-color" content="#00385A">
   <link rel="icon" type="image/svg+xml" href="{{ asset('assets/icon.svg') }}">
   <title>Ganti Password - InvenTrack</title>
+  @fonts('poppins')
   @vite(['resources/css/app.css', 'resources/js/app.js'])
 </head>
 

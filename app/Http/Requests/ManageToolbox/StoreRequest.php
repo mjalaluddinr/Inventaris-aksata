@@ -3,6 +3,7 @@
 namespace App\Http\Requests\ManageToolbox;
 
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
 
 class StoreRequest extends FormRequest
 {
@@ -17,6 +18,7 @@ class StoreRequest extends FormRequest
         return [
             'nama_toolbox' => ['required', 'string', 'max:100'],
             'keterangan' => ['nullable', 'string', 'max:255'],
+            'return_to' => ['nullable', Rule::in(['barang', 'toolbox'])],
         ];
     }
 

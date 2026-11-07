@@ -21,8 +21,6 @@
       importError: '',
       imagePreview: '',
       imagePreviewName: '',
-      toolboxModalOpen: @js($errors->any() && old('toolbox_form') === 'store'),
-      toolboxSubmitting: false,
       modalOpen: @js($errors->any() && in_array(old('barang_form'), ['create', 'edit'], true)),
       modalMode: @js(old('barang_form') === 'edit' ? 'edit' : 'create'),
       currentItem: {
@@ -31,7 +29,7 @@
           locations: @js(old('locations', [['ruangan_id' => '', 'lemari_id' => '', 'toolbox_id' => '', 'stok_total' => 0, 'stok_tersedia' => 0]])),
           kode_barang: @js(old('kode_barang', '')),
           nama_barang: @js(old('nama_barang', '')),
-          satuan: @js(old('satuan', '')),
+          satuan: @js(strtoupper((string) old('satuan', ''))),
           stok_total: @js(old('stok_total', 0)),
           stok_tersedia: @js(old('stok_tersedia', 0)),
           kondisi: @js(old('kondisi', 'baru')),
@@ -60,6 +58,14 @@
         )
         ->values(),
 ),
+      roomOptions: @js(
+    $ruangans
+        ->map(fn($ruangan) => [
+            'ruangan_id' => $ruangan->ruangan_id,
+            'nama_ruangan' => $ruangan->nama_ruangan,
+        ])
+        ->values(),
+),
       deleteModalOpen: false,
       deleteLoading: false,
       pendingDeleteForm: null,
@@ -72,6 +78,7 @@
       usageActivePanel: @js($filters['panel'] ?? 'usage'),
       selectedBarangId: @js($selectedBarang?->barang_id ?? ''),
       usagePanelLoading: false,
+      usagePanelRequest: null,
       usageSubmitting: false,
       activeUsageExpanded: false,
       init() {
@@ -136,6 +143,7 @@
                   });
               }
               window.history.replaceState({}, '', requestUrl);
+              await this.reloadUsagePanel();
           } catch (error) {
               if (error.name !== 'AbortError') {
                   this.filterError = error.message || 'Daftar barang tidak dapat dimuat.';
@@ -179,9 +187,15 @@
       async reloadUsagePanel() {
           const container = document.getElementById('barang-usage-container');
           if (!container) return;
+          if (this.usagePanelRequest) this.usagePanelRequest.abort();
+
+          const request = new AbortController();
+          this.usagePanelRequest = request;
           this.usagePanelLoading = true;
           try {
-              const url = new URL(this.barangResultsUrl, window.location.href);
+              const url = new URL(window.location.href);
+              url.searchParams.delete('fragment');
+              url.searchParams.delete('mutation_page');
               if (this.selectedBarangId) {
                   url.searchParams.set('barang_id', this.selectedBarangId);
               }
@@ -192,10 +206,13 @@
                       'X-Requested-With': 'XMLHttpRequest',
                       'X-Fragment': 'barang-usage-panel',
                       'Accept': 'text/html',
-                  }
+                  },
+                  signal: request.signal,
               });
               if (!response.ok) throw new Error('Data barang tidak dapat dimuat.');
               const html = await response.text();
+              if (request.signal.aborted || this.usagePanelRequest !== request) return;
+
               container.innerHTML = html;
               if (window.Alpine) {
                   window.Alpine.initTree(container);
@@ -203,9 +220,14 @@
               url.searchParams.delete('fragment');
               window.history.replaceState({}, '', url);
           } catch (err) {
-              window.showToast(err.message || 'Gagal memuat barang.', 'error');
+              if (err.name !== 'AbortError') {
+                  window.showToast(err.message || 'Gagal memuat barang.', 'error');
+              }
           } finally {
-              this.usagePanelLoading = false;
+              if (this.usagePanelRequest === request) {
+                  this.usagePanelLoading = false;
+                  this.usagePanelRequest = null;
+              }
           }
       },
       async submitUsageForm(event) {
@@ -230,7 +252,6 @@
                   return;
               }
               window.showToast(data?.message || 'Pemakaian barang berhasil dicatat.', 'success');
-              await this.reloadUsagePanel();
               await this.filterBarang();
           } catch (err) {
               window.showToast(err.message || 'Terjadi kesalahan sistem.', 'error');
@@ -260,7 +281,6 @@
                   return;
               }
               window.showToast(data?.message || 'Barang berhasil ditarik kembali.', 'success');
-              await this.reloadUsagePanel();
               await this.filterBarang();
           } catch (err) {
               window.showToast(err.message || 'Terjadi kesalahan sistem.', 'error');
@@ -352,6 +372,34 @@
               stok_tersedia: 0,
               reserved_stock: 0
           });
+      },
+      stockLocationGridStyle() {
+          const labelFor = (options, id, label) => {
+              const selectedOption = options.find((option) => String(option.id) === String(id));
+              return selectedOption ? label(selectedOption) : '';
+          };
+          const widthFor = (labels, minimum) => {
+              const longestLabel = labels.reduce((longest, label) => Math.max(longest, Array.from(label).length), 0);
+              return `minmax(${minimum}ch, ${Math.max(minimum, longestLabel + 7)}ch)`;
+          };
+          const roomWidth = widthFor(this.currentItem.locations.map((location) =>
+              labelFor(this.roomOptions.map((room) => ({ id: room.ruangan_id, name: room.nama_ruangan })),
+                  location.ruangan_id, (room) => room.name)
+          ), 15);
+          const cabinetWidth = widthFor(this.currentItem.locations.map((location) =>
+              labelFor(this.lemariOptions.map((cabinet) => ({ id: cabinet.lemari_id, name: cabinet.nama_lemari })),
+                  location.lemari_id, (cabinet) => cabinet.name)
+          ), 15);
+          const toolboxWidth = widthFor(this.currentItem.locations.map((location) =>
+              labelFor(this.toolboxOptions.map((toolbox) => ({
+                  id: toolbox.toolbox_id,
+                  name: `${toolbox.kode_toolbox} · ${toolbox.nama_toolbox}`,
+              })), location.toolbox_id, (toolbox) => toolbox.name)
+          ), 15);
+
+          return {
+              gridTemplateColumns: `${roomWidth} ${cabinetWidth} ${toolboxWidth} 10rem 10rem minmax(12rem, max-content) 2rem`,
+          };
       },
       removeStockLocation(index) {
           if (
@@ -456,12 +504,22 @@
           this.modalMode = 'edit';
           this.formSubmitting = false;
           this.clearBarangImagePreview();
+          const hasActiveReservations = item.has_active_reservations === true;
           this.currentItem = {
               ...item,
-              locations: item.locations.map((location) => ({
-                  ...location,
-                  reserved_stock: Math.max(0, Number(location.stok_total) - Number(location.stok_tersedia))
-              }))
+              satuan: String(item.satuan || '').toUpperCase(),
+              stok_tersedia: hasActiveReservations ? item.stok_tersedia : item.stok_total,
+              locations: item.locations.map((location) => {
+                  const reservedStock = hasActiveReservations
+                      ? Math.max(0, Number(location.stok_total) - Number(location.stok_tersedia))
+                      : 0;
+
+                  return {
+                      ...location,
+                      stok_tersedia: hasActiveReservations ? location.stok_tersedia : location.stok_total,
+                      reserved_stock: reservedStock
+                  };
+              })
           };
           this.imagePreview = item.image_url || '';
           this.syncStockTotals('location');
@@ -557,7 +615,6 @@
       handleEscape() {
           this.modalOpen = false;
           this.importOpen = false;
-          this.toolboxModalOpen = false;
           this.cancelDelete();
       },
       selectImportFiles(files = this.$refs.barangImportPicker.files) {
@@ -758,7 +815,7 @@
           this.importFiles = [];
           const failedJobs = this.importJobs.filter(job => Number(job.failed_rows) > 0 || job.status === 'gagal');
           if (!failedJobs.length) {
-              window.showToast('Import selesai.', 'success', 2500);
+              window.showToast('Import selesai.', 'success', 5000);
               return;
           }
 
@@ -795,13 +852,8 @@
             <div class="flex w-full flex-wrap items-center gap-2">
               <button type="button" @click="createItem()"
                 class="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-[#009F91] bg-[#00B19C] px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-[#009A87] focus:outline-none focus:ring-2 focus:ring-[#00B19C] focus:ring-offset-2">
-                <iconify-icon icon="mdi:plus" width="18" aria-hidden="true"></iconify-icon>
+                <iconify-icon icon="mdi:package-variant-plus" width="18" aria-hidden="true"></iconify-icon>
                 Tambah Barang
-              </button>
-              <button type="button" @click="toolboxModalOpen = true"
-                class="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm transition hover:border-emerald-400 hover:bg-emerald-50 focus:outline-none focus:ring-2 focus:ring-[#00B19C] focus:ring-offset-2">
-                <iconify-icon icon="mdi:archive-plus-outline" width="18" aria-hidden="true"></iconify-icon>
-                Tambah Wadah
               </button>
               <button type="button" @click="importOpen = true"
                 class="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm transition hover:border-emerald-400 hover:bg-emerald-50 focus:outline-none focus:ring-2 focus:ring-[#00B19C] focus:ring-offset-2">
@@ -892,7 +944,7 @@
       <div x-ref="barangResults" @click="handleBarangPagination($event)" :aria-busy="filterLoading.toString()">
         @fragment('barang-results')
           <section class="overflow-hidden rounded-xl border border-[#D3E3DF] bg-white shadow-sm">
-            <div class="theme-scrollbar overflow-x-auto">
+            <div class="overflow-x-auto">
               <table class="min-w-full w-full divide-y divide-[#DCE9E6]">
                 <thead class="bg-[#F1F3F4]">
                   <tr>
@@ -961,6 +1013,7 @@
                             @csrf
                             @method('PUT')
                             <input type="hidden" name="barang_form" value="status">
+                            <input type="hidden" name="status_field" value="kondisi">
                             <input type="hidden" name="barang_id" value="{{ $barang->barang_id }}">
                             <input type="hidden" name="kategori_id" value="{{ $barang->kategori_id }}">
                             <input type="hidden" name="kode_barang" value="{{ $barang->kode_barang }}">
@@ -999,6 +1052,7 @@
                             @csrf
                             @method('PUT')
                             <input type="hidden" name="barang_form" value="status">
+                            <input type="hidden" name="status_field" value="kelayakan">
                             <input type="hidden" name="barang_id" value="{{ $barang->barang_id }}">
                             <input type="hidden" name="kategori_id" value="{{ $barang->kategori_id }}">
                             <input type="hidden" name="kode_barang" value="{{ $barang->kode_barang }}">
@@ -1068,6 +1122,7 @@
                             kondisi: $el.dataset.kondisi,
                             kelayakan: $el.dataset.kelayakan,
                             spesifikasi: $el.dataset.spesifikasi,
+                            has_active_reservations: $el.dataset.hasActiveReservations === 'true',
                             image_url: $el.dataset.imageUrl
                         })"
                               data-barang-id="{{ $barang->barang_id }}" data-kategori-id="{{ $barang->kategori_id }}"
@@ -1085,6 +1140,7 @@
                                           'reserved_stock' => max(0, $location->stok_total - $location->stok_tersedia),
                                       ],
                                   )->values()->toJson() }}"
+                              data-has-active-reservations="{{ $barang->active_usages_count > 0 || $barang->active_loans_count > 0 ? 'true' : 'false' }}"
                               data-kelayakan="{{ $barangEligibility }}" data-spesifikasi="{{ $barang->spesifikasi }}"
                               data-image-url="{{ $barang->image_url }}"
                               class="inline-flex min-h-8 items-center gap-1 rounded-md border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-700 transition hover:border-sky-400 hover:text-sky-700 focus:outline-none focus:ring-2 focus:ring-sky-400">
@@ -1161,11 +1217,14 @@
                     <label for="usage-item" class="sr-only">Pilih barang untuk riwayat atau pemakaian</label>
                     <select id="usage-item" x-model="selectedBarangId" @change="changeUsageBarang($event.target.value)"
                       class="max-w-full rounded-lg border border-[#B9DED4] bg-white px-3 py-2 text-xs font-semibold text-slate-700 focus:border-[#008b7a] focus:outline-none focus:ring-2 focus:ring-[#008b7a]/20">
-                      @if (!$barangs->contains('barang_id', $selectedBarang->barang_id))
-                        <option value="{{ $selectedBarang->barang_id }}">{{ $selectedBarang->nama_barang }}</option>
+                      @if (!$usageBarangs->contains('barang_id', $selectedBarang->barang_id))
+                        <option value="{{ $selectedBarang->barang_id }}" selected>
+                          {{ $selectedBarang->nama_barang }} · {{ $selectedBarang->kode_barang }}
+                        </option>
                       @endif
-                      @foreach ($barangs as $barangOption)
-                        <option value="{{ $barangOption->barang_id }}">
+                      @foreach ($usageBarangs as $barangOption)
+                        <option value="{{ $barangOption->barang_id }}"
+                          @selected($selectedBarang->barang_id === $barangOption->barang_id)>
                           {{ $barangOption->nama_barang }} · {{ $barangOption->kode_barang }}
                         </option>
                       @endforeach
@@ -1566,6 +1625,7 @@
                     <iconify-icon x-show="!importLoading && !importQueued" icon="mdi:upload" width="16"
                       aria-hidden="true"></iconify-icon>
                     <span x-show="!importLoading && !importQueued">Simpan Import</span>
+                    <span x-show="importLoading || importQueued">Mengimpor...</span>
                   </button>
                 </div>
               </form>
@@ -1586,11 +1646,6 @@
                 <input type="hidden" name="barang_id" x-model="currentItem.barang_id">
                 <input type="hidden" name="kode_barang" x-model="currentItem.kode_barang"
                   :disabled="modalMode !== 'edit'">
-                <input type="hidden" name="kondisi" x-model="currentItem.kondisi"
-                  :disabled="modalMode !== 'edit'">
-                <input type="hidden" name="kelayakan" x-model="currentItem.kelayakan"
-                  :disabled="modalMode !== 'edit'">
-
                 <div class="flex items-center justify-between border-b border-slate-200 px-5 py-4">
                   <div class="flex items-center gap-3">
                     <span class="flex h-10 w-10 items-center justify-center rounded-lg bg-sky-50 text-sky-700">
@@ -1681,9 +1736,17 @@
 
                     <label class="text-xs font-medium text-slate-700">
                       Satuan
-                      <input name="satuan" type="text" maxlength="20" required x-model="currentItem.satuan"
-                        class="mt-1 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 focus:border-[#08A9D6] focus:outline-none focus:ring-2 focus:ring-[#08A9D6]/20"
-                        placeholder="unit">
+                      <select name="satuan" required x-model="currentItem.satuan"
+                        class="mt-1 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 focus:border-[#08A9D6] focus:outline-none focus:ring-2 focus:ring-[#08A9D6]/20">
+                        <option value="">Pilih satuan</option>
+                        <option value="PCS">PCS</option>
+                        <option value="METER">METER</option>
+                        <option value="UNIT">UNIT</option>
+                        <option value="BUAH">BUAH</option>
+                        <option value="ROLL">ROLL</option>
+                        <option value="SET">SET</option>
+                        <option value="LAINNYA">LAINNYA</option>
+                      </select>
                       @error('satuan')
                         <span class="mt-1 block text-xs text-rose-700">{{ $message }}</span>
                       @enderror
@@ -1700,54 +1763,70 @@
                         Tambah lokasi
                       </button>
                     </div>
-                    <div class="max-w-full space-y-2 overflow-x-auto">
+                    <div class="w-full min-w-0 space-y-2 overflow-x-auto overscroll-x-contain touch-pan-x">
                       <template x-for="(location, index) in currentItem.locations" :key="index">
                         <div
-                          class="flex w-max min-w-full flex-nowrap items-end gap-2 rounded-lg border border-slate-200 bg-slate-50 p-3">
+                          class="grid w-max min-w-full items-end gap-2 rounded-lg border border-slate-200 bg-slate-50 p-3"
+                          :style="stockLocationGridStyle()">
                           <input type="hidden" :name="`locations[${index}][ruangan_id]`"
                             :value="location.ruangan_id" :disabled="Number(location.reserved_stock) <= 0">
-                          <label class="w-40 shrink-0 text-[11px] font-semibold text-slate-600">
+                          <label class="block min-w-0 text-[11px] font-semibold text-slate-600">
                             Ruangan
-                            <select :name="`locations[${index}][ruangan_id]`" x-model="location.ruangan_id"
-                              @change="setStockLocationRoom(location, $event.target.value)" required
-                              :disabled="Number(location.reserved_stock) > 0"
-                              class="mt-1 block w-full rounded-md border border-slate-300 bg-white px-2.5 py-2 text-xs font-normal text-slate-800">
-                              <option value="">Pilih ruangan</option>
-                              @foreach ($ruangans as $ruangan)
-                                <option value="{{ $ruangan->ruangan_id }}">{{ $ruangan->nama_ruangan }}</option>
-                              @endforeach
-                            </select>
+                            <span class="relative mt-1 block">
+                              <select :name="`locations[${index}][ruangan_id]`" x-model="location.ruangan_id"
+                                @change="setStockLocationRoom(location, $event.target.value)" required
+                                :disabled="Number(location.reserved_stock) > 0"
+                                class="block w-full appearance-none rounded-md border border-slate-300 bg-white py-2 pl-2.5 pr-12 text-xs font-normal text-slate-800 disabled:bg-slate-100">
+                                <option value="">Pilih ruangan</option>
+                                @foreach ($ruangans as $ruangan)
+                                  <option value="{{ $ruangan->ruangan_id }}">{{ $ruangan->nama_ruangan }}</option>
+                                @endforeach
+                              </select>
+                              <iconify-icon icon="mdi:chevron-down" width="17"
+                                class="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-slate-500"
+                                aria-hidden="true"></iconify-icon>
+                            </span>
                           </label>
                           <input type="hidden" :name="`locations[${index}][lemari_id]`" :value="location.lemari_id"
                             :disabled="Number(location.reserved_stock) <= 0">
-                          <label class="w-40 shrink-0 text-[11px] font-semibold text-slate-600">
+                          <label class="block min-w-0 text-[11px] font-semibold text-slate-600">
                             Lemari
-                            <select :name="`locations[${index}][lemari_id]`" x-model="location.lemari_id"
-                              :disabled="!location.ruangan_id || Number(location.reserved_stock) > 0"
-                              class="mt-1 block w-full rounded-md border border-slate-300 bg-white px-2.5 py-2 text-xs font-normal text-slate-800 disabled:bg-slate-100">
-                              <option value="">Tanpa lemari</option>
-                              <template
-                                x-for="cabinet in lemariOptions.filter((item) => item.ruangan_id === location.ruangan_id)"
-                                :key="cabinet.lemari_id">
-                                <option :value="cabinet.lemari_id" x-text="cabinet.nama_lemari"></option>
-                              </template>
-                            </select>
+                            <span class="relative mt-1 block">
+                              <select :name="`locations[${index}][lemari_id]`" x-model="location.lemari_id"
+                                :disabled="!location.ruangan_id || Number(location.reserved_stock) > 0"
+                                class="block w-full appearance-none rounded-md border border-slate-300 bg-white py-2 pl-2.5 pr-12 text-xs font-normal text-slate-800 disabled:bg-slate-100">
+                                <option value="">Tanpa lemari</option>
+                                <template
+                                  x-for="cabinet in lemariOptions.filter((item) => item.ruangan_id === location.ruangan_id)"
+                                  :key="cabinet.lemari_id">
+                                  <option :value="cabinet.lemari_id" x-text="cabinet.nama_lemari"></option>
+                                </template>
+                              </select>
+                              <iconify-icon icon="mdi:chevron-down" width="17"
+                                class="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-slate-500"
+                                aria-hidden="true"></iconify-icon>
+                            </span>
                           </label>
                           <input type="hidden" :name="`locations[${index}][toolbox_id]`"
                             :value="location.toolbox_id" :disabled="Number(location.reserved_stock) <= 0">
-                          <label class="w-40 shrink-0 text-[11px] font-semibold text-slate-600">
+                          <label class="block min-w-0 text-[11px] font-semibold text-slate-600">
                             Wadah
-                            <select :name="`locations[${index}][toolbox_id]`" x-model="location.toolbox_id"
-                              :disabled="Number(location.reserved_stock) > 0"
-                              class="mt-1 block w-full rounded-md border border-slate-300 bg-white px-2.5 py-2 text-xs font-normal text-slate-800">
-                              <option value="">Tanpa wadah</option>
-                              <template x-for="toolbox in toolboxOptions" :key="toolbox.toolbox_id">
-                                <option :value="toolbox.toolbox_id"
-                                  x-text="`${toolbox.kode_toolbox} · ${toolbox.nama_toolbox}`"></option>
-                              </template>
-                            </select>
+                            <span class="relative mt-1 block">
+                              <select :name="`locations[${index}][toolbox_id]`" x-model="location.toolbox_id"
+                                :disabled="Number(location.reserved_stock) > 0"
+                                class="block w-full appearance-none rounded-md border border-slate-300 bg-white py-2 pl-2.5 pr-12 text-xs font-normal text-slate-800 disabled:bg-slate-100">
+                                <option value="">Tanpa wadah</option>
+                                <template x-for="toolbox in toolboxOptions" :key="toolbox.toolbox_id">
+                                  <option :value="toolbox.toolbox_id"
+                                    x-text="`${toolbox.kode_toolbox} · ${toolbox.nama_toolbox}`"></option>
+                                </template>
+                              </select>
+                              <iconify-icon icon="mdi:chevron-down" width="17"
+                                class="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-slate-500"
+                                aria-hidden="true"></iconify-icon>
+                            </span>
                           </label>
-                          <label class="w-36 shrink-0 whitespace-nowrap text-[11px] font-semibold text-slate-600">
+                          <label class="block min-w-0 whitespace-nowrap text-[11px] font-semibold text-slate-600">
                             Jumlah total lokasi
                             <input type="number" min="0" step="1" required
                               :name="`locations[${index}][stok_total]`" x-model.number="location.stok_total"
@@ -1755,7 +1834,7 @@
                               @input="syncStockTotals('location_total', index)"
                               class="mt-1 block w-full min-w-0 rounded-md border border-slate-300 bg-white px-2 py-2 text-xs font-normal text-slate-800">
                           </label>
-                          <label class="w-36 shrink-0 whitespace-nowrap text-[11px] font-semibold text-slate-600">
+                          <label class="block min-w-0 whitespace-nowrap text-[11px] font-semibold text-slate-600">
                             Jumlah tersedia lokasi
                             <input type="number" min="0" step="1" required
                               :name="`locations[${index}][stok_tersedia]`" x-model.number="location.stok_tersedia"
@@ -1764,12 +1843,12 @@
                               class="mt-1 block w-full min-w-0 rounded-md border border-slate-300 bg-white px-2 py-2 text-xs font-normal text-slate-800">
                           </label>
                           <p x-show="Number(location.reserved_stock) > 0"
-                            class="w-48 shrink-0 text-[10px] font-normal text-amber-700">
+                            class="col-start-6 text-[10px] font-normal text-amber-700">
                             Stok yang sedang dipinjam/dipakai tetap di lokasi ini.
                           </p>
                           <button type="button" @click="removeStockLocation(index)"
                             :disabled="currentItem.locations.length <= 1 || Number(location.reserved_stock) > 0"
-                            class="flex h-8 shrink-0 items-center justify-center self-end rounded-md px-2 text-slate-500 transition hover:bg-rose-50 hover:text-rose-600 disabled:cursor-not-allowed disabled:opacity-30"
+                            class="col-start-7 flex h-8 items-center justify-center self-end rounded-md px-2 text-slate-500 transition hover:bg-rose-50 hover:text-rose-600 disabled:cursor-not-allowed disabled:opacity-30"
                             aria-label="Hapus lokasi">
                             <iconify-icon icon="mdi:trash-can-outline" width="17"
                               aria-hidden="true"></iconify-icon>
@@ -1846,71 +1925,15 @@
                     Batal
                   </button>
                   <button type="submit" :disabled="formSubmitting" :aria-busy="formSubmitting.toString()"
-                    class="admin-submit-button inline-flex items-center justify-center rounded-md border border-[#009F91] bg-[#00B19C] px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-[#009A87] disabled:cursor-not-allowed">
-                    <span x-show="!formSubmitting"
+                    class="admin-submit-button inline-flex items-center justify-center gap-2 rounded-md border border-[#009F91] bg-[#00B19C] px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-[#009A87] focus:outline-none focus:ring-2 focus:ring-[#00B19C] focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60">
+                    <iconify-icon x-show="formSubmitting" icon="mdi:loading" class="animate-spin text-lg"
+                      aria-hidden="true"></iconify-icon>
+                    <iconify-icon x-show="!formSubmitting"
+                      :icon="modalMode === 'create' ? 'mdi:content-save-plus-outline' : 'mdi:content-save-edit-outline'"
+                      width="18" aria-hidden="true"></iconify-icon>
+                    <span x-show="!formSubmitting" class="ml-1"
                       x-text="modalMode === 'create' ? 'Simpan Barang' : 'Simpan Perubahan'"></span>
                     <span x-show="formSubmitting">Menyimpan...</span>
-                  </button>
-                </div>
-              </form>
-            </section>
-          </div>
-          <div x-cloak x-show="toolboxModalOpen" x-transition.opacity
-            class="fixed inset-0 z-[100] flex items-center justify-center overflow-y-auto overscroll-contain p-4 sm:p-6"
-            @click.self="toolboxModalOpen = false" role="presentation">
-            <div class="absolute inset-0 bg-slate-950/65 backdrop-blur-sm" @click="toolboxModalOpen = false"></div>
-            <section x-show="toolboxModalOpen" x-transition
-              class="relative z-10 my-auto w-full max-w-lg overflow-hidden rounded-xl border border-[#08A9D6] bg-white shadow-[0_24px_80px_rgba(2,25,41,0.4)]"
-              role="dialog" aria-modal="true" aria-labelledby="toolbox-modal-title">
-              <form action="{{ route('admin.toolbox.store') }}" method="POST" @submit="toolboxSubmitting = true">
-                @csrf
-                <input type="hidden" name="toolbox_form" value="store">
-                <div class="flex items-center justify-between border-b border-slate-200 px-5 py-4">
-                  <div class="flex items-center gap-3">
-                    <span class="flex h-10 w-10 items-center justify-center rounded-lg bg-emerald-50 text-emerald-700">
-                      <iconify-icon icon="mdi:archive-plus-outline" width="22" aria-hidden="true"></iconify-icon>
-                    </span>
-                    <div>
-                      <h2 id="toolbox-modal-title" class="text-base font-semibold text-slate-800">Tambah Wadah</h2>
-                      <p class="mt-1 text-xs text-slate-500">Wadah baru dapat dipilih sebagai lokasi stok barang.</p>
-                    </div>
-                  </div>
-                  <button type="button" @click="toolboxModalOpen = false"
-                    class="rounded-md p-1 text-slate-500 transition hover:bg-slate-100 hover:text-slate-700"
-                    aria-label="Tutup formulir wadah">
-                    <iconify-icon icon="mdi:close" width="20" aria-hidden="true"></iconify-icon>
-                  </button>
-                </div>
-                <div class="space-y-4 px-5 py-4">
-                  <label class="block text-xs font-medium text-slate-700">
-                    Nama Wadah
-                    <input name="nama_toolbox" type="text" maxlength="100" required
-                      value="{{ old('nama_toolbox') }}"
-                      class="mt-1 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 focus:border-[#08A9D6] focus:outline-none focus:ring-2 focus:ring-[#08A9D6]/20"
-                      placeholder="Nama wadah">
-                    @error('nama_toolbox')
-                      <span class="mt-1 block text-xs text-rose-700">{{ $message }}</span>
-                    @enderror
-                  </label>
-                  <label class="block text-xs font-medium text-slate-700">
-                    Keterangan
-                    <textarea name="keterangan" maxlength="255" rows="2"
-                      class="mt-1 w-full resize-y rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 focus:border-[#08A9D6] focus:outline-none focus:ring-2 focus:ring-[#08A9D6]/20"
-                      placeholder="Keterangan wadah">{{ old('keterangan') }}</textarea>
-                    @error('keterangan')
-                      <span class="mt-1 block text-xs text-rose-700">{{ $message }}</span>
-                    @enderror
-                  </label>
-                </div>
-                <div class="flex justify-end gap-2 border-t border-slate-200 bg-slate-50 px-5 py-3">
-                  <button type="button" @click="toolboxModalOpen = false"
-                    class="rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-100">
-                    Batal
-                  </button>
-                  <button type="submit" :disabled="toolboxSubmitting" :aria-busy="toolboxSubmitting.toString()"
-                    class="admin-submit-button inline-flex items-center justify-center rounded-md border border-[#009F91] bg-[#00B19C] px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-[#009A87] disabled:cursor-not-allowed">
-                    <span x-show="!toolboxSubmitting">Simpan Wadah</span>
-                    <span x-show="toolboxSubmitting">Menyimpan...</span>
                   </button>
                 </div>
               </form>
@@ -1935,7 +1958,7 @@
                   Barang yang masih dipinjam atau digunakan tidak dapat dihapus.
                 </p>
               </div>
-              <div class="flex justify-center gap-3 border-t border-slate-200 bg-slate-50 px-6 py-4">
+              <div class="flex justify-end gap-3 border-t border-slate-200 bg-slate-50 px-6 py-4">
                 <button type="button" @click="cancelDelete()" :disabled="deleteLoading"
                   class="rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-60">
                   Batal

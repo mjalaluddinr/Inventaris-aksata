@@ -38,6 +38,7 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'permission:admin-pa
     Route::middleware('permission:inventory.view')->group(function () {
         Route::get('/barang', [ManageBarang::class, 'index'])->name('barang');
         Route::get('/kategori', [ManageKategori::class, 'index'])->name('kategori');
+        Route::get('/toolbox', [ManageToolbox::class, 'index'])->name('toolbox.index');
 
         Route::prefix('ruangan')->name('ruangan.')->group(function () {
             Route::get('/', [ManageRuangan::class, 'index'])->name('index');
@@ -50,9 +51,12 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'permission:admin-pa
         });
     });
 
+    // ASVS V8.2.2/V8.3.1: Keep inventory changes behind server-side manage permission checks.
     Route::middleware('permission:inventory.manage')->group(function () {
         Route::post('/barang', [ManageBarang::class, 'store'])->name('barang.store');
         Route::post('/toolbox', [ManageToolbox::class, 'store'])->name('toolbox.store');
+        Route::put('/toolbox/{toolbox}', [ManageToolbox::class, 'update'])->name('toolbox.update');
+        Route::delete('/toolbox/{toolbox}', [ManageToolbox::class, 'destroy'])->name('toolbox.destroy');
         Route::post('/barang/import', [ManageBarang::class, 'import'])->name('barang.import');
         Route::get('/barang/import/{logInput}/status', [ManageBarang::class, 'importStatus'])
             ->name('barang.import.status');

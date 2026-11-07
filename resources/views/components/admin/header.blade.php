@@ -45,7 +45,9 @@
   $roomDetail = request()->routeIs('admin.ruangan.show') ? request()->route('ruangan') : null;
 @endphp
 
-<header class="sticky top-0 z-30 -mx-8 mb-8 border-b border-[#D8E6E2] bg-white px-5 py-5 sm:px-8">
+<header
+  :class="isScrolled ? 'py-3 shadow-sm' : 'py-5 shadow-none'"
+  class="sticky top-0 z-30 -mx-8 mb-8 border-b border-[#D8E6E2] bg-white px-5 transition-[padding,border-color,box-shadow] duration-300 ease-out motion-reduce:transition-none sm:px-8">
   <div class="flex items-center justify-between gap-6">
     <div class="min-w-0">
       <nav
@@ -53,7 +55,7 @@
         :inert="isScrolled"
         :class="isScrolled ? 'mb-0 max-h-0 -translate-y-1 opacity-0' : 'mb-1 max-h-12 translate-y-0 opacity-100'"
         aria-label="Breadcrumb"
-        class="flex flex-wrap items-center gap-2 overflow-hidden text-sm transition-[max-height,margin,opacity,transform] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]">
+        class="flex flex-wrap items-center gap-2 overflow-hidden text-sm transition-[max-height,margin,opacity,transform] duration-300 ease-out motion-reduce:transition-none">
         @foreach ($segments as $index => $segment)
           @php
             $path = implode('/', array_slice($segments, 0, $index + 1));

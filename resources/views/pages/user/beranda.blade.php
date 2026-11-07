@@ -143,12 +143,11 @@
                 <div class="aspect-[16/10] w-full overflow-hidden bg-gradient-to-br from-[#dff7ef] to-[#f2fbf8]">
                   @if ($item->image_url)
                     <img src="{{ $item->image_url }}" alt="Foto {{ $item->nama_barang }}" loading="lazy"
-                      decoding="async" class="h-full w-full object-cover">
+                      decoding="async" class="h-full w-full object-cover object-center">
                   @else
-                    <div class="flex h-full flex-col items-center justify-center gap-2 text-[#538b7d]" role="img"
+                    <div class="flex h-full items-center justify-center text-[#538b7d]" role="img"
                       aria-label="Foto {{ $item->nama_barang }} belum tersedia">
                       <iconify-icon icon="mdi:image-outline" class="text-4xl" aria-hidden="true"></iconify-icon>
-                      <span class="text-xs font-medium">Foto belum tersedia</span>
                     </div>
                   @endif
                 </div>

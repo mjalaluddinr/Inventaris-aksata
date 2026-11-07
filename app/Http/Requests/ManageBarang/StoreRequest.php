@@ -20,6 +20,16 @@ class StoreRequest extends FormRequest
     {
         // ASVS 2.2.2: Complete omitted allocations at the trusted request boundary.
         $this->completeStockLocationAllocation();
+        $this->normalizeUnit();
+    }
+
+    private function normalizeUnit(): void
+    {
+        $unit = $this->input('satuan');
+
+        if (is_string($unit)) {
+            $this->merge(['satuan' => strtoupper($unit)]);
+        }
     }
 
     public function rules(): array
@@ -51,7 +61,7 @@ class StoreRequest extends FormRequest
                 Rule::exists('kategori', 'kategori_id')->where(fn ($query) => $query->whereNull('deleted_at')),
             ],
             'nama_barang' => ['required', 'string', 'max:150'],
-            'satuan' => ['required', 'string', 'max:20'],
+            'satuan' => ['required', Rule::in(['PCS', 'METER', 'UNIT', 'BUAH', 'ROLL', 'SET', 'LAINNYA'])],
             'stok_total' => ['required', 'integer', 'min:0'],
             'stok_tersedia' => ['required', 'integer', 'min:0', 'lte:stok_total'],
             'kondisi' => ['required', Rule::in(['baru', 'lama'])],
@@ -111,12 +121,13 @@ class StoreRequest extends FormRequest
                     }
                 }
 
-                if ($stockTotal !== (int) $this->input('stok_total')) {
-                    $validator->errors()->add('locations', 'Jumlah stok per lokasi harus sama dengan jumlah total barang.');
+                // ASVS 2.2.1/2.2.3: Keep location allocations within the declared item stock.
+                if ($stockTotal > (int) $this->input('stok_total')) {
+                    $validator->errors()->add('locations', 'Jumlah stok per lokasi tidak boleh melebihi jumlah total barang.');
                 }
 
-                if ($stockAvailable !== (int) $this->input('stok_tersedia')) {
-                    $validator->errors()->add('locations', 'Stok tersedia per lokasi harus sama dengan stok tersedia barang.');
+                if ($stockAvailable > (int) $this->input('stok_tersedia')) {
+                    $validator->errors()->add('locations', 'Stok tersedia per lokasi tidak boleh melebihi stok tersedia barang.');
                 }
             },
         ];

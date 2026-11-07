@@ -82,7 +82,10 @@ class ManageRuangan extends Controller
 
         try {
             DB::transaction(function () use ($validated) {
-                Ruangan::create($validated);
+                Ruangan::query()->create([
+                    ...$validated,
+                    'kode_ruangan' => $this->nextRuanganCode(),
+                ]);
             });
 
             return redirect()->route('admin.ruangan.index')
@@ -135,5 +138,26 @@ class ManageRuangan extends Controller
 
             return redirect()->back()->with('error', 'Terjadi kesalahan pada sistem. Silakan coba lagi.');
         }
+    }
+
+    private function nextRuanganCode(): string
+    {
+        $usedCodes = array_fill_keys(
+            array_map('strtoupper', Ruangan::withTrashed()->lockForUpdate()->pluck('kode_ruangan')->all()),
+            true,
+        );
+        $nextCodeNumber = 0;
+
+        foreach (array_keys($usedCodes) as $code) {
+            if (preg_match('/^RGN-(\d+)$/', $code, $matches) === 1) {
+                $nextCodeNumber = max($nextCodeNumber, (int) $matches[1]);
+            }
+        }
+
+        do {
+            $code = sprintf('RGN-%03d', ++$nextCodeNumber);
+        } while (isset($usedCodes[$code]));
+
+        return $code;
     }
 }

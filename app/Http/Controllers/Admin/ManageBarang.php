@@ -17,6 +17,7 @@ use App\Models\LokasiBarang;
 use App\Models\Ruangan;
 use App\Models\Toolbox;
 use App\Models\User;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection as EloquentCollection;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\File;
@@ -105,14 +106,7 @@ class ManageBarang extends Controller
             'mutation_page' => ['nullable', 'integer', 'min:1'],
         ]);
 
-        $barangs = Barang::query()
-            ->with([
-                'kategori',
-                'lokasiBarangs' => fn ($query) => $query->orderBy('created_at')->orderBy('lokasi_barang_id'),
-                'lokasiBarangs.ruangan',
-                'lokasiBarangs.lemari',
-                'lokasiBarangs.toolbox',
-            ])
+        $applyBarangFilters = static fn (Builder $query): Builder => $query
             ->when($filters['search'] ?? null, function ($query, string $search): void {
                 $query->where(function ($query) use ($search): void {
                     $query->where('kode_barang', 'like', '%'.$search.'%')
@@ -128,7 +122,23 @@ class ManageBarang extends Controller
                 $query->whereHas('lokasiBarangs', fn ($locations) => $locations->where('lemari_id', $id));
             })
             ->when($filters['kondisi'] ?? null, fn ($query, string $value) => $query->where('kondisi', $value))
-            ->when($filters['kelayakan'] ?? null, fn ($query, string $value) => $query->where('kelayakan', $value))
+            ->when($filters['kelayakan'] ?? null, fn ($query, string $value) => $query->where('kelayakan', $value));
+
+        $barangs = $applyBarangFilters(Barang::query())
+            ->with([
+                'kategori',
+                'lokasiBarangs' => fn ($query) => $query->orderBy('created_at')->orderBy('lokasi_barang_id'),
+                'lokasiBarangs.ruangan',
+                'lokasiBarangs.lemari',
+                'lokasiBarangs.toolbox',
+            ])
+            ->when(
+                $request->user()?->canManageInventory(),
+                fn (Builder $query) => $query->withCount([
+                    'barangDipakais as active_usages_count' => fn (Builder $query) => $query->where('status', 'aktif'),
+                    'detailPeminjamans as active_loans_count' => fn (Builder $query) => $query->whereIn('status', ['pending', 'dipinjam']),
+                ]),
+            )
             ->latest()
             ->orderByDesc('kode_barang')
             ->paginate(10)
@@ -143,8 +153,13 @@ class ManageBarang extends Controller
         $mutationLogs = collect();
         $activeUsages = collect();
         $usageLocations = collect();
+        $usageBarangs = collect();
 
         if ($request->user()?->canManageAllAccounts()) {
+            $usageBarangs = $applyBarangFilters(Barang::query())
+                ->latest()
+                ->orderByDesc('kode_barang')
+                ->get(['barang_id', 'nama_barang', 'kode_barang']);
             $selectedBarang = isset($filters['barang_id'])
               ? Barang::query()->findOrFail($filters['barang_id'])
               : $barangs->first();
@@ -187,6 +202,7 @@ class ManageBarang extends Controller
             'ruangans',
             'selectedBarang',
             'toolboxes',
+            'usageBarangs',
             'usageLocations',
         ));
 
@@ -1367,7 +1383,13 @@ class ManageBarang extends Controller
                 $attributes = $request->validated();
                 $isEdit = $attributes['barang_form'] === 'edit';
                 $locations = $attributes['locations'] ?? [];
-                unset($attributes['barang_form'], $attributes['locations'], $attributes['image']);
+                $statusField = $attributes['status_field'] ?? null;
+                unset($attributes['barang_form'], $attributes['status_field'], $attributes['locations'], $attributes['image']);
+                if ($isEdit) {
+                    unset($attributes['kondisi'], $attributes['kelayakan']);
+                } elseif (is_string($statusField)) {
+                    $attributes = [$statusField => $attributes[$statusField]];
+                }
 
                 $lockedBarang = Barang::query()
                     ->whereKey($barang->getKey())
@@ -1447,12 +1469,23 @@ class ManageBarang extends Controller
             ]);
         }
 
-        // ASVS 2.3.3/2.3.4: Map unallocated reserved stock without moving reserved stock between existing locations.
-        $unallocatedReserved = $unallocatedTotal - $unallocatedAvailable;
+        $hasActiveReservations = $barang->barangDipakais()
+            ->where('status', 'aktif')
+            ->exists()
+            || $barang->detailPeminjamans()
+                ->whereIn('status', ['pending', 'dipinjam'])
+                ->exists();
+
+        // Only active usage and loan records should prevent stock from changing locations.
+        $unallocatedReserved = $hasActiveReservations
+            ? $unallocatedTotal - $unallocatedAvailable
+            : 0;
         $newlyAllocatedReserved = 0;
 
         foreach ($existingLocations as $key => $location) {
-            $reservedQuantity = $location->stok_total - $location->stok_tersedia;
+            $reservedQuantity = $hasActiveReservations
+                ? $location->stok_total - $location->stok_tersedia
+                : 0;
             $desired = $desiredLocations[$key] ?? null;
 
             if ($desired === null && $reservedQuantity > 0) {
@@ -1461,7 +1494,7 @@ class ManageBarang extends Controller
                 ]);
             }
 
-            $desiredReservedQuantity = $desired === null
+            $desiredReservedQuantity = $desired === null || ! $hasActiveReservations
                 ? 0
                 : $desired['stok_total'] - $desired['stok_tersedia'];
 
@@ -1475,7 +1508,7 @@ class ManageBarang extends Controller
         }
 
         foreach ($desiredLocations as $key => $desired) {
-            if (! $existingLocations->has($key)) {
+            if (! $existingLocations->has($key) && $hasActiveReservations) {
                 $newlyAllocatedReserved += $desired['stok_total'] - $desired['stok_tersedia'];
             }
         }

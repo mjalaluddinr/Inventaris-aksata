@@ -293,7 +293,7 @@
         @if(auth()->user()?->canManageInventory())
         <button type="button" @click="createCategory()"
           class="inline-flex min-h-9 items-center gap-2 self-start rounded-md border border-[#009F91] bg-[#00B19C] px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition hover:bg-[#009A87] focus:outline-none focus:ring-2 focus:ring-[#00B19C] focus:ring-offset-2">
-          <iconify-icon icon="mdi:plus" width="16" aria-hidden="true"></iconify-icon>
+          <iconify-icon icon="mdi:tag-plus-outline" width="16" aria-hidden="true"></iconify-icon>
           Tambah Kategori
         </button>
         @endif
@@ -464,7 +464,7 @@
                 :icon="modalMode === 'edit' ? 'mdi:content-save-edit-outline' : 'mdi:content-save-plus-outline'"
                 width="18" aria-hidden="true"></iconify-icon>
               <span x-show="!categoryBusy" class="ml-2" x-text="modalMode === 'edit' ? 'Simpan perubahan' : 'Simpan kategori'"></span>
-              <span x-show="categoryBusy" class="sr-only">Sedang menyimpan...</span>
+              <span x-show="categoryBusy">Menyimpan...</span>
             </button>
           </div>
         </form>
@@ -490,7 +490,7 @@
           Tindakan ini tidak dapat dibatalkan.
           </p>
         </div>
-        <div class="flex justify-center gap-3 border-t border-slate-200 bg-slate-50 px-6 py-4">
+        <div class="flex justify-end gap-3 border-t border-slate-200 bg-slate-50 px-6 py-4">
           <button type="button" @click="cancelDelete()"
             class="rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-slate-400">
             Batal
@@ -500,7 +500,7 @@
             <iconify-icon x-show="categoryBusy" icon="mdi:loading" class="animate-spin text-lg" aria-hidden="true"></iconify-icon>
             <iconify-icon x-show="!categoryBusy" icon="mdi:delete-outline" class="text-lg" aria-hidden="true"></iconify-icon>
             <span x-show="!categoryBusy">Ya, Hapus</span>
-            <span x-show="categoryBusy" class="sr-only">Sedang menghapus...</span>
+            <span x-show="categoryBusy">Menghapus...</span>
           </button>
         </div>
       </section>

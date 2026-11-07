@@ -54,8 +54,8 @@ class ManageUser extends Controller
                     });
                 }
             })
-            ->orderByDesc('must_change_password')
             ->latest()
+            ->orderByDesc('must_change_password')
             ->paginate(10)
             ->withQueryString();
 

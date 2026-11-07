@@ -328,7 +328,7 @@
         <div class="flex flex-wrap gap-2">
           <button type="button" @click="createLemari()"
             class="rak-primary-button inline-flex items-center gap-2 rounded-lg border border-[#009F91] bg-sidebar-start px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-[#009a87] focus:outline-none focus:ring-2 focus:ring-sidebar-start focus:ring-offset-2">
-            <iconify-icon icon="mdi:plus" width="18"></iconify-icon> Tambah Lemari
+            <iconify-icon icon="mdi:archive-plus-outline" width="18" aria-hidden="true"></iconify-icon> Tambah Lemari
           </button>
         </div>
         @endif
@@ -500,11 +500,11 @@
               </select>
             </div>
             <div>
-              <label class="mb-1 block text-xs font-medium text-slate-700">Kode Lemari <span
-                  class="text-rose-500">*</span></label>
-              <input type="text" name="kode_lemari" x-model="currentLemari.kode_lemari" required maxlength="20"
-                placeholder="Contoh: LMR-D2"
+              <label class="mb-1 block text-xs font-medium text-slate-700">Kode Lemari</label>
+              <input type="text" :value="modalMode === 'create' ? 'Otomatis dibuat (LMR-001)' : currentLemari.kode_lemari"
+                readonly
                 class="rak-form-field block w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 shadow-sm focus:border-[#08A9D6] focus:outline-none focus:ring-2 focus:ring-[#08A9D6]/20">
+              <p class="mt-1 text-xs text-slate-500">Kode lemari dibuat otomatis oleh sistem.</p>
             </div>
             <div>
               <label class="mb-1 block text-xs font-medium text-slate-700">Nama Lemari <span
@@ -530,7 +530,7 @@
                 :icon="modalMode === 'create' ? 'mdi:content-save-plus-outline' : 'mdi:content-save-edit-outline'"
                 width="18" aria-hidden="true"></iconify-icon>
               <span x-show="!formBusy" class="ml-2" x-text="modalMode === 'create' ? 'Simpan Lemari' : 'Simpan Perubahan'"></span>
-              <span x-show="formBusy" class="sr-only">Sedang menyimpan...</span>
+              <span x-show="formBusy">Menyimpan...</span>
             </button>
           </div>
         </form>
@@ -557,7 +557,7 @@
             Tindakan ini tidak dapat dibatalkan.
           </p>
         </div>
-        <div class="flex justify-center gap-3 border-t border-slate-200 bg-slate-50 px-6 py-4">
+        <div class="flex justify-end gap-3 border-t border-slate-200 bg-slate-50 px-6 py-4">
           <button type="button" @click="cancelDelete()" :disabled="formBusy"
             class="rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-slate-400">Batal</button>
           <button type="button" @click="submitDelete()" :disabled="formBusy" :aria-busy="formBusy.toString()"
@@ -566,7 +566,7 @@
               aria-hidden="true"></iconify-icon>
             <iconify-icon x-show="!formBusy" icon="mdi:delete-outline" class="text-lg" aria-hidden="true"></iconify-icon>
             <span x-show="!formBusy">Ya, Hapus</span>
-            <span x-show="formBusy" class="sr-only">Sedang menghapus...</span>
+            <span x-show="formBusy">Menghapus...</span>
           </button>
         </div>
       </div>

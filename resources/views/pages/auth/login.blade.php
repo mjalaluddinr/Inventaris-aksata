@@ -7,6 +7,7 @@
   <meta name="theme-color" content="#006b70">
   <link rel="icon" type="image/svg+xml" href="{{ asset('assets/icon.svg') }}">
   <title>Login - InvenTrack</title>
+  @fonts('poppins')
   @vite(['resources/css/app.css', 'resources/js/app.js'])
   <style>
     @keyframes login-content-arrive {
