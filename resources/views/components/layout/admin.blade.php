@@ -126,7 +126,7 @@
       class="min-w-0 flex-1 overflow-y-auto px-8 pb-8 pt-0">
       <div class="admin-page-enter min-w-0">
         <x-admin.header :title="$headerTitle" :description="$headerDescription" />
-        @if (!request()->routeIs('admin.barang*', 'admin.rak.*', 'admin.kategori*', 'admin.peminjaman*', 'admin.ruangan.*', 'admin.akun.*'))
+        @if (!request()->routeIs('admin.barang*', 'admin.rak.*', 'admin.kategori*', 'admin.ruangan.*', 'admin.akun.*'))
           @if (session('success') && session('success') !== 'Login berhasil!')
             <span class="hidden" x-init="window.showToast(@js(session('success')), 'success')"></span>
           @elseif (session('error'))

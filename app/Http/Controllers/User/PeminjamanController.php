@@ -13,6 +13,7 @@ use App\Models\User;
 use App\Services\RedisNotificationService;
 use Illuminate\Database\Eloquent\Collection as EloquentCollection;
 use Illuminate\Database\UniqueConstraintViolationException;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -28,7 +29,7 @@ class PeminjamanController extends Controller
 
     public function __construct(private RedisNotificationService $notifications) {}
 
-    public function store(StorePeminjamanRequest $request): RedirectResponse
+    public function store(StorePeminjamanRequest $request): RedirectResponse|JsonResponse
     {
         $user = $request->user();
 
@@ -78,7 +79,7 @@ class PeminjamanController extends Controller
 
                         if ($barang->stok_tersedia < $item['quantity'] || $locationStock < $item['quantity']) {
                             throw ValidationException::withMessages([
-                                'items' => "Stok {$barang->nama_barang} baru saja berubah. Kurangi jumlah atau muat ulang katalog.",
+                                'items' => 'Stok barang berubah.',
                             ]);
                         }
 
@@ -130,6 +131,15 @@ class PeminjamanController extends Controller
                 if (++$attempt >= 5) {
                     throw $exception;
                 }
+            } catch (ValidationException $exception) {
+                if (! $request->expectsJson()) {
+                    throw $exception;
+                }
+
+                return response()->json([
+                    'message' => 'Stok barang berubah. Periksa jumlah dan kirim ulang pengajuan.',
+                    'stock' => $this->availableStockForItems($validated['items']),
+                ], 409);
             }
         } while (true);
 
@@ -150,10 +160,52 @@ class PeminjamanController extends Controller
             $redirect->with('cart_cleared', true);
         }
 
-        return $redirect;
+        if ($request->expectsJson()) {
+            $request->session()->flash('success', 'Pengajuan peminjaman berhasil dikirim.');
+
+            return response()->json([
+                'message' => 'Pengajuan peminjaman berhasil dikirim.',
+                'redirect_url' => route('user.beranda', ['page' => 'history'], false),
+                'submitted_item_ids' => collect($validated['items'])->pluck('barang_id')->all(),
+            ], 201);
+        }
+
+        return $redirect->with('success', 'Pengajuan peminjaman berhasil dikirim.');
     }
 
-    public function cancel(Request $request, string $peminjamanId): RedirectResponse
+    /**
+     * @param  array<int, array{barang_id: string, quantity: int|string}>  $items
+     * @return array<string, int>
+     */
+    private function availableStockForItems(array $items): array
+    {
+        $itemIds = collect($items)->pluck('barang_id');
+        $barangs = Barang::query()
+            ->whereIn('barang_id', $itemIds)
+            ->get(['barang_id', 'stok_tersedia'])
+            ->keyBy('barang_id');
+        $locationStocks = LokasiBarang::query()
+            ->selectRaw('barang_id, SUM(stok_tersedia) as stok_tersedia')
+            ->whereIn('barang_id', $itemIds)
+            ->groupBy('barang_id')
+            ->pluck('stok_tersedia', 'barang_id');
+
+        return $itemIds->mapWithKeys(function (string $itemId) use ($barangs, $locationStocks): array {
+            $barang = $barangs->get($itemId);
+
+            if (! $barang) {
+                return [$itemId => 0];
+            }
+
+            $locationStock = $locationStocks->get($itemId);
+
+            return [$itemId => $locationStock === null
+                ? (int) $barang->stok_tersedia
+                : min((int) $barang->stok_tersedia, (int) $locationStock)];
+        })->all();
+    }
+
+    public function cancel(Request $request, string $peminjamanId): RedirectResponse|JsonResponse
     {
         $user = $request->user();
 
@@ -192,9 +244,18 @@ class PeminjamanController extends Controller
             $loan->clearCancellationRequest();
         }, 3);
 
-        return redirect()
+        $redirect = redirect()
             ->route('user.beranda', ['page' => 'history'])
             ->with('success', 'Peminjaman berhasil dibatalkan.');
+
+        if ($request->expectsJson()) {
+            return response()->json([
+                'message' => 'Peminjaman berhasil dibatalkan.',
+                'peminjaman_id' => $peminjamanId,
+            ]);
+        }
+
+        return $redirect;
     }
 
     private function restorePendingReservation(Peminjaman $loan, DetailPeminjaman $detail, User $user): void

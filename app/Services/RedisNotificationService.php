@@ -12,6 +12,7 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Redis;
 use Illuminate\Support\Str;
 use Predis\Connection\ConnectionException;
+use Predis\Connection\Resource\Exception\StreamInitException;
 use UnexpectedValueException;
 
 class RedisNotificationService
@@ -165,7 +166,7 @@ class RedisNotificationService
             foreach (['7-days', '3-days', '1-day', 'overdue'] as $stage) {
                 $redis->del($this->deduplicationKey($recipientId, "loan-reminder:{$loanId}:{$stage}"));
             }
-        } catch (ConnectionException|LockTimeoutException $exception) {
+        } catch (ConnectionException|LockTimeoutException|StreamInitException $exception) {
             Log::error('Redis loan reminder markers could not be cleared.', [
                 'loan_id' => $loanId,
                 'exception' => $exception,
@@ -211,7 +212,7 @@ class RedisNotificationService
 
                 return true;
             });
-        } catch (ConnectionException|LockTimeoutException $exception) {
+        } catch (ConnectionException|LockTimeoutException|StreamInitException $exception) {
             Log::error('Redis notification could not be stored.', [
                 'recipient_id' => $recipient->getKey(),
                 'exception' => $exception,

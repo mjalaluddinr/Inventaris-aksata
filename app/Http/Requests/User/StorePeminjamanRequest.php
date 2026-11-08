@@ -20,7 +20,7 @@ class StorePeminjamanRequest extends FormRequest
             'items.*.barang_id' => ['required', 'uuid', 'distinct', 'exists:barang,barang_id'],
             'items.*.quantity' => ['required', 'integer', 'min:1'],
             'keperluan' => ['required', 'string', 'max:255'],
-            'jenis_peminjaman' => ['required', 'string', 'in:harian,praktik,lainnya', 'max:30'],
+            'jenis_peminjaman' => ['required', 'string', 'in:harian,praktik,mingguan,bulanan,semesteran,tahunan', 'max:30'],
             'tanggal_rencana_kembali' => ['required', 'date', 'after_or_equal:today'],
             'preserve_cart' => ['sometimes', 'boolean'],
             // ASVS V2.2.1/2.2.2: only clear the browser cart items explicitly submitted by this form.
@@ -37,6 +37,7 @@ class StorePeminjamanRequest extends FormRequest
             'items.*.barang_id.distinct' => 'Barang yang sama tidak boleh dimasukkan lebih dari sekali.',
             'items.*.quantity.integer' => 'Jumlah barang harus berupa angka bulat.',
             'items.*.quantity.min' => 'Jumlah barang minimal satu.',
+            'jenis_peminjaman.in' => 'Pilih jenis peminjaman yang tersedia.',
             'tanggal_rencana_kembali.after_or_equal' => 'Tanggal rencana kembali tidak boleh sebelum hari ini.',
         ];
     }

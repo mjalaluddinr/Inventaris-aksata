@@ -88,8 +88,49 @@
   </style>
 </head>
 
-<body x-data="userPortal()" x-init="initCart(); initCatalogAjax(); initHistoryAjax(); @if (session('cart_cleared')) clearCart() @elseif (session('cart_items_submitted')) removeSubmittedItems(@js(session('cart_items_submitted'))) @endif" class="min-h-screen bg-[#e9faf5] font-sans text-[#153c36] antialiased">
+<body x-data="userPortal()" x-init="initCart(); initCatalogAjax(); initHistoryAjax(); @if(session('success')) window.showToast(@js(session('success')), 'success'); @elseif(session('error')) window.showToast(@js(session('error')), 'error'); @endif @foreach($errors->all() as $error) window.showToast(@js($error), 'error'); @endforeach @if (session('cart_cleared')) clearCart() @elseif (session('cart_items_submitted')) removeSubmittedItems(@js(session('cart_items_submitted'))) @endif" class="min-h-screen bg-[#e9faf5] font-sans text-[#153c36] antialiased">
   <x-auth.session-notice />
+  <div x-data="globalToast" x-cloak x-show="visible"
+    x-transition:enter="transition ease-out duration-200"
+    x-transition:enter-start="translate-x-4 opacity-0"
+    x-transition:enter-end="translate-x-0 opacity-100"
+    x-transition:leave="transition ease-in duration-200"
+    x-transition:leave-start="opacity-100"
+    x-transition:leave-end="translate-x-4 opacity-0"
+    class="pointer-events-none fixed right-4 top-24 z-[120] w-[calc(100%-2rem)] max-w-md sm:right-6"
+    :role="type === 'error' ? 'alert' : 'status'"
+    :aria-live="type === 'error' ? 'assertive' : 'polite'" aria-atomic="true">
+    <div class="pointer-events-auto relative flex items-start gap-3 overflow-hidden rounded-xl border p-4 pb-5 text-white shadow-[0_16px_48px_rgba(2,25,41,0.24)]"
+      :class="{
+        'border-rose-700 bg-rose-600': type === 'error',
+        'border-emerald-700 bg-emerald-600': type === 'success',
+        'border-sky-700 bg-sky-600': type === 'info',
+        'border-amber-700 bg-amber-500': type === 'warning'
+      }">
+      <iconify-icon
+        :icon="type === 'error' ? 'mdi:close-circle' : (type === 'warning' ? 'mdi:alert-circle' : (type === 'info' ? 'mdi:information' : 'mdi:check-circle'))"
+        class="mt-0.5 shrink-0 text-white"
+        width="22" aria-hidden="true"></iconify-icon>
+      <div class="min-w-0 flex-1">
+        <p class="font-semibold" x-text="title"></p>
+        <p class="mt-1 break-words text-sm text-white/90">
+          <template x-for="(part, index) in message" :key="index">
+            <span :class="part.bold ? 'font-bold text-white' : ''" x-text="part.text"></span>
+          </template>
+        </p>
+        <button x-cloak x-show="actionLabel && onAction" type="button" @click="activateAction()"
+          class="mt-3 inline-flex items-center gap-1 rounded-md bg-white/15 px-2.5 py-1.5 text-xs font-semibold text-white transition hover:bg-white/25 focus:outline-none focus:ring-2 focus:ring-white/80"
+          x-text="actionLabel"></button>
+      </div>
+      <button type="button" @click="dismiss()"
+        class="-mr-1 -mt-1 shrink-0 rounded-md p-1 text-white/80 transition hover:bg-white/15 hover:text-white focus:outline-none focus:ring-2 focus:ring-white/80"
+        aria-label="Tutup notifikasi">
+        <iconify-icon icon="mdi:close" width="18" aria-hidden="true"></iconify-icon>
+      </button>
+      <span x-ref="progress" class="absolute inset-x-0 bottom-0 h-1 origin-left bg-white/70"
+        aria-hidden="true"></span>
+    </div>
+  </div>
   <x-user.navbar />
   {{ $slot }}
   <x-user.keranjang />
@@ -111,7 +152,9 @@
       aria-labelledby="quick-loan-title"
     >
       <div class="h-1.5 bg-gradient-to-r from-[#007b6d] via-[#00b99a] to-[#00e3a8]" aria-hidden="true"></div>
-      <form method="POST" action="{{ route('user.peminjaman.store') }}" class="p-5 sm:p-7">
+      <form method="POST" action="{{ route('user.peminjaman.store', absolute: false) }}" class="p-5 sm:p-7"
+        @submit.prevent="submitLoanForm($event)"
+        :aria-busy="loanSubmitting">
         @csrf
         <input type="hidden" name="items[0][barang_id]" :value="selectedLoanItem?.id">
         <input type="hidden" name="items[0][quantity]" :value="loanQuantity">
@@ -130,7 +173,7 @@
         <div class="mt-4 rounded-xl border border-slate-200 bg-[#f7fbfa] px-4 py-3">
           <p class="text-sm font-semibold text-slate-900" x-text="selectedLoanItem?.name"></p>
           <p class="mt-1 text-xs text-slate-500" x-text="selectedLoanItem?.category"></p>
-          <p class="mt-2 text-xs font-medium text-[#007b6d]">Stok tersedia: <span x-text="selectedLoanItem?.stock"></span> <span x-text="selectedLoanItem?.unit"></span></p>
+          <p class="mt-2 text-sm font-semibold text-[#007b6d]">Stok tersedia: <span x-text="selectedLoanItem?.stock"></span></p>
         </div>
 
         <div class="mt-4 grid gap-4 sm:grid-cols-2">
@@ -165,7 +208,10 @@
             >
               <option value="harian">Harian</option>
               <option value="praktik">Praktik</option>
-              <option value="lainnya">Lainnya</option>
+              <option value="mingguan">Mingguan</option>
+              <option value="bulanan">Bulanan</option>
+              <option value="semesteran">Semesteran</option>
+              <option value="tahunan">Tahunan</option>
             </select>
           </label>
         </div>
@@ -183,15 +229,16 @@
         </label>
         <footer class="mt-5 flex flex-col-reverse justify-end gap-2 sm:flex-row">
           <button type="button" @click="loanModalOpen = false" class="rounded-lg border border-slate-200 px-4 py-2.5 text-sm font-semibold text-slate-600 transition hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-400">Batal</button>
-          <button type="submit" class="inline-flex items-center justify-center gap-2 rounded-lg bg-[#00d69f] px-5 py-2.5 text-sm font-bold text-[#004d43] shadow-[0_5px_14px_rgba(0,190,144,0.2)] transition hover:bg-[#36e9b3] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#008b7a] focus-visible:ring-offset-2">
-            <iconify-icon icon="mdi:check-circle-outline" class="text-lg" aria-hidden="true"></iconify-icon>
-            Ajukan Peminjaman
+          <button type="submit" :disabled="loanSubmitting || !selectedLoanItem?.stock"
+            class="inline-flex items-center justify-center gap-2 rounded-lg bg-[#00d69f] px-5 py-2.5 text-sm font-bold text-[#004d43] shadow-[0_5px_14px_rgba(0,190,144,0.2)] transition hover:bg-[#36e9b3] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#008b7a] focus-visible:ring-offset-2 disabled:cursor-wait disabled:opacity-70">
+            <iconify-icon x-show="!loanSubmitting" icon="mdi:check-circle-outline" class="text-lg" aria-hidden="true"></iconify-icon>
+            <iconify-icon x-show="loanSubmitting" icon="mdi:loading" class="animate-spin text-lg" aria-hidden="true"></iconify-icon>
+            <span x-text="loanSubmitting ? 'Mengirim pengajuan...' : 'Ajukan Peminjaman'"></span>
           </button>
         </footer>
       </form>
     </section>
   </div>
-  <div x-cloak x-show="notice" x-transition class="fixed bottom-5 left-1/2 z-[70] w-[min(92vw,36rem)] -translate-x-1/2 rounded-xl bg-[#003f38] px-4 py-3 text-sm text-white shadow-xl" role="status" x-text="notice"></div>
   <script>
     function userPortal() {
       return {
@@ -201,6 +248,8 @@
         loanModalOpen: false,
         selectedLoanItem: null,
         loanQuantity: 1,
+        loanSubmitting: false,
+        isOpeningApply: false,
         notice: '',
         noticeTimer: null,
         cartStorageKey: 'inventrack-user-cart-v1',
@@ -209,10 +258,192 @@
         historyPollTimer: null,
         historyRequestController: null,
         applyUrl: @js(route('user.beranda', ['page' => 'apply'])),
+        async cancelLoan(event) {
+          const form = event.currentTarget;
+          const submitButton = form.querySelector('[type="submit"]');
+
+          if (submitButton) {
+            submitButton.disabled = true;
+          }
+
+          try {
+            const response = await fetch(form.action, {
+              method: 'POST',
+              body: new FormData(form),
+              headers: {
+                'Accept': 'application/json',
+                'X-Requested-With': 'XMLHttpRequest',
+              },
+              credentials: 'same-origin',
+              cache: 'no-store',
+            });
+            const payload = await response.json().catch(() => ({}));
+
+            if (!response.ok) {
+              const validationMessage = Object.values(payload.errors || {})
+                .flatMap(messages => Array.isArray(messages) ? messages : [])
+                .find(message => typeof message === 'string');
+              window.showToast(validationMessage || payload.message || 'Peminjaman gagal dibatalkan.', 'error');
+              return;
+            }
+
+            const card = form.closest('[data-loan-state]');
+            if (card) {
+              card.classList.add('opacity-0', 'scale-[0.99]', 'transition', 'duration-300');
+              window.setTimeout(() => card.remove(), 280);
+            }
+            window.showToast(payload.message || 'Peminjaman berhasil dibatalkan.', 'success');
+          } catch (error) {
+            console.error('Failed to cancel borrower loan.', error);
+            window.showToast('Peminjaman gagal dibatalkan. Periksa koneksi lalu coba lagi.', 'error');
+          } finally {
+            if (submitButton) {
+              submitButton.disabled = false;
+            }
+          }
+        },
+        async submitLoanForm(event) {
+          if (this.loanSubmitting) {
+            return;
+          }
+
+          const form = event.currentTarget;
+          const formUrl = new URL(form.action, window.location.href);
+          if (formUrl.origin !== window.location.origin) {
+            this.showNotice('Alamat pengajuan tidak valid. Muat ulang halaman lalu coba lagi.');
+            return;
+          }
+
+          this.loanSubmitting = true;
+          let redirecting = false;
+          try {
+            // ASVS V2.2.2: AJAX improves feedback; server-side validation remains authoritative.
+            const response = await fetch(formUrl, {
+              method: 'POST',
+              body: new FormData(form),
+              headers: {
+                'Accept': 'application/json',
+                'X-Requested-With': 'XMLHttpRequest',
+              },
+              credentials: 'same-origin',
+              cache: 'no-store',
+            });
+            const contentType = response.headers.get('content-type') || '';
+            if (!contentType.includes('application/json')) {
+              throw new Error(`Loan request returned an unexpected content type (${response.status}).`);
+            }
+
+            const payload = await response.json();
+            if (response.status === 409 && payload.stock && typeof payload.stock === 'object' && !Array.isArray(payload.stock)) {
+              this.syncCartStock(payload.stock);
+              this.showNotice(payload.message || 'Stok barang berubah. Periksa jumlah dan kirim ulang pengajuan.');
+              return;
+            }
+
+            if (!response.ok) {
+              const validationMessage = Object.values(payload.errors || {})
+                .flatMap(messages => Array.isArray(messages) ? messages : [])
+                .find(message => typeof message === 'string');
+              this.showNotice(validationMessage || payload.message || 'Pengajuan gagal diproses. Periksa kembali data Anda.');
+              return;
+            }
+
+            if (typeof payload.redirect_url !== 'string' || !Array.isArray(payload.submitted_item_ids)) {
+              throw new Error('Loan response did not contain the expected success data.');
+            }
+
+            const destination = new URL(payload.redirect_url, window.location.href);
+            // ASVS V3.7.2: only follow a server-provided redirect on the current origin.
+            if (destination.origin !== window.location.origin) {
+              throw new Error('Loan response contained a cross-origin redirect.');
+            }
+
+            this.removeSubmittedItems(payload.submitted_item_ids);
+            window.location.assign(destination.href);
+            redirecting = true;
+          } catch (error) {
+            console.error('Failed to submit borrower loan.', error);
+            this.showNotice('Pengajuan gagal dikirim. Periksa koneksi lalu coba lagi.');
+          } finally {
+            if (!redirecting) {
+              this.loanSubmitting = false;
+            }
+          }
+        },
+        syncCartStock(stockById) {
+          const syncedCart = [];
+          for (const item of this.cart) {
+            const currentStock = stockById[item.id];
+            if (!Number.isInteger(currentStock) || currentStock < 0) {
+              syncedCart.push(item);
+              continue;
+            }
+            if (currentStock === 0) {
+              continue;
+            }
+
+            item.stock = currentStock;
+            item.quantity = Math.min(item.quantity, currentStock);
+            syncedCart.push(item);
+          }
+
+          this.cart = syncedCart;
+          this.selectedCartItemIds = this.selectedCartItemIds.filter(itemId => this.cart.some(item => item.id === itemId));
+          this.persistCart();
+          this.persistCartSelection();
+
+          if (this.selectedLoanItem && Number.isInteger(stockById[this.selectedLoanItem.id])) {
+            this.selectedLoanItem.stock = stockById[this.selectedLoanItem.id];
+            this.loanQuantity = this.selectedLoanItem.stock > 0
+              ? Math.min(this.loanQuantity, this.selectedLoanItem.stock)
+              : 1;
+          }
+        },
         initHistoryAjax() {
           if (!document.getElementById('history-content') || this.historyPollTimer !== null) {
             return;
           }
+
+          document.addEventListener('click', event => {
+            const link = event.target.closest('a[href]');
+            const history = document.getElementById('history-content');
+            if (
+              !link
+              || !history?.contains(link)
+              || (!link.hasAttribute('data-history-ajax') && !link.closest('nav[role="navigation"]'))
+              || event.button !== 0
+              || event.metaKey
+              || event.ctrlKey
+              || event.shiftKey
+              || event.altKey
+              || link.target
+            ) {
+              return;
+            }
+
+            const destination = new URL(link.href, window.location.href);
+            if (
+              destination.origin !== window.location.origin
+              || destination.pathname !== window.location.pathname
+              || destination.searchParams.get('page') !== 'history'
+            ) {
+              return;
+            }
+
+            event.preventDefault();
+            this.loadHistory(destination, { updateHistory: true, animate: true });
+          });
+          window.addEventListener('popstate', () => {
+            const url = new URL(window.location.href);
+            if (
+              document.getElementById('history-content')
+              && url.origin === window.location.origin
+              && url.pathname === window.location.pathname
+              && url.searchParams.get('page') === 'history'
+            ) {
+              this.loadHistory(url, { animate: true, abortPrevious: true });
+            }
+          });
 
           this.historyPollTimer = window.setInterval(() => {
             if (document.visibilityState === 'visible') {
@@ -221,10 +452,9 @@
           }, 5000);
         },
         async refreshHistory() {
-          const currentHistory = document.getElementById('history-content');
           const url = new URL(window.location.href);
           if (
-            !currentHistory
+            !document.getElementById('history-content')
             || this.historyRequestController
             || url.origin !== window.location.origin
             || url.pathname !== window.location.pathname
@@ -233,8 +463,30 @@
             return;
           }
 
+          await this.loadHistory(url, { onlyIfChanged: true });
+        },
+        async loadHistory(destination, { updateHistory = false, animate = false, onlyIfChanged = false, abortPrevious = false } = {}) {
+          const currentHistory = document.getElementById('history-content');
+          const url = new URL(destination, window.location.href);
+          if (
+            !currentHistory
+            || url.origin !== window.location.origin
+            || url.pathname !== window.location.pathname
+            || url.searchParams.get('page') !== 'history'
+          ) {
+            return;
+          }
+
+          if (this.historyRequestController) {
+            if (!updateHistory && !abortPrevious) {
+              return;
+            }
+            this.historyRequestController.abort();
+          }
+
           const controller = new AbortController();
           this.historyRequestController = controller;
+          currentHistory.setAttribute('aria-busy', 'true');
           try {
             // ASVS V8.2.2: refresh the authenticated borrower page so its owner-scoped query remains authoritative.
             const response = await fetch(url, {
@@ -260,22 +512,51 @@
             }
 
             const loanStates = history => Array.from(history.querySelectorAll('[data-loan-state]'), loan => loan.dataset.loanState).join('|');
-            if (loanStates(currentHistory) === loanStates(nextHistory)) {
+            if (onlyIfChanged && loanStates(currentHistory) === loanStates(nextHistory)) {
               return;
             }
 
             const scrollPosition = window.scrollY;
             const horizontalScrollPosition = window.scrollX;
+            const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+            if (animate && !reduceMotion) {
+              const exitAnimation = currentHistory.animate(
+                [{ opacity: 1, transform: 'translateY(0)' }, { opacity: 0.82, transform: 'translateY(4px)' }],
+                { duration: 100, easing: 'ease-in', fill: 'forwards' },
+              );
+              await exitAnimation.finished;
+              exitAnimation.cancel();
+              if (controller.signal.aborted) {
+                return;
+              }
+            }
+
             currentHistory.replaceWith(nextHistory);
             window.Alpine.initTree(nextHistory);
             window.scrollTo(horizontalScrollPosition, scrollPosition);
+            if (updateHistory) {
+              window.history.pushState({ history: true }, '', url);
+            }
+
+            if (animate && !reduceMotion) {
+              const entranceAnimation = nextHistory.animate(
+                [{ opacity: 0.82, transform: 'translateY(4px)' }, { opacity: 1, transform: 'translateY(0)' }],
+                { duration: 180, easing: 'cubic-bezier(0.2, 0.7, 0.2, 1)' },
+              );
+              await entranceAnimation.finished;
+              entranceAnimation.cancel();
+            }
           } catch (error) {
             if (error.name !== 'AbortError') {
-              console.error('Failed to refresh borrower loan history.', error);
+              console.error('Failed to load borrower loan history.', error);
+              if (updateHistory) {
+                this.showNotice('Riwayat gagal dimuat. Periksa koneksi lalu coba lagi.');
+              }
             }
           } finally {
             if (this.historyRequestController === controller) {
               this.historyRequestController = null;
+              document.getElementById('history-content')?.removeAttribute('aria-busy');
             }
           }
         },
@@ -442,7 +723,7 @@
             this.persistCartSelection();
           }
           this.persistCart();
-          this.showNotice(`${item.name} ditambahkan ke keranjang.`);
+          window.showToast(`${item.name} ditambahkan ke keranjang.`, 'success', 2500, 'Ditambahkan ke keranjang');
         },
         openLoanModal(item) {
           this.selectedLoanItem = item;
@@ -497,15 +778,17 @@
           return this.cart.filter(item => this.selectedCartItemIds.includes(item.id));
         },
         showNotice(message) {
-          this.notice = message;
-          window.clearTimeout(this.noticeTimer);
-          this.noticeTimer = window.setTimeout(() => this.notice = '', 3500);
+          window.showToast(message, 'error');
         },
         goToApply() {
+          if (this.isOpeningApply) {
+            return;
+          }
           if (this.selectedCartItems.length === 0) {
             this.showNotice('Pilih setidaknya satu barang untuk diajukan.');
             return;
           }
+          this.isOpeningApply = true;
           window.location.assign(this.applyUrl);
         },
       };

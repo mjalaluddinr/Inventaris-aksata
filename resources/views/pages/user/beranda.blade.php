@@ -159,9 +159,9 @@
                   </div>
                   <h3 class="mt-2 truncate text-sm font-bold text-slate-900" title="{{ $item->nama_barang }}">
                     {{ $item->nama_barang }}</h3>
-                  <p class="mt-1 truncate text-[10px] text-slate-500">{{ $item->satuan }}</p>
-                  <p class="mt-2 text-xs"><strong>{{ number_format($item->stok_tersedia) }}</strong><span
-                      class="text-slate-500"> / {{ number_format($item->stok_total) }} tersedia</span></p>
+                  <p class="mt-2 flex items-baseline gap-1.5"><strong
+                      class="text-xl font-extrabold text-[#006f62]">{{ number_format($item->stok_tersedia) }}</strong><span
+                      class="text-xs text-slate-500">/ {{ number_format($item->stok_total) }} tersedia</span></p>
                   <div class="mt-1.5 h-1.5 overflow-hidden rounded-full bg-slate-100" role="progressbar"
                     aria-label="Stok tersedia {{ $item->nama_barang }}" aria-valuenow="{{ $item->stok_tersedia }}"
                     aria-valuemin="0" aria-valuemax="{{ max($item->stok_total, 1) }}">
@@ -170,12 +170,13 @@
                   </div>
                   <div class="mt-auto flex items-center justify-between gap-2 pt-3">
                     <button type="button"
-                      @click="addToCart({ id: @js($item->barang_id), name: @js($item->nama_barang), unit: @js($item->satuan), stock: {{ (int) $item->stok_tersedia }}, category: @js($item->kategori?->nama_kategori ?? 'Tanpa kategori') })"
-                      class="rounded-full bg-[#00d69f] px-3 py-1.5 text-[10px] font-bold text-[#003f38] transition hover:bg-[#36e9b3] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#008b7a] focus-visible:ring-offset-2">+
+                      @click="addToCart({ id: @js($item->barang_id), name: @js($item->nama_barang), stock: {{ (int) $item->stok_tersedia }}, category: @js($item->kategori?->nama_kategori ?? 'Tanpa kategori') })"
+                      class="inline-flex flex-1 items-center justify-center gap-1 whitespace-nowrap rounded-full bg-[#00d69f] px-2.5 py-2 text-xs font-bold text-[#003f38] transition hover:bg-[#36e9b3] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#008b7a] focus-visible:ring-offset-2">
+                      <iconify-icon icon="mdi:cart-plus" aria-hidden="true"></iconify-icon>
                       Keranjang</button>
                     <button type="button"
-                      @click="openLoanModal({ id: @js($item->barang_id), name: @js($item->nama_barang), unit: @js($item->satuan), stock: {{ (int) $item->stok_tersedia }}, category: @js($item->kategori?->nama_kategori ?? 'Tanpa kategori') })"
-                      class="rounded-full border border-slate-300 px-3 py-1.5 text-[10px] font-semibold text-slate-800 transition hover:border-[#00a88f] hover:text-[#007f70] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#008b7a] focus-visible:ring-offset-2">Pinjam
+                      @click="openLoanModal({ id: @js($item->barang_id), name: @js($item->nama_barang), stock: {{ (int) $item->stok_tersedia }}, category: @js($item->kategori?->nama_kategori ?? 'Tanpa kategori') })"
+                      class="flex-1 whitespace-nowrap rounded-full border border-slate-300 px-2 py-2 text-xs font-semibold text-slate-800 transition hover:border-[#00a88f] hover:text-[#007f70] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#008b7a] focus-visible:ring-offset-2">Pinjam
                       Sekarang</button>
                   </div>
                 </div>

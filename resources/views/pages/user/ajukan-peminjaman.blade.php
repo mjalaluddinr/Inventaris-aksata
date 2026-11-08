@@ -38,22 +38,14 @@
         class="mt-3 inline-flex rounded-full border border-[#00a88f] px-3 py-1.5 text-[10px] font-semibold text-[#007f70] transition hover:bg-emerald-50">+
         Tambah barang lain</a>
     </div>
-    <form method="POST" action="{{ route('user.peminjaman.store') }}"
-      class="rounded-xl border border-[#d1e6e1] bg-white p-4 shadow-[0_2px_5px_rgba(20,55,48,0.12)] sm:p-5">
+    <form method="POST" action="{{ route('user.peminjaman.store', absolute: false) }}"
+      class="rounded-xl border border-[#d1e6e1] bg-white p-4 shadow-[0_2px_5px_rgba(20,55,48,0.12)] sm:p-5"
+      @submit.prevent="submitLoanForm($event)"
+      :aria-busy="loanSubmitting">
       @csrf
       <input type="hidden" name="preserve_cart" value="1">
       <input type="hidden" name="clear_submitted_items" value="1">
       <h2 class="mb-4 border-b border-slate-200 pb-3 text-base font-bold text-slate-900">Ringkasan Pengajuan</h2>
-      @if ($errors->any())
-        <div class="mb-4 rounded-lg border border-rose-200 bg-rose-50 p-3 text-xs text-rose-800" role="alert">
-          <p class="font-semibold">Pengajuan belum dapat diproses:</p>
-          <ul class="mt-1 list-inside list-disc">
-            @foreach ($errors->all() as $error)
-              <li>{{ $error }}</li>
-            @endforeach
-          </ul>
-        </div>
-      @endif
       <template x-for="(item, index) in selectedCartItems" :key="item.id">
         <span>
           <input type="hidden" :name="`items[${index}][barang_id]`" :value="item.id">
@@ -67,13 +59,13 @@
       </label>
       <label class="mb-3 block text-xs font-semibold text-slate-700">Jenis Peminjaman
         <select name="jenis_peminjaman"
+          required
           class="mt-1 block w-full rounded-lg border border-slate-200 bg-[#f7fbfa] px-3 py-2 text-sm font-normal outline-none transition focus:border-[#00a88f] focus:ring-2 focus:ring-[#00a88f]/20">
           <option value="harian" @selected(old('jenis_peminjaman', 'harian') === 'harian')>Harian</option>
           <option value="mingguan" @selected(old('jenis_peminjaman') === 'mingguan')>Mingguan</option>
           <option value="bulanan" @selected(old('jenis_peminjaman') === 'bulanan')>Bulanan</option>
           <option value="semesteran" @selected(old('jenis_peminjaman') === 'semesteran')>Semesteran</option>
           <option value="tahunan" @selected(old('jenis_peminjaman') === 'tahunan')>Tahunan</option>
-          <option value="lainnya" @selected(old('jenis_peminjaman') === 'lainnya')>Lainnya</option>
         </select>
       </label>
       <label class="mb-4 block text-xs font-semibold text-slate-700">Tanggal Rencana Kembali
@@ -89,9 +81,12 @@
           class="mb-3 rounded-lg border border-amber-200 bg-amber-50 p-3 text-center text-[11px] leading-relaxed text-amber-950">
           <strong>Pengembalian dilakukan sekaligus, bukan sebagian. Jika barang kembali setengah akan ada
             konsekuensi dari SARPRAS.</strong></p>
-        <button type="submit" :disabled="selectedCartItems.length === 0"
-          class="w-full rounded-lg bg-[#00d69f] px-4 py-2.5 text-sm font-bold text-[#004d43] shadow-[0_5px_14px_rgba(0,190,144,0.2)] transition hover:bg-[#36e9b3] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#008b7a] focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50">Ajukan
-          Peminjaman</button>
+        <button type="submit" :disabled="selectedCartItems.length === 0 || loanSubmitting"
+          class="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-[#00d69f] px-4 py-2.5 text-sm font-bold text-[#004d43] shadow-[0_5px_14px_rgba(0,190,144,0.2)] transition hover:bg-[#36e9b3] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#008b7a] focus-visible:ring-offset-2 disabled:cursor-wait disabled:opacity-60">
+          <iconify-icon x-show="!loanSubmitting" icon="mdi:send-check-outline" aria-hidden="true"></iconify-icon>
+          <iconify-icon x-show="loanSubmitting" icon="mdi:loading" class="animate-spin text-lg" aria-hidden="true"></iconify-icon>
+          <span x-text="loanSubmitting ? 'Mengirim pengajuan...' : 'Ajukan Peminjaman'"></span>
+        </button>
       </div>
     </form>
   </section>

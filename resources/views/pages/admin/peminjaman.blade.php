@@ -243,17 +243,6 @@
                       @foreach ($loan->detailPeminjamans as $detail)
                         <div class="mb-2 min-w-0">
                           <span class="block whitespace-nowrap">{{ $detail->barang?->nama_barang ?? 'Barang tidak tersedia' }}</span>
-                          @forelse ($detail->logMutasiBarangs as $reservation)
-                            <span class="mt-0.5 block whitespace-nowrap text-[10px] text-slate-500">
-                              {{ $reservation->ruangan?->nama_ruangan ?? 'Lokasi tidak tersedia' }}
-                              @if ($reservation->lemariAsal)
-                                · {{ $reservation->lemariAsal->nama_lemari }}
-                              @endif
-                              ×{{ number_format($reservation->jumlah, 0, ',', '.') }}
-                            </span>
-                          @empty
-                            <span class="mt-0.5 block text-[10px] text-slate-400">Lokasi belum tercatat</span>
-                          @endforelse
                         </div>
                       @endforeach
                     </td>
@@ -272,18 +261,62 @@
                     </td>
                     <td class="whitespace-nowrap px-3 py-3 sm:px-4">
                       @if ($activeTab === 'pending')
-                        <div x-data="{ rejectOpen: false }" class="flex items-center gap-1.5">
-                          <form method="POST" action="{{ route('admin.peminjaman.confirm', $loan) }}">
-                            @csrf
-                            <button type="submit" class="inline-flex items-center gap-1 rounded-md bg-[#00d69f] px-2.5 py-1.5 text-[10px] font-semibold text-[#003f38] transition hover:bg-[#36e9b3]">
-                              <iconify-icon icon="mdi:check" aria-hidden="true"></iconify-icon>
-                              Konfirmasi
-                            </button>
-                          </form>
+                        <div x-data="{ confirmOpen: false, rejectOpen: false }" class="flex items-center gap-1.5">
+                          <button type="button" @click="confirmOpen = true" class="inline-flex items-center gap-1 rounded-md bg-[#00d69f] px-2.5 py-1.5 text-[10px] font-semibold text-[#003f38] transition hover:bg-[#36e9b3]">
+                            <iconify-icon icon="mdi:check" aria-hidden="true"></iconify-icon>
+                            Konfirmasi
+                          </button>
                           <button type="button" @click="rejectOpen = true" class="inline-flex items-center gap-1 rounded-md bg-rose-600 px-2.5 py-1.5 text-[10px] font-semibold text-white transition hover:bg-rose-700">
                               <iconify-icon icon="mdi:close" aria-hidden="true"></iconify-icon>
                               Tolak
                           </button>
+                          <template x-teleport="body">
+                            <div x-cloak x-show="confirmOpen" x-transition.opacity class="fixed inset-0 z-[90] flex items-center justify-center overflow-y-auto bg-slate-950/55 p-4" role="presentation" @click.self="confirmOpen = false" @keydown.escape.window="confirmOpen = false">
+                              <section x-show="confirmOpen" x-transition:enter="transition ease-out duration-200" x-transition:enter-start="scale-95 opacity-0" x-transition:enter-end="scale-100 opacity-100" x-transition:leave="transition ease-in duration-150" x-transition:leave-start="scale-100 opacity-100" x-transition:leave-end="scale-95 opacity-0" class="my-auto w-full max-w-lg overflow-hidden rounded-2xl bg-white shadow-2xl" role="dialog" aria-modal="true" aria-labelledby="confirm-title-{{ $loan->peminjaman_id }}">
+                                <header class="flex items-start justify-between border-b border-slate-100 px-5 py-4">
+                                  <div>
+                                    <h2 id="confirm-title-{{ $loan->peminjaman_id }}" class="font-bold text-slate-900">Konfirmasi Pengambilan Barang</h2>
+                                    <p class="mt-1 text-xs text-slate-500">{{ $loan->kode_peminjaman }}</p>
+                                  </div>
+                                  <button type="button" @click="confirmOpen = false" class="flex h-9 w-9 items-center justify-center rounded-full text-slate-500 hover:bg-slate-100" aria-label="Tutup konfirmasi">
+                                    <iconify-icon icon="mdi:close" class="text-xl" aria-hidden="true"></iconify-icon>
+                                  </button>
+                                </header>
+                                <div class="max-h-[55vh] space-y-3 overflow-y-auto p-5">
+                                  @foreach ($loan->detailPeminjamans as $detail)
+                                    <div class="rounded-xl border border-[#dce7e4] bg-[#fbfefd] p-3.5">
+                                      <p class="text-sm font-bold text-slate-900">{{ $detail->barang?->nama_barang ?? 'Barang tidak tersedia' }}</p>
+                                      @forelse ($detail->logMutasiBarangs as $reservation)
+                                        <div class="mt-2 flex items-center justify-between gap-3 rounded-lg border border-slate-100 bg-white px-3 py-2.5 text-xs">
+                                          <div class="min-w-0">
+                                            <p class="font-semibold text-slate-800">
+                                              {{ $reservation->ruangan?->nama_ruangan ?? 'Lokasi tidak tersedia' }}
+                                              @if ($reservation->lemariAsal)
+                                                · {{ $reservation->lemariAsal->nama_lemari }}
+                                              @endif
+                                            </p>
+                                          </div>
+                                          <span class="shrink-0 rounded-full bg-emerald-100 px-2.5 py-1 font-bold text-emerald-800">×{{ number_format($reservation->jumlah, 0, ',', '.') }}</span>
+                                        </div>
+                                      @empty
+                                        <p class="mt-2 rounded-lg bg-slate-100 px-3 py-2 text-xs text-slate-500">Lokasi reservasi belum tercatat.</p>
+                                      @endforelse
+                                    </div>
+                                  @endforeach
+                                </div>
+                                <footer class="flex justify-end gap-2 border-t border-slate-100 px-5 py-4">
+                                  <button type="button" @click="confirmOpen = false" class="rounded-lg border border-slate-200 px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-50">Batal</button>
+                                  <form method="POST" action="{{ route('admin.peminjaman.confirm', $loan) }}">
+                                    @csrf
+                                    <button type="submit" class="inline-flex items-center gap-1.5 rounded-lg bg-[#00d69f] px-4 py-2 text-xs font-bold text-[#003f38] transition hover:bg-[#36e9b3]">
+                                      <iconify-icon icon="mdi:check-circle-outline" aria-hidden="true"></iconify-icon>
+                                      Konfirmasi Peminjaman
+                                    </button>
+                                  </form>
+                                </footer>
+                              </section>
+                            </div>
+                          </template>
                           <template x-teleport="body">
                           <div x-cloak x-show="rejectOpen" x-transition.opacity class="fixed inset-0 z-[90] flex items-center justify-center overflow-y-auto bg-slate-950/55 p-4" role="presentation" @click.self="rejectOpen = false" @keydown.escape.window="rejectOpen = false">
                             <section x-show="rejectOpen" x-transition class="my-auto w-full max-w-md overflow-hidden rounded-2xl bg-white shadow-2xl" role="dialog" aria-modal="true" aria-labelledby="reject-title-{{ $loan->peminjaman_id }}">

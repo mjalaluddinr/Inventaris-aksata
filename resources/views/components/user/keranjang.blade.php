@@ -46,7 +46,14 @@
     </div>
     <footer class="border-t border-slate-200 px-5 py-4">
       <div class="mb-3 flex justify-between text-base font-bold text-slate-900"><span>Barang dipilih</span><span x-text="`${selectedCartItems.length} item`"></span></div>
-      <button type="button" @click="goToApply()" :disabled="selectedCartItems.length === 0" class="w-full rounded-lg bg-[#00d69f] px-4 py-3 text-sm font-bold text-[#004d43] transition hover:bg-[#36e9b3] disabled:cursor-not-allowed disabled:opacity-50">Ajukan Peminjaman</button>
+      <button type="button" @click="goToApply()"
+        :disabled="selectedCartItems.length === 0 || isOpeningApply"
+        :aria-busy="isOpeningApply"
+        class="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-[#00d69f] px-4 py-3 text-sm font-bold text-[#004d43] transition hover:bg-[#36e9b3] disabled:cursor-wait disabled:opacity-60">
+        <iconify-icon x-show="!isOpeningApply" icon="mdi:send-check-outline" aria-hidden="true"></iconify-icon>
+        <iconify-icon x-show="isOpeningApply" icon="mdi:loading" class="animate-spin text-lg" aria-hidden="true"></iconify-icon>
+        <span x-text="isOpeningApply ? 'Membuka formulir...' : 'Ajukan Peminjaman'"></span>
+      </button>
     </footer>
   </aside>
 </div>

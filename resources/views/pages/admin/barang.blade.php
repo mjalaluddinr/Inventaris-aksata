@@ -1861,7 +1861,6 @@
                         <option value="BUAH">BUAH</option>
                         <option value="ROLL">ROLL</option>
                         <option value="SET">SET</option>
-                        <option value="LAINNYA">LAINNYA</option>
                       </select>
                       @error('satuan')
                         <span class="mt-1 block text-xs text-rose-700">{{ $message }}</span>

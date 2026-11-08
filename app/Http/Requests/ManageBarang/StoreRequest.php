@@ -57,7 +57,7 @@ class StoreRequest extends FormRequest
                 Rule::exists('kategori', 'kategori_id')->where(fn ($query) => $query->whereNull('deleted_at')),
             ],
             'nama_barang' => ['required', 'string', 'max:150'],
-            'satuan' => ['required', Rule::in(['PCS', 'METER', 'UNIT', 'BUAH', 'ROLL', 'SET', 'LAINNYA'])],
+            'satuan' => ['required', Rule::in(['PCS', 'METER', 'UNIT', 'BUAH', 'ROLL', 'SET'])],
             'stok_total' => ['required', 'integer', 'min:0'],
             'stok_tersedia' => ['required', 'integer', 'min:0', 'lte:stok_total'],
             'kondisi' => ['required', Rule::in(['baru', 'lama'])],

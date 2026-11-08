@@ -17,22 +17,12 @@
         title="Riwayat Peminjaman Saya"
         description="Pantau status pengajuan aktif dan transaksi yang sudah selesai."
       />
-      @if (session('success'))
-        <div class="mx-4 mt-5 rounded-lg border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-800 sm:mx-8 lg:mx-10" role="status">{{ session('success') }}</div>
-      @endif
-      @if ($errors->any())
-        <div class="mx-4 mt-5 rounded-lg border border-rose-200 bg-rose-50 p-4 text-sm text-rose-800 sm:mx-8 lg:mx-10" role="alert">
-          @foreach ($errors->all() as $error)
-            <p>{{ $error }}</p>
-          @endforeach
-        </div>
-      @endif
       <section class="mx-auto max-w-6xl px-4 py-5 sm:px-8 sm:py-6 lg:px-10">
         <div class="mb-5 flex flex-wrap items-center gap-2" aria-label="Filter riwayat peminjaman">
-          <a href="{{ route('user.beranda', ['page' => 'history', 'status' => 'active']) }}"
+          <a data-history-ajax href="{{ route('user.beranda', ['page' => 'history', 'status' => 'active']) }}"
             @if (request('status', 'active') === 'active') aria-current="page" @endif
             class="rounded-full border px-4 py-1.5 text-xs font-semibold transition focus:outline-none focus-visible:ring-2 focus-visible:ring-[#008b7a] focus-visible:ring-offset-2 {{ request('status', 'active') === 'active' ? 'border-[#00ae91] bg-[#00ae91] text-white' : 'border-[#00ae91] bg-white text-[#007f70] hover:bg-emerald-50' }}">Aktif</a>
-          <a href="{{ route('user.beranda', ['page' => 'history', 'status' => 'finished']) }}"
+          <a data-history-ajax href="{{ route('user.beranda', ['page' => 'history', 'status' => 'finished']) }}"
             @if (request('status') === 'finished') aria-current="page" @endif
             class="rounded-full border px-4 py-1.5 text-xs font-semibold transition focus:outline-none focus-visible:ring-2 focus-visible:ring-[#008b7a] focus-visible:ring-offset-2 {{ request('status') === 'finished' ? 'border-[#00ae91] bg-[#00ae91] text-white' : 'border-[#00ae91] bg-white text-[#007f70] hover:bg-emerald-50' }}">Selesai</a>
         </div>
@@ -41,13 +31,18 @@
             @foreach ($historyLoans as $loan)
               @php
                 $detailStatuses = $loan->detailPeminjamans->pluck('status')->unique();
+                $hasActiveItems = $detailStatuses->contains(
+                    fn (string $status): bool => in_array($status, ['pending', 'dipinjam'], true),
+                );
                 $loanStatus = $detailStatuses->count() === 1 ? $detailStatuses->first() : 'diproses';
                 $statusLabels = ['pending' => 'Menunggu konfirmasi', 'dipinjam' => 'Sedang dipinjam', 'dikembalikan' => 'Dikembalikan', 'ditolak' => 'Ditolak', 'dibatalkan' => 'Peminjaman Dibatalkan', 'diproses' => 'Beberapa status'];
                 $progressIndex = match ($loanStatus) {
                     'dipinjam' => 2,
                     'dikembalikan' => 3,
+                    'ditolak', 'dibatalkan' => 1,
                     default => 0,
                 };
+                $progressIsRejected = in_array($loanStatus, ['ditolak', 'dibatalkan'], true);
                 $isOverdue = $loanStatus === 'dipinjam'
                     && $loan->tanggal_rencana_kembali?->isBefore(today()) === true;
                 $statusStyle = match (true) {
@@ -66,16 +61,22 @@
                     <h2 class="text-sm font-bold tracking-wide text-slate-900 sm:text-base">Pesanan peminjaman</h2>
                     <p class="mt-1 text-[11px] text-slate-500">Diajukan {{ $loan->tanggal_pengajuan?->format('d M Y') ?? '—' }}</p>
                   </div>
-                  <span class="shrink-0 rounded-full px-3 py-1 text-[10px] font-semibold {{ $statusStyle }}">
-                    {{ $isOverdue ? 'Jatuh tempo' : ($statusLabels[$loanStatus] ?? ucfirst($loanStatus)) }}
-                  </span>
+                  <div class="flex shrink-0 flex-col items-end gap-1.5">
+                    <span class="rounded-full px-3 py-1 text-[10px] font-semibold {{ $statusStyle }}">
+                      {{ $isOverdue ? 'Jatuh tempo' : ($statusLabels[$loanStatus] ?? ucfirst($loanStatus)) }}
+                    </span>
+                    @if ($loanStatus === 'dibatalkan')
+                      <span class="text-right text-[10px] font-bold text-slate-700">
+                        Tanggal rencana kembali: {{ $loan->tanggal_rencana_kembali?->format('d M Y') ?? '—' }}
+                      </span>
+                    @endif
+                  </div>
                 </div>
                 <div class="divide-y divide-slate-100 px-4 sm:px-5">
                   @foreach ($loan->detailPeminjamans as $detail)
                     <div class="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 py-3">
                       <div class="min-w-0">
                         <p class="text-xs font-semibold text-slate-800">{{ $detail->barang?->nama_barang ?? 'Barang tidak tersedia' }} <span class="font-normal text-slate-500">× {{ $detail->jumlah_pinjam }}</span></p>
-                        <p class="mt-1 text-[10px] text-slate-500">Pengembalian sesuai tanggal transaksi: {{ $loan->tanggal_rencana_kembali?->format('d M Y') ?? '—' }}</p>
                       </div>
                     </div>
                   @endforeach
@@ -83,18 +84,29 @@
                 <div class="px-4 pb-3 sm:px-5">
                   <ol class="grid grid-cols-4" aria-label="Tahapan peminjaman">
                     @foreach ($progressSteps as $stepIndex => $stepLabel)
+                      @php
+                        $stepIsRejected = $progressIsRejected && $stepIndex === 1;
+                        $stepIsCompleted = $stepIndex <= $progressIndex && ! $stepIsRejected;
+                        $stepIsCurrent = $stepIndex === $progressIndex;
+                        $stepLabelText = $stepIsRejected
+                            ? ($loanStatus === 'ditolak' ? 'Ditolak' : 'Dibatalkan')
+                            : $stepLabel;
+                      @endphp
                       <li class="relative flex min-w-0 flex-col items-center text-center">
                         @if ($stepIndex > 0)
-                          <span class="absolute left-0 right-1/2 top-[11px] h-0.5 {{ $stepIndex <= $progressIndex ? 'bg-[#00c99c]' : 'bg-slate-200' }}" aria-hidden="true"></span>
+                          <span class="absolute left-0 right-1/2 top-[11px] h-0.5 {{ $stepIsRejected || ($stepIndex <= $progressIndex && ! $progressIsRejected) ? 'bg-[#00c99c]' : ($progressIsRejected && $stepIndex > 1 ? 'bg-slate-200' : 'bg-slate-200') }}" aria-hidden="true"></span>
                         @endif
                         @if ($stepIndex < count($progressSteps) - 1)
-                          <span class="absolute left-1/2 right-0 top-[11px] h-0.5 {{ $stepIndex < $progressIndex ? 'bg-[#00c99c]' : 'bg-slate-200' }}" aria-hidden="true"></span>
+                          <span class="absolute left-1/2 right-0 top-[11px] h-0.5 {{ $stepIsRejected ? 'bg-rose-300' : ($stepIndex < $progressIndex ? 'bg-[#00c99c]' : 'bg-slate-200') }}" aria-hidden="true"></span>
                         @endif
-                        <span class="relative z-10 flex h-6 w-6 items-center justify-center rounded-full {{ $stepIndex <= $progressIndex ? 'bg-[#00c99c] text-white' : 'bg-slate-200 text-slate-400' }}">
-                          @if ($stepIndex < $progressIndex)
+                        <span class="relative z-10 flex h-6 w-6 items-center justify-center rounded-full {{ $stepIsRejected ? 'bg-rose-600 text-white' : ($stepIsCompleted || $stepIsCurrent ? 'bg-[#00c99c] text-white' : 'bg-slate-200 text-slate-400') }}">
+                          @if ($stepIsRejected)
+                            <iconify-icon icon="mdi:close" class="text-sm" aria-hidden="true"></iconify-icon>
+                            <span class="sr-only">{{ $stepLabelText }}: </span>
+                          @elseif ($stepIndex < $progressIndex)
                             <span aria-hidden="true">✓</span>
                             <span class="sr-only">Selesai: </span>
-                          @elseif ($stepIndex === $progressIndex)
+                          @elseif ($stepIsCurrent)
                             <span class="h-2 w-2 rounded-full bg-white" aria-hidden="true"></span>
                             <span class="sr-only">Tahap saat ini: </span>
                           @else
@@ -102,12 +114,14 @@
                             <span class="sr-only">Belum: </span>
                           @endif
                         </span>
-                        <span class="mt-1.5 max-w-full px-0.5 text-[8px] leading-tight {{ $stepIndex <= $progressIndex ? 'font-semibold text-[#007f70]' : 'text-slate-400' }} sm:text-[10px]">{{ $stepLabel }}</span>
+                        <span class="mt-1.5 max-w-full px-0.5 text-[8px] leading-tight {{ $stepIsRejected ? 'font-bold text-rose-700' : ($stepIsCompleted || $stepIsCurrent ? 'font-semibold text-[#007f70]' : 'text-slate-400') }} sm:text-[10px]">{{ $stepLabelText }}</span>
                       </li>
                     @endforeach
                   </ol>
                 </div>
-                <p class="mx-4 mb-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 text-center text-[10px] leading-relaxed text-amber-950 sm:mx-5"><strong>Pengembalian dilakukan sekaligus, bukan sebagian. Jika barang kembali setengah akan ada konsekuensi dari SARPRAS.</strong></p>
+                @if ($hasActiveItems)
+                  <p class="mx-4 mb-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 text-center text-[10px] leading-relaxed text-amber-950 sm:mx-5"><strong>Pengembalian dilakukan sekaligus, bukan sebagian. Jika barang kembali setengah akan ada konsekuensi dari SARPRAS.</strong></p>
+                @endif
                 <div class="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-t border-slate-100 bg-[#fbfefd] px-4 py-3 sm:px-5">
                   <p class="min-w-0 text-[10px] text-slate-500"><span class="font-semibold text-slate-600">Keperluan:</span> {{ $loan->keperluan ?: '—' }}</p>
                   @if ($loanStatus === 'pending')
@@ -159,7 +173,6 @@
                             </span>
                             <div>
                               <h2 id="cancellation-title-{{ $loan->peminjaman_id }}" class="text-base font-bold text-slate-900">Batalkan peminjaman?</h2>
-                              <p class="mt-1 text-xs leading-relaxed text-slate-500">Peminjaman akan langsung dibatalkan dan stok barang dikembalikan.</p>
                             </div>
                           </div>
                           <button type="button" @click="cancellationOpen = false" class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-slate-400 transition hover:bg-slate-100 hover:text-slate-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500" aria-label="Tutup konfirmasi pembatalan">
@@ -168,11 +181,11 @@
                         </header>
                         <div class="px-5 pb-5 pt-4 sm:px-6">
                           <div id="cancellation-description-{{ $loan->peminjaman_id }}" class="rounded-xl border border-amber-100 bg-amber-50 p-3.5">
-                            <p class="text-xs leading-relaxed text-amber-950">Apakah kamu yakin ingin membatalkan peminjaman ini? Tindakan ini tidak dapat diurungkan.</p>
+                            <p class="text-xs leading-relaxed text-amber-950">Apakah kamu yakin ingin membatalkan peminjaman ini? Tindakan ini tidak dapat dikembalikan.</p>
                           </div>
                           <div class="mt-5 flex flex-col-reverse justify-end gap-2 sm:flex-row">
                             <button type="button" @click="cancellationOpen = false" class="rounded-lg border border-slate-200 px-4 py-2.5 text-xs font-semibold text-slate-600 transition hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-400">Kembali</button>
-                            <form method="POST" action="{{ route('user.peminjaman.cancel', $loan->peminjaman_id) }}" class="w-full sm:w-auto">
+                            <form method="POST" action="{{ route('user.peminjaman.cancel', $loan->peminjaman_id) }}" @submit.prevent="cancelLoan($event)" class="w-full sm:w-auto">
                               @csrf
                               <button type="submit" class="w-full rounded-lg bg-rose-600 px-4 py-2.5 text-xs font-bold text-white shadow-sm transition hover:bg-rose-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-rose-600 focus-visible:ring-offset-2 sm:w-auto">Ya, Batalkan Peminjaman</button>
                             </form>
