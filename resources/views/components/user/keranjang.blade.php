@@ -28,7 +28,7 @@
               <input type="checkbox" :checked="isCartItemSelected(item.id)" @change="toggleCartItem(item.id, $event.target.checked)" :aria-label="`Pilih ${item.name} untuk diajukan`" class="mt-0.5 h-4 w-4 shrink-0 rounded border-slate-300 text-[#008f7a] focus:ring-[#008f7a]">
               <span class="min-w-0">
                 <span class="block truncate text-sm font-semibold text-slate-900" x-text="item.name"></span>
-                <span class="mt-1 block text-xs text-slate-500"><span x-text="item.code"></span> · <span x-text="item.category"></span></span>
+                <span class="mt-1 block text-xs text-slate-500" x-text="item.category"></span>
               </span>
             </label>
             <button type="button" @click="removeFromCart(item.id)" class="inline-flex shrink-0 items-center gap-1 rounded-md bg-rose-600 px-2 py-1 text-[10px] font-semibold text-white transition hover:bg-rose-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-rose-600">

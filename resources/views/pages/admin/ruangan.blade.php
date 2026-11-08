@@ -523,13 +523,6 @@
 
           <div class="px-5 py-4 space-y-4">
             <div>
-              <label class="mb-1 block text-xs font-medium text-slate-700">Kode Ruangan</label>
-              <input type="text" :value="modalMode === 'create' ? 'Otomatis dibuat (RGN-001)' : currentRuangan.kode_ruangan"
-                readonly
-                class="ruangan-form-field block w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 shadow-sm focus:border-[#08A9D6] focus:outline-none focus:ring-2 focus:ring-[#08A9D6]/20">
-              <p class="mt-1 text-xs text-slate-500">Kode ruangan dibuat otomatis oleh sistem.</p>
-            </div>
-            <div>
               <label class="mb-1 block text-xs font-medium text-slate-700">Nama Ruangan <span
                   class="text-rose-500">*</span></label>
               <input type="text" name="nama_ruangan" x-model="currentRuangan.nama_ruangan" required
@@ -548,12 +541,12 @@
             <button type="button" @click="closeAccountModal()"
               class="rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-slate-400">Batal              </button>
               <button type="submit" :disabled="formBusy" :aria-busy="formBusy.toString()"
-                class="admin-submit-button ruangan-primary-button inline-flex items-center justify-center rounded-md border border-[#009F91] bg-sidebar-start px-4 py-2 text-sm font-semibold text-white shadow-sm transition focus:outline-none focus:ring-2 focus:ring-sidebar-start focus:ring-offset-2">
+                class="admin-submit-button ruangan-primary-button inline-flex items-center justify-center gap-2 rounded-md border border-[#009F91] bg-sidebar-start px-4 py-2 text-sm font-semibold text-white shadow-sm transition focus:outline-none focus:ring-2 focus:ring-sidebar-start focus:ring-offset-2">
               <iconify-icon x-show="formBusy" icon="mdi:loading" class="animate-spin text-lg" aria-hidden="true"></iconify-icon>
               <iconify-icon x-show="!formBusy"
                 :icon="modalMode === 'create' ? 'mdi:content-save-plus-outline' : 'mdi:content-save-edit-outline'"
                 width="18" aria-hidden="true"></iconify-icon>
-              <span x-show="!formBusy" class="ml-2" x-text="modalMode === 'create' ? 'Simpan Ruangan' : 'Simpan Perubahan'"></span>
+              <span x-show="!formBusy" x-text="modalMode === 'create' ? 'Simpan Ruangan' : 'Simpan Perubahan'"></span>
               <span x-show="formBusy">Menyimpan...</span>
             </button>
           </div>
@@ -578,8 +571,8 @@
           </div>
           <h3 class="text-lg font-semibold text-slate-900">Hapus Ruangan?</h3>
           <p class="mt-2 text-sm text-slate-600">
-            Anda akan menghapus ruangan <span class="font-bold text-slate-800" x-text="pendingDeleteNama"></span>.
-            Tindakan ini tidak dapat dibatalkan.
+            Apakah Anda yakin ingin menghapus ruangan
+            <span class="font-bold text-slate-800" x-text="pendingDeleteNama"></span> dari daftar ruangan?
           </p>
         </div>
         <div class="flex justify-end gap-3 border-t border-slate-200 bg-slate-50 px-6 py-4">

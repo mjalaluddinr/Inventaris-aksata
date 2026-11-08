@@ -12,8 +12,8 @@
         <div class="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 py-3">
           <div class="min-w-0 flex-1">
             <h3 class="truncate text-sm font-semibold text-slate-800" x-text="item.name"></h3>
-            <p class="mt-0.5 text-[10px] text-slate-500"><span x-text="item.code"></span> · <span
-                x-text="item.category"></span> · stok <span x-text="item.stock"></span></p>
+            <p class="mt-0.5 text-[10px] text-slate-500"><span x-text="item.category"></span> · stok <span
+                x-text="item.stock"></span></p>
           </div>
           <div class="flex items-center gap-1.5">
             <button type="button" @click="updateQuantity(item, item.quantity - 1)"

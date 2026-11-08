@@ -126,7 +126,7 @@
           this.deleteAction = '';
           this.pendingDeleteName = '';
       }
-  }" class="relative -mx-8 -mb-8 min-h-full bg-[#E8F8F4] p-4 sm:p-8">
+  }" class="relative -mx-8 -mt-8 -mb-8 min-h-[calc(100vh-10rem)] bg-[#E8F8F4] p-4 sm:p-8">
     <div class="mb-5 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
       @if (auth()->user()?->canManageInventory())
         <button type="button" @click="createToolbox()"
@@ -211,7 +211,12 @@
                 <td colspan="{{ auth()->user()?->canManageInventory() ? 5 : 4 }}" class="px-6 py-12 text-center">
                   <iconify-icon icon="mdi:archive-search-outline" class="mb-2 text-slate-300" width="42" aria-hidden="true"></iconify-icon>
                   <p class="text-sm font-medium text-slate-600">
-                    {{ filled($filters['search'] ?? null) ? 'Tidak ada wadah yang cocok dengan kata kunci.' : 'Belum ada wadah yang terdaftar.' }}
+                    @if (filled($filters['search'] ?? null))
+                      Tidak ada wadah yang cocok dengan kata kunci
+                      <strong class="font-bold text-slate-900">"{{ $filters['search'] }}"</strong>.
+                    @else
+                      Belum ada wadah yang terdaftar.
+                    @endif
                   </p>
                 </td>
               </tr>
@@ -317,8 +322,8 @@
                 </span>
                 <h2 id="toolbox-delete-title" class="text-lg font-semibold text-slate-900">Hapus Wadah?</h2>
                 <p class="mt-2 text-sm text-slate-600">
-                  Wadah <strong class="font-bold text-slate-800" x-text="pendingDeleteName"></strong> akan dihapus.
-                  Wadah yang masih digunakan oleh lokasi barang tidak dapat dihapus.
+                  Apakah Anda yakin ingin menghapus wadah
+                  <strong class="font-bold text-slate-800" x-text="pendingDeleteName"></strong> dari daftar wadah?
                 </p>
               </div>
               <div class="flex justify-end gap-3 border-t border-slate-200 bg-slate-50 px-6 py-4">

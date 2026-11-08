@@ -318,7 +318,7 @@
         @submit.prevent="handleCategoryDelete($event)" :aria-busy="filterLoading.toString()">
         @fragment('kategori-results')
       <section class="overflow-hidden rounded-lg border border-[#D3E3DF] bg-white shadow-sm">
-        <div class="theme-scrollbar overflow-x-auto">
+        <div class="overflow-x-auto">
           <table class="min-w-full w-full divide-y divide-[#DCE9E6]">
             <thead class="bg-[#F1F3F4]">
               <tr>
@@ -458,12 +458,12 @@
               Batal
             </button>
             <button type="submit" :disabled="categoryBusy" :aria-busy="categoryBusy.toString()"
-              class="admin-submit-button inline-flex items-center justify-center rounded-md border border-[#009F91] bg-[#00B19C] px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-[#009A87] focus:outline-none focus:ring-2 focus:ring-[#00B19C] focus:ring-offset-2">
+              class="admin-submit-button inline-flex items-center justify-center gap-2 rounded-md border border-[#009F91] bg-[#00B19C] px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-[#009A87] focus:outline-none focus:ring-2 focus:ring-[#00B19C] focus:ring-offset-2">
               <iconify-icon x-show="categoryBusy" icon="mdi:loading" class="animate-spin text-lg" aria-hidden="true"></iconify-icon>
               <iconify-icon x-show="!categoryBusy"
                 :icon="modalMode === 'edit' ? 'mdi:content-save-edit-outline' : 'mdi:content-save-plus-outline'"
                 width="18" aria-hidden="true"></iconify-icon>
-              <span x-show="!categoryBusy" class="ml-2" x-text="modalMode === 'edit' ? 'Simpan perubahan' : 'Simpan kategori'"></span>
+              <span x-show="!categoryBusy" x-text="modalMode === 'edit' ? 'Simpan perubahan' : 'Simpan kategori'"></span>
               <span x-show="categoryBusy">Menyimpan...</span>
             </button>
           </div>
@@ -486,8 +486,8 @@
           </div>
           <h2 id="kategori-delete-title" class="text-lg font-semibold text-slate-900">Hapus Kategori?</h2>
           <p id="kategori-delete-description" class="mt-2 text-sm text-slate-600">
-          Anda akan menghapus kategori <strong class="font-bold text-slate-800" x-text="pendingDeleteName"></strong>.
-          Tindakan ini tidak dapat dibatalkan.
+            Apakah Anda yakin ingin menghapus kategori
+            <strong class="font-bold text-slate-800" x-text="pendingDeleteName"></strong> dari daftar kategori?
           </p>
         </div>
         <div class="flex justify-end gap-3 border-t border-slate-200 bg-slate-50 px-6 py-4">

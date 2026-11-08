@@ -575,7 +575,7 @@ class ManagePeminjaman extends Controller
 
             $mutationType = match ($condition) {
                 'baik' => 'dikembalikan',
-                'hilang' => 'ditarik',
+                'hilang' => 'penyesuaian',
                 default => 'penyesuaian',
             };
 

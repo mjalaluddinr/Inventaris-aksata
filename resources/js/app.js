@@ -78,7 +78,9 @@ const formatToastMessage = (message, type) => {
         : [];
 };
 
-window.showToast = (message, type = 'success', duration = 5000, title = '') => {
+let toastSequence = 0;
+
+window.showToast = (message, type = 'success', duration = 5000, title = '', action = null) => {
     const messageParts = formatToastMessage(message, type);
     const validParts = messageParts.filter((part) => part.text !== '');
 
@@ -96,14 +98,19 @@ window.showToast = (message, type = 'success', duration = 5000, title = '') => {
         ? Math.min(Math.max(duration, 1000), 10000)
         : 5000;
 
+    const toastId = ++toastSequence;
     window.dispatchEvent(new CustomEvent('app-toast', {
         detail: {
+            toastId,
             message: validParts,
             type,
             duration: durationMs,
             title: typeof title === 'string' ? title.trim() : '',
+            actionLabel: typeof action?.label === 'string' ? action.label.trim() : '',
+            onAction: typeof action?.onClick === 'function' ? action.onClick : null,
         },
     }));
+    return toastId;
 };
 
 Alpine.data('globalToast', () => ({
@@ -112,14 +119,21 @@ Alpine.data('globalToast', () => ({
     type: 'success',
     title: 'Berhasil!',
     duration: 5000,
+    toastId: null,
+    actionLabel: '',
+    onAction: null,
     timeout: null,
     progressAnimation: null,
     toastListener: null,
     init() {
         this.toastListener = (event) => {
+            if (this.visible) this.dismiss();
+            this.toastId = event.detail.toastId;
             this.message = event.detail.message;
             this.type = event.detail.type;
             this.duration = event.detail.duration;
+            this.actionLabel = event.detail.actionLabel || '';
+            this.onAction = event.detail.onAction || null;
             this.title = event.detail.title || ({
                 error: 'Gagal!',
                 warning: 'Perhatian!',
@@ -137,7 +151,7 @@ Alpine.data('globalToast', () => ({
                 );
             });
             this.timeout = window.setTimeout(() => {
-                this.visible = false;
+                this.dismiss();
             }, event.detail.duration);
         };
 
@@ -149,9 +163,25 @@ Alpine.data('globalToast', () => ({
         this.progressAnimation?.cancel();
     },
     dismiss() {
+        const toastId = this.toastId;
         this.visible = false;
+        this.toastId = null;
+        this.actionLabel = '';
+        this.onAction = null;
         window.clearTimeout(this.timeout);
         this.progressAnimation?.cancel();
+        if (toastId !== null) {
+            window.dispatchEvent(new CustomEvent('app-toast-dismissed', {
+                detail: { toastId },
+            }));
+        }
+    },
+    activateAction() {
+        if (typeof this.onAction !== 'function') return;
+
+        const action = this.onAction;
+        this.dismiss();
+        action();
     },
 }));
 

@@ -156,13 +156,9 @@ class ManageBarang extends Controller
         $usageBarangs = collect();
 
         if ($request->user()?->canManageAllAccounts()) {
-            $usageBarangs = $applyBarangFilters(Barang::query())
-                ->latest()
-                ->orderByDesc('kode_barang')
-                ->get(['barang_id', 'nama_barang', 'kode_barang']);
-            $selectedBarang = isset($filters['barang_id'])
-              ? Barang::query()->findOrFail($filters['barang_id'])
-              : $barangs->first();
+            $usageBarangs = $barangs->getCollection();
+            $selectedBarang = $usageBarangs->firstWhere('barang_id', $filters['barang_id'] ?? null)
+                ?? $usageBarangs->first();
 
             if ($selectedBarang instanceof Barang) {
                 $adminAccounts = User::query()
@@ -1463,18 +1459,32 @@ class ManageBarang extends Controller
         $unallocatedTotal = $barang->stok_total - $existingTotal;
         $unallocatedAvailable = $barang->stok_tersedia - $existingAvailable;
 
-        if ($unallocatedTotal < 0 || $unallocatedAvailable < 0 || $unallocatedAvailable > $unallocatedTotal) {
-            throw ValidationException::withMessages([
-                'locations' => 'Stok lama memiliki jumlah yang belum terpetakan atau sedang dipinjam. Periksa riwayat stok sebelum mengubah lokasi.',
-            ]);
-        }
-
         $hasActiveReservations = $barang->barangDipakais()
             ->where('status', 'aktif')
             ->exists()
             || $barang->detailPeminjamans()
                 ->whereIn('status', ['pending', 'dipinjam'])
                 ->exists();
+
+        if ($hasActiveReservations) {
+            if ($unallocatedTotal < 0) {
+                throw ValidationException::withMessages([
+                    'stock_location_total' => 'Jumlah total stok per lokasi tidak boleh melebihi jumlah total stok barang.',
+                ]);
+            }
+
+            if ($unallocatedAvailable < 0) {
+                throw ValidationException::withMessages([
+                    'stock_location_available' => 'Jumlah stok tersedia per lokasi tidak boleh melebihi jumlah stok tersedia barang.',
+                ]);
+            }
+
+            if ($unallocatedAvailable > $unallocatedTotal) {
+                throw ValidationException::withMessages([
+                    'stock_location_available' => 'Jumlah stok tersedia per lokasi tidak boleh kurang dari jumlah stok tersedia barang.',
+                ]);
+            }
+        }
 
         // Only active usage and loan records should prevent stock from changing locations.
         $unallocatedReserved = $hasActiveReservations

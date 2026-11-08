@@ -39,7 +39,7 @@ class ManageKategori extends Controller
 
     public function store(StoreRequest $request): RedirectResponse
     {
-        Kategori::create($request->validated());
+        $kategori = Kategori::create($request->validated());
 
         return redirect()->route('admin.kategori')
             ->with('success', "Kategori {$kategori->nama_kategori} berhasil ditambahkan.");

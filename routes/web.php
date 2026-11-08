@@ -102,11 +102,17 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'permission:admin-pa
         Route::delete('/{user}', [ManageUser::class, 'destroy'])->name('destroy');
         Route::get('/{user}/password', [ManageUser::class, 'editPassword'])->name('password.edit');
         Route::put('/{user}/password', [ManageUser::class, 'resetPassword'])->name('password.update');
+        Route::post('/{user}/password-request/approve', [ManageUser::class, 'approvePasswordRecovery'])
+            ->name('password-request.approve');
+        Route::post('/{user}/password-request/reject', [ManageUser::class, 'rejectPasswordRecovery'])
+            ->name('password-request.reject');
 
         Route::patch('/{user}/toggle-status', [ManageUser::class, 'toggleStatus'])->name('toggle-status');
 
         Route::middleware('permission:accounts.manage-all')->group(function () {
             Route::post('/import', [ManageUser::class, 'import'])->name('import');
+            Route::get('/import/{logInput}/status', [ManageUser::class, 'importStatus'])
+                ->name('import.status');
             Route::get('/log/{id}/detail', [ManageUser::class, 'showLogDetail'])->name('log.detail');
         });
     });

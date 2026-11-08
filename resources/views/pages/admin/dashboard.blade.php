@@ -1,6 +1,4 @@
 <x-layout.admin title="Dashboard - InvenTrack" header-title="Dashboard" header-description="Selamat datang di InvenTrack.">
-  <x-auth.login-welcome />
-
   <div class="-mx-8 -mt-8 -mb-8 min-h-[calc(100vh-10rem)] bg-[#E8F8F4]">
     <div class="space-y-6 p-4 sm:p-8">
       <section class="grid auto-rows-fr grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4" aria-label="Ringkasan inventaris">

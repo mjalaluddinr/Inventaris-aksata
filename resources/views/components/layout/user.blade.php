@@ -89,6 +89,7 @@
 </head>
 
 <body x-data="userPortal()" x-init="initCart(); initCatalogAjax(); initHistoryAjax(); @if (session('cart_cleared')) clearCart() @elseif (session('cart_items_submitted')) removeSubmittedItems(@js(session('cart_items_submitted'))) @endif" class="min-h-screen bg-[#e9faf5] font-sans text-[#153c36] antialiased">
+  <x-auth.session-notice />
   <x-user.navbar />
   {{ $slot }}
   <x-user.keranjang />
@@ -128,7 +129,7 @@
 
         <div class="mt-4 rounded-xl border border-slate-200 bg-[#f7fbfa] px-4 py-3">
           <p class="text-sm font-semibold text-slate-900" x-text="selectedLoanItem?.name"></p>
-          <p class="mt-1 text-xs text-slate-500"><span x-text="selectedLoanItem?.code"></span><span class="px-1">·</span><span x-text="selectedLoanItem?.category"></span></p>
+          <p class="mt-1 text-xs text-slate-500" x-text="selectedLoanItem?.category"></p>
           <p class="mt-2 text-xs font-medium text-[#007b6d]">Stok tersedia: <span x-text="selectedLoanItem?.stock"></span> <span x-text="selectedLoanItem?.unit"></span></p>
         </div>
 

@@ -214,7 +214,7 @@
 
       <section class="overflow-hidden rounded-xl border border-[#b8d4cd] bg-white shadow-sm" aria-label="{{ $activeTab === 'pending' ? 'Peminjaman menunggu konfirmasi' : ($activeTab === 'borrowed' ? 'Barang yang sedang dipinjam' : 'Riwayat peminjaman selesai') }}">
         @if ($peminjamans->isNotEmpty())
-          <div class="theme-scrollbar overflow-x-auto">
+          <div class="overflow-x-auto">
             <table class="w-full min-w-[1100px] table-auto divide-y divide-[#DCE9E6] text-left text-xs">
               <thead class="bg-[#f3f5f4] text-[#124b45]">
                 <tr>

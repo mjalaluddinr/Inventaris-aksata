@@ -23,6 +23,9 @@
       imagePreviewName: '',
       modalOpen: @js($errors->any() && in_array(old('barang_form'), ['create', 'edit'], true)),
       modalMode: @js(old('barang_form') === 'edit' ? 'edit' : 'create'),
+      stockLocationValidationMessage: @js($errors->first('stock_location_total') ?: $errors->first('stock_location_available')),
+      stockLocationToastId: null,
+      toastDismissListener: null,
       currentItem: {
           barang_id: @js(old('barang_id', '')),
           kategori_id: @js(old('kategori_id', '')),
@@ -82,6 +85,14 @@
       usageSubmitting: false,
       activeUsageExpanded: false,
       init() {
+          this.toastDismissListener = (event) => {
+              if (event.detail.toastId === this.stockLocationToastId) {
+                  this.stockLocationValidationMessage = '';
+                  this.stockLocationToastId = null;
+              }
+          };
+          window.addEventListener('app-toast-dismissed', this.toastDismissListener);
+
           if (@js($errors->any())) {
               this.feedbackType = 'error';
               this.feedbackMessage = @js($errors->first());
@@ -89,7 +100,17 @@
           this.formAction = this.modalMode === 'edit' && this.currentItem.barang_id ?
               this.itemUpdateUrl(this.currentItem.barang_id) :
               this.createUrl;
-          if (this.feedbackMessage || this.feedbackBarangName) this.notifyFeedback();
+          if (this.stockLocationValidationMessage) {
+              const validationMessage = this.stockLocationValidationMessage;
+              const toastId = window.showToast(validationMessage, 'error');
+              this.stockLocationValidationMessage = validationMessage;
+              this.stockLocationToastId = toastId;
+          } else if (this.feedbackMessage || this.feedbackBarangName) {
+              this.notifyFeedback();
+          }
+      },
+      destroy() {
+          window.removeEventListener('app-toast-dismissed', this.toastDismissListener);
       },
       notifyFeedback() {
           const message = this.feedbackBarangName ? [
@@ -135,6 +156,12 @@
               if (!response.ok || response.redirected) throw new Error('Daftar barang tidak dapat dimuat.');
 
               this.$refs.barangResults.innerHTML = await response.text();
+              const visiblePageBarangIds = Array.from(
+                  this.$refs.barangResults.querySelectorAll('[data-barang-row]')
+              ).map(row => row.dataset.barangId);
+              if (!visiblePageBarangIds.includes(this.selectedBarangId)) {
+                  this.selectedBarangId = visiblePageBarangIds[0] || '';
+              }
               if (paginationScrollTop !== null) {
                   const scrollContainer = this.$el.closest('main');
                   requestAnimationFrame(() => {
@@ -419,6 +446,48 @@
               0
           );
       },
+      stockLocationValidationError() {
+          const locationStockTotal = this.currentItem.locations.reduce(
+              (total, location) => total + (Number(location.stok_total) || 0),
+              0
+          );
+          const locationStockAvailable = this.currentItem.locations.reduce(
+              (total, location) => total + (Number(location.stok_tersedia) || 0),
+              0
+          );
+          const itemStockTotal = Number(this.currentItem.stok_total) || 0;
+          const itemStockAvailable = Number(this.currentItem.stok_tersedia) || 0;
+
+          if (locationStockTotal < itemStockTotal) {
+              return 'Jumlah total stok per lokasi tidak boleh kurang dari jumlah total stok barang.';
+          }
+          if (locationStockTotal > itemStockTotal) {
+              return 'Jumlah total stok per lokasi tidak boleh melebihi jumlah total stok barang.';
+          }
+          if (locationStockAvailable < itemStockAvailable) {
+              return 'Jumlah stok tersedia per lokasi tidak boleh kurang dari jumlah stok tersedia barang.';
+          }
+          if (locationStockAvailable > itemStockAvailable) {
+              return 'Jumlah stok tersedia per lokasi tidak boleh melebihi jumlah stok tersedia barang.';
+          }
+
+          return '';
+      },
+      submitBarangForm(event) {
+          const validationMessage = this.stockLocationValidationError();
+          if (validationMessage) {
+              this.formSubmitting = false;
+              const toastId = window.showToast(validationMessage, 'error');
+              this.stockLocationValidationMessage = validationMessage;
+              this.stockLocationToastId = toastId;
+
+              return;
+          }
+
+          this.stockLocationValidationMessage = '';
+          this.formSubmitting = true;
+          event.target.submit();
+      },
       syncStockTotals(changedField = 'location', locationIndex = null) {
           this.currentItem.locations.forEach((location) => {
               const available = Math.max(0, Number(location.stok_tersedia) || 0);
@@ -508,21 +577,18 @@
           this.currentItem = {
               ...item,
               satuan: String(item.satuan || '').toUpperCase(),
-              stok_tersedia: hasActiveReservations ? item.stok_tersedia : item.stok_total,
+              stok_tersedia: item.stok_tersedia,
               locations: item.locations.map((location) => {
                   const reservedStock = hasActiveReservations
                       ? Math.max(0, Number(location.stok_total) - Number(location.stok_tersedia))
                       : 0;
-
                   return {
                       ...location,
-                      stok_tersedia: hasActiveReservations ? location.stok_tersedia : location.stok_total,
                       reserved_stock: reservedStock
                   };
               })
           };
           this.imagePreview = item.image_url || '';
-          this.syncStockTotals('location');
           this.formAction = this.itemUpdateUrl(item.barang_id);
           this.modalOpen = true;
       },
@@ -968,7 +1034,7 @@
                       $barangCondition = strtolower(trim((string) $barang->kondisi));
                       $barangEligibility = str_replace([' ', '-'], '_', strtolower(trim((string) $barang->kelayakan)));
                     @endphp
-                    <tr data-barang-row
+                    <tr data-barang-row data-barang-id="{{ $barang->barang_id }}"
                       data-searchable="{{ mb_strtolower(trim($barang->kode_barang . ' ' . $barang->nama_barang . ' ' . ($barang->spesifikasi ?? ''))) }}"
                       x-show="matchesBarang($el.dataset.searchable)" class="transition-colors hover:bg-[#F7FBFA]">
                       <td class="w-24 px-4 py-3">
@@ -1167,8 +1233,63 @@
                       <td colspan="8" class="px-6 py-14 text-center">
                         <iconify-icon icon="mdi:package-variant-closed" class="mb-2 text-slate-300" width="42"
                           aria-hidden="true"></iconify-icon>
-                        <p class="text-sm font-medium text-slate-700">Belum ada barang</p>
-                        <p class="mt-1 text-xs text-slate-500">Tambahkan barang untuk mulai mengelola inventaris.</p>
+                        @php
+                          $emptyBarangCriteria = [];
+                          if (filled($filters['search'] ?? null)) {
+                              $emptyBarangCriteria[] = [
+                                  'label' => 'kata kunci',
+                                  'value' => $filters['search'],
+                                  'quoted' => true,
+                              ];
+                          }
+                          if (filled($filters['kategori_id'] ?? null)) {
+                              $emptyBarangCriteria[] = [
+                                  'label' => 'kategori',
+                                  'value' => $kategoris->firstWhere('kategori_id', $filters['kategori_id'])?->nama_kategori ?? 'terpilih',
+                                  'quoted' => false,
+                              ];
+                          }
+                          if (filled($filters['ruangan_id'] ?? null)) {
+                              $emptyBarangCriteria[] = [
+                                  'label' => 'ruangan',
+                                  'value' => $ruangans->firstWhere('ruangan_id', $filters['ruangan_id'])?->nama_ruangan ?? 'terpilih',
+                                  'quoted' => false,
+                              ];
+                          }
+                          if (filled($filters['lemari_id'] ?? null)) {
+                              $emptyBarangCriteria[] = [
+                                  'label' => 'lemari',
+                                  'value' => $lemaris->firstWhere('lemari_id', $filters['lemari_id'])?->nama_lemari ?? 'terpilih',
+                                  'quoted' => false,
+                              ];
+                          }
+                          if (filled($filters['kondisi'] ?? null)) {
+                              $emptyBarangCriteria[] = [
+                                  'label' => 'kondisi',
+                                  'value' => $filters['kondisi'] === 'baru' ? 'baru' : 'lama',
+                                  'quoted' => false,
+                              ];
+                          }
+                          if (filled($filters['kelayakan'] ?? null)) {
+                              $emptyBarangCriteria[] = [
+                                  'label' => 'kelayakan',
+                                  'value' => $filters['kelayakan'] === 'layak' ? 'layak' : 'tidak layak',
+                                  'quoted' => false,
+                              ];
+                          }
+                        @endphp
+                        @if ($emptyBarangCriteria !== [])
+                          <p class="text-sm font-medium text-slate-700">
+                            Tidak ada barang yang cocok dengan
+                            @foreach ($emptyBarangCriteria as $criterion)
+                              {{ $criterion['label'] }}
+                              <strong class="font-bold text-slate-900">{{ $criterion['quoted'] ? '"' . $criterion['value'] . '"' : $criterion['value'] }}</strong>{{ $loop->last ? '.' : ($loop->remaining === 1 ? ' dan ' : ', ') }}
+                            @endforeach
+                          </p>
+                        @else
+                          <p class="text-sm font-medium text-slate-700">Belum ada barang</p>
+                          <p class="mt-1 text-xs text-slate-500">Tambahkan barang untuk mulai mengelola inventaris.</p>
+                        @endif
                       </td>
                     </tr>
                   @endforelse
@@ -1217,11 +1338,6 @@
                     <label for="usage-item" class="sr-only">Pilih barang untuk riwayat atau pemakaian</label>
                     <select id="usage-item" x-model="selectedBarangId" @change="changeUsageBarang($event.target.value)"
                       class="max-w-full rounded-lg border border-[#B9DED4] bg-white px-3 py-2 text-xs font-semibold text-slate-700 focus:border-[#008b7a] focus:outline-none focus:ring-2 focus:ring-[#008b7a]/20">
-                      @if (!$usageBarangs->contains('barang_id', $selectedBarang->barang_id))
-                        <option value="{{ $selectedBarang->barang_id }}" selected>
-                          {{ $selectedBarang->nama_barang }} · {{ $selectedBarang->kode_barang }}
-                        </option>
-                      @endif
                       @foreach ($usageBarangs as $barangOption)
                         <option value="{{ $barangOption->barang_id }}"
                           @selected($selectedBarang->barang_id === $barangOption->barang_id)>
@@ -1639,7 +1755,7 @@
               class="relative z-10 my-auto w-full max-w-4xl overflow-hidden rounded-xl border border-[#08A9D6] bg-white shadow-[0_24px_80px_rgba(2,25,41,0.4)]"
               role="dialog" aria-modal="true" aria-labelledby="barang-modal-title">
               <form :action="formAction" method="POST" enctype="multipart/form-data"
-                @submit="formSubmitting = true">
+                @submit.prevent="submitBarangForm($event)">
                 @csrf
                 <input type="hidden" name="_method" value="PUT" :disabled="modalMode !== 'edit'">
                 <input type="hidden" name="barang_form" :value="modalMode">
@@ -1874,6 +1990,8 @@
                     @error('locations.*.stok_tersedia')
                       <p class="mt-1 text-xs text-rose-700">{{ $message }}</p>
                     @enderror
+                    <p x-cloak x-show="stockLocationValidationMessage" class="mt-2 text-sm font-bold text-rose-700"
+                      role="alert" aria-live="polite" x-text="stockLocationValidationMessage"></p>
                   </section>
 
                   <label class="text-xs font-medium text-slate-700 sm:col-span-2">
@@ -1931,7 +2049,7 @@
                     <iconify-icon x-show="!formSubmitting"
                       :icon="modalMode === 'create' ? 'mdi:content-save-plus-outline' : 'mdi:content-save-edit-outline'"
                       width="18" aria-hidden="true"></iconify-icon>
-                    <span x-show="!formSubmitting" class="ml-1"
+                    <span x-show="!formSubmitting"
                       x-text="modalMode === 'create' ? 'Simpan Barang' : 'Simpan Perubahan'"></span>
                     <span x-show="formSubmitting">Menyimpan...</span>
                   </button>
@@ -1953,8 +2071,9 @@
                 </span>
                 <h2 id="barang-delete-title" class="text-lg font-semibold text-slate-900">Hapus Barang?</h2>
                 <p id="barang-delete-description" class="mt-2 text-sm text-slate-600">
-                  Barang <strong class="font-bold text-slate-900" x-text="pendingDeleteName"></strong> akan
-                  disembunyikan dari daftar. Riwayat dan data lokasinya tetap tersimpan.
+                  Apakah Anda yakin ingin menyembunyikan barang
+                  <strong class="font-bold text-slate-900" x-text="pendingDeleteName"></strong> dari daftar?
+                  Riwayat dan data lokasinya tetap tersimpan.
                   Barang yang masih dipinjam atau digunakan tidak dapat dihapus.
                 </p>
               </div>

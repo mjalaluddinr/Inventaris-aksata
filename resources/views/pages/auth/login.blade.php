@@ -106,6 +106,23 @@
       animation: login-content-arrive 760ms 80ms both cubic-bezier(0.2, 0.7, 0.2, 1);
     }
 
+    .login-forgot-link {
+      text-decoration: none;
+    }
+
+    .login-forgot-link iconify-icon {
+      transition: transform 220ms cubic-bezier(.22, 1, .36, 1);
+    }
+
+    .login-forgot-link:hover iconify-icon {
+      transform: translate3d(3px, -2px, 0) rotate(45deg);
+    }
+
+    .login-forgot-link:focus-visible {
+      text-decoration: underline;
+      text-underline-offset: 4px;
+    }
+
     .login-mobile-logo {
       display: none;
     }
@@ -339,6 +356,7 @@
 </head>
 
 <body class="h-dvh min-h-dvh overflow-hidden bg-white font-sans antialiased text-slate-900">
+  <x-auth.session-notice />
   <main class="login-page relative isolate h-dvh min-h-dvh overflow-hidden lg:grid lg:grid-cols-2">
     <section
       class="login-brand-panel absolute inset-0 z-0 flex h-full min-h-0 flex-col justify-between overflow-hidden px-6 py-6 text-white sm:px-12 sm:py-8 lg:relative lg:inset-auto lg:z-auto lg:h-dvh lg:px-10 lg:py-7 xl:px-14"
@@ -392,44 +410,6 @@
           </h2>
           <p class="mt-2 text-sm font-semibold tracking-[0.04em] text-[#83a4a2]">MASUK KE AKUN ANDA</p>
         </header>
-
-        @if (session('success'))
-          <div x-data="{ visible: true }" x-init="window.setTimeout(() => visible = false, 1500)">
-            <template x-teleport="body">
-              <div x-show="visible" x-transition.opacity
-                class="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/45 p-4"
-                @click.self="visible = false" role="presentation">
-            <section x-show="visible" x-transition
-              class="relative w-full max-w-lg overflow-hidden rounded-2xl border border-emerald-200 bg-gradient-to-br from-white via-emerald-50 to-teal-50 p-5 shadow-[0_24px_70px_rgba(0,127,107,0.22)] sm:p-6"
-              role="dialog" aria-modal="true" aria-labelledby="login-success-title">
-              <div class="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-[#00c99a] to-[#008f7e]"
-                aria-hidden="true"></div>
-              <div class="flex items-start gap-3">
-                <span class="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-emerald-100 text-[#008f7e]">
-                  <iconify-icon icon="mdi:shield-check" width="25" aria-hidden="true"></iconify-icon>
-                </span>
-                <div class="min-w-0 flex-1 pt-0.5">
-                  <p id="login-success-title" class="text-base font-extrabold text-[#064e3b]">
-                    {{ session('success') === 'Berhasil logout.' ? 'Berhasil keluar' : 'Berhasil!' }}
-                  </p>
-                  <p class="mt-1 text-sm leading-6 text-emerald-900/80">
-                    @if (session('success') === 'Berhasil logout.')
-                      Sesi Anda sudah diakhiri dengan aman. Sampai jumpa kembali!
-                    @else
-                      {{ session('success') }}
-                    @endif
-                  </p>
-                </div>
-                <button type="button" @click="visible = false" aria-label="Tutup pesan berhasil"
-                  class="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-emerald-700/60 transition hover:bg-emerald-100 hover:text-emerald-900 focus:outline-none focus:ring-2 focus:ring-emerald-500">
-                  <iconify-icon icon="mdi:close" width="18" aria-hidden="true"></iconify-icon>
-                </button>
-              </div>
-            </section>
-          </div>
-            </template>
-          </div>
-        @endif
 
         @if (session('info'))
           <div x-data="{ visible: true }">
@@ -558,8 +538,9 @@
 
           <div class="flex justify-end">
             <a href="{{ route('password.request') }}" id="forgotPasswordLink"
-              class="inline-flex rounded-lg px-2 py-1 text-sm font-semibold text-[#007f78] transition duration-200 hover:-translate-y-0.5 hover:bg-[#e6f8f3] hover:text-[#005d54] hover:shadow-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#008f82]">
+              class="login-forgot-link inline-flex items-center gap-1.5 py-1 text-sm font-semibold text-[#007f78] transition-colors duration-200 hover:text-[#005d54]">
               Lupa password?
+              <iconify-icon icon="mdi:arrow-up-right" aria-hidden="true"></iconify-icon>
             </a>
           </div>
 
@@ -605,7 +586,12 @@
     const loginForm = document.getElementById('loginForm');
     const loginBtn = document.getElementById('loginBtn');
 
+    let loginTransitionStarted = false;
+
     loginForm.addEventListener('submit', () => {
+      if (loginTransitionStarted) return;
+      loginTransitionStarted = true;
+
       loginBtn.disabled = true;
       loginBtn.setAttribute('aria-busy', 'true');
       loginBtn.querySelector('.btn-text').classList.add('invisible');

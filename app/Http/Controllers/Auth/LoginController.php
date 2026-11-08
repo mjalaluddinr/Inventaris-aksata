@@ -58,9 +58,13 @@ class LoginController extends Controller
         $request->session()->put('can_meminjamkan', $accessFlags['can_meminjamkan']);
         $request->session()->put('is_laboran', $accessFlags['is_laboran']);
 
+        $request->session()->forget('password_change_reauth_user_id');
+
         // Redirect logic
         if ($user->must_change_password) {
-            return redirect()->route('password.change')->with('info', 'Wajib ganti password.');
+            $request->session()->put('password_change_reauth_user_id', $user->getAuthIdentifier());
+
+            return redirect()->route('password.change');
         }
 
         // ASVS V8.2: Direct loan-only staff to a queue protected by server-side permission middleware.

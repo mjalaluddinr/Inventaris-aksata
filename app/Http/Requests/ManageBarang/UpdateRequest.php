@@ -9,8 +9,6 @@ use Illuminate\Validation\Validator;
 
 class UpdateRequest extends FormRequest
 {
-    use CompletesStockAllocation;
-
     public function authorize(): bool
     {
         return true;
@@ -18,11 +16,6 @@ class UpdateRequest extends FormRequest
 
     protected function prepareForValidation(): void
     {
-        if ($this->input('barang_form') === 'edit') {
-            // ASVS 2.2.2: Complete omitted allocations at the trusted request boundary.
-            $this->completeStockLocationAllocation();
-        }
-
         $unit = $this->input('satuan');
 
         if (is_string($unit)) {
@@ -129,13 +122,31 @@ class UpdateRequest extends FormRequest
                     }
                 }
 
-                // ASVS 2.2.1/2.2.3: Keep location allocations within the declared item stock.
-                if ($stockTotal > (int) $this->input('stok_total')) {
-                    $validator->errors()->add('locations', 'Jumlah stok per lokasi tidak boleh melebihi jumlah total barang.');
+                // ASVS 2.2.1/2.2.2/2.2.3: Match location allocations to the declared item stock.
+                $itemStockTotal = (int) $this->input('stok_total');
+                if ($stockTotal < $itemStockTotal) {
+                    $validator->errors()->add(
+                        'stock_location_total',
+                        'Jumlah total stok per lokasi tidak boleh kurang dari jumlah total stok barang.',
+                    );
+                } elseif ($stockTotal > $itemStockTotal) {
+                    $validator->errors()->add(
+                        'stock_location_total',
+                        'Jumlah total stok per lokasi tidak boleh melebihi jumlah total stok barang.',
+                    );
                 }
 
-                if ($stockAvailable > (int) $this->input('stok_tersedia')) {
-                    $validator->errors()->add('locations', 'Stok tersedia per lokasi tidak boleh melebihi stok tersedia barang.');
+                $itemStockAvailable = (int) $this->input('stok_tersedia');
+                if ($stockAvailable < $itemStockAvailable) {
+                    $validator->errors()->add(
+                        'stock_location_available',
+                        'Jumlah stok tersedia per lokasi tidak boleh kurang dari jumlah stok tersedia barang.',
+                    );
+                } elseif ($stockAvailable > $itemStockAvailable) {
+                    $validator->errors()->add(
+                        'stock_location_available',
+                        'Jumlah stok tersedia per lokasi tidak boleh melebihi jumlah stok tersedia barang.',
+                    );
                 }
             },
         ];

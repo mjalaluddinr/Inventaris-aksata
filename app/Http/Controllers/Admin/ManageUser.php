@@ -6,21 +6,36 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\ManageUser\ImportRequest;
 use App\Http\Requests\ManageUser\StoreRequest;
 use App\Http\Requests\ManageUser\UpdateRequest;
+use App\Jobs\ImportAkunJob;
 use App\Models\LogInput;
 use App\Models\User;
+use App\Services\PasswordRecoveryRequests;
 use Exception;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Http\Response;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Illuminate\View\View;
 use Maatwebsite\Excel\Concerns\ToArray;
 use Maatwebsite\Excel\Facades\Excel;
+use PhpOffice\PhpSpreadsheet\IOFactory;
+use PhpOffice\PhpSpreadsheet\Reader\IReader2;
+use Throwable;
 
 class ManageUser extends Controller
 {
-    public function index(Request $request): View|string
+    private const MAX_IMPORT_ROWS = 1000;
+
+    private const MAX_IMPORT_COLUMNS = 32;
+
+    private const MAX_IMPORT_SHEETS = 10;
+
+    public function index(Request $request, PasswordRecoveryRequests $recoveryRequests): Response
     {
         $filters = $request->validate([
             'search' => ['nullable', 'string', 'max:100'],
@@ -36,6 +51,9 @@ class ManageUser extends Controller
             abort_unless($passwordResetUser->must_change_password, 404);
         }
 
+        $pendingPasswordRequests = $request->user()->canManageAllAccounts()
+            ? $recoveryRequests->all()
+            : [];
         $users = User::query()
             ->with('privileges')
             ->when(
@@ -54,15 +72,30 @@ class ManageUser extends Controller
                     });
                 }
             })
+            ->when($pendingPasswordRequests !== [], function ($query) use ($pendingPasswordRequests): void {
+                $accountIds = array_keys($pendingPasswordRequests);
+                $placeholders = implode(', ', array_fill(0, count($accountIds), '?'));
+
+                // ASVS 1.2.4: Bind request IDs while prioritizing accounts awaiting admin review.
+                $query->orderByRaw("CASE WHEN akun_id IN ({$placeholders}) THEN 0 ELSE 1 END", $accountIds);
+            })
             ->latest()
             ->orderByDesc('must_change_password')
             ->paginate(10)
             ->withQueryString();
 
         /** @var View $renderedView */
-        $renderedView = view('pages.admin.akun', compact('users', 'filters', 'passwordResetUser'));
+        $renderedView = view('pages.admin.akun', compact(
+            'users',
+            'filters',
+            'passwordResetUser',
+            'pendingPasswordRequests',
+        ));
 
-        return $renderedView->fragmentIf($request->ajax(), 'account-results');
+        $responseContent = $renderedView->fragmentIf($request->ajax(), 'account-results');
+
+        // ASVS 14.3.2: Prevent account data and one-time recovery credentials from being cached.
+        return response($responseContent)->header('Cache-Control', 'no-store, private');
     }
 
     public function store(StoreRequest $request)
@@ -154,14 +187,36 @@ class ManageUser extends Controller
             ->with('success', "Akun {$user->username} berhasil memperbarui password dan menyelesaikan reset.");
     }
 
-    public function destroy(User $user)
+    public function destroy(User $user, PasswordRecoveryRequests $recoveryRequests)
     {
         $this->authorizeAccountManagement($user);
+        $recoveryRequests->reject($user);
         $user->privileges()->delete();
         $user->delete();
 
         return redirect()->route('admin.akun.index')
             ->with('success', "Akun {$user->username} berhasil dihapus.");
+    }
+
+    public function approvePasswordRecovery(User $user, PasswordRecoveryRequests $recoveryRequests): RedirectResponse
+    {
+        $this->authorizeAccountManagement($user);
+        $temporaryPassword = $recoveryRequests->approve($user);
+        abort_unless($temporaryPassword !== null, 404);
+
+        return redirect()
+            ->route('admin.akun.index')
+            ->with('success', "Permintaan ganti password {$user->username} diterima.")
+            ->with('recovery_temporary_password', $temporaryPassword);
+    }
+
+    public function rejectPasswordRecovery(User $user, PasswordRecoveryRequests $recoveryRequests): RedirectResponse
+    {
+        $this->authorizeAccountManagement($user);
+        abort_unless($recoveryRequests->reject($user), 404);
+
+        return redirect()->route('admin.akun.index')
+            ->with('success', "Permintaan ganti password {$user->username} ditolak.");
     }
 
     // ✅ METHOD BARU: AJAX Toggle Status
@@ -177,10 +232,16 @@ class ManageUser extends Controller
         ]);
     }
 
-    public function import(ImportRequest $request)
+    public function import(ImportRequest $request): JsonResponse
     {
         $file = $request->file('file');
-        $fileName = $file->getClientOriginalName();
+        $fileName = Str::of(
+            preg_replace(
+                '/[\x00-\x1F\x7F]/',
+                '',
+                basename(str_replace('\\', '/', $file->getClientOriginalName())),
+            ) ?: 'account-import',
+        )->limit(255, '')->toString();
 
         $log = LogInput::create([
             'jenis_input' => 'akun',
@@ -192,8 +253,61 @@ class ManageUser extends Controller
             'mulai_at' => now(),
         ]);
 
+        $uploadDirectory = 'temp/akun-import/'.$log->log_input_id;
+        $filePath = null;
+
+        try {
+            $filePath = $file->storeAs(
+                $uploadDirectory,
+                'data.'.strtolower($file->getClientOriginalExtension()),
+                'local',
+            );
+
+            if (! is_string($filePath)) {
+                throw new \RuntimeException('File impor akun gagal disimpan.');
+            }
+
+            // ASVS 5.3.2: Store the validated upload under a server-generated path.
+            $queueConnection = PHP_OS_FAMILY === 'Windows' ? 'deferred' : 'background';
+            ImportAkunJob::dispatch($log->log_input_id, $uploadDirectory, $filePath)
+                ->onConnection($queueConnection);
+        } catch (Throwable $exception) {
+            Storage::disk('local')->deleteDirectory($uploadDirectory);
+            report($exception);
+            $log->update([
+                'status' => 'gagal',
+                'detail_error' => [
+                    $fileName,
+                    'queue_failed',
+                    [],
+                ],
+                'selesai_at' => now(),
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'File gagal dimasukkan ke antrean. Silakan coba kembali.',
+            ], 503);
+        }
+
+        return response()->json([
+            'success' => true,
+            'status' => 'proses',
+            'log_id' => $log->log_input_id,
+            'file_name' => $fileName,
+            'message' => 'File berhasil masuk antrean import akun.',
+        ], 202);
+    }
+
+    public function processImport(string $logInputId, string $filePath): void
+    {
+        $log = LogInput::query()
+            ->where('jenis_input', 'akun')
+            ->findOrFail($logInputId);
+        $fileName = $log->nama_file;
         $fileError = null;
         $rowErrors = [];
+        $fileDiagnostics = null;
         $totalRows = 0;
         $successRows = 0;
         $failedRows = 0;
@@ -204,18 +318,35 @@ class ManageUser extends Controller
             {
                 public function array(array $array): void {}
             };
-            $spreadsheet = Excel::toArray($dummyImport, $file);
+            $path = Storage::disk('local')->path($filePath);
+            // ASVS 5.2.1: Bound worksheet dimensions before loading spreadsheet data.
+            $reader = IOFactory::createReaderForFile($path);
+            if (! $reader instanceof IReader2 || ! $this->hasBoundedWorksheetInfo($reader->listWorksheetInfo($path))) {
+                $fileError = 'file_limit_exceeded';
+                throw new Exception('ACCOUNT_IMPORT_FILE_LIMIT_EXCEEDED');
+            }
+
+            $spreadsheet = Excel::toArray($dummyImport, $path);
             $rows = $spreadsheet[0] ?? [];
 
             if (empty($rows)) {
-                throw new Exception('File kosong atau tidak memiliki data.');
+                throw new Exception('ACCOUNT_IMPORT_FILE_EMPTY');
             }
 
             $mapping = null;
             $headerRowIndex = -1;
+            $bestHeaderRowIndex = 0;
+            $bestHeaderScore = -1;
+            $bestDetectedFields = [];
             for ($i = 0; $i < min(50, count($rows)); $i++) {
-                $headers = array_map(fn ($h) => strtolower(trim($h ?? '')), $rows[$i]);
+                $headers = array_map(fn ($header) => strtolower(trim((string) ($header ?? ''))), $rows[$i]);
                 $tempMapping = $this->detectColumns($headers);
+                $headerScore = count($tempMapping) * 100 + count(array_filter($headers));
+                if ($headerScore > $bestHeaderScore) {
+                    $bestHeaderRowIndex = $i;
+                    $bestHeaderScore = $headerScore;
+                    $bestDetectedFields = array_keys($tempMapping);
+                }
                 if (isset($tempMapping['username']) && isset($tempMapping['password'])) {
                     $mapping = $tempMapping;
                     $headerRowIndex = $i;
@@ -224,10 +355,50 @@ class ManageUser extends Controller
             }
 
             if (! $mapping) {
-                throw new Exception("Kolom 'username' dan 'password' tidak ditemukan.");
+                $headerRowIndex = $bestHeaderRowIndex;
+                $detectedHeaders = array_values(array_filter(
+                    array_map(
+                        static fn ($header): string => mb_substr(trim((string) ($header ?? '')), 0, 60),
+                        $rows[$headerRowIndex] ?? [],
+                    ),
+                    static fn (string $header): bool => $header !== '',
+                ));
+                $fileDiagnostics = [
+                    'row' => $headerRowIndex + 1,
+                    'columns' => array_slice($detectedHeaders, 0, 20),
+                    'required_columns' => ['username', 'password'],
+                    'missing_columns' => array_values(array_diff(
+                        ['username', 'password'],
+                        $bestDetectedFields,
+                    )),
+                ];
+                $totalRows = count(array_filter(
+                    array_slice($rows, $headerRowIndex + 1),
+                    static fn (mixed $row): bool => is_array($row) && array_filter(
+                        $row,
+                        static fn ($value): bool => trim((string) ($value ?? '')) !== '',
+                    ) !== [],
+                ));
+                $failedRows = $totalRows;
+
+                throw new Exception('ACCOUNT_IMPORT_HEADERS_MISSING');
             }
 
             $totalRows = count($rows) - ($headerRowIndex + 1);
+            $dataRows = array_slice($rows, $headerRowIndex + 1);
+            $nonEmptyDataRows = array_filter(
+                $dataRows,
+                static fn (mixed $row): bool => is_array($row) && array_filter(
+                    $row,
+                    static fn (mixed $value): bool => trim((string) ($value ?? '')) !== '',
+                ) !== [],
+            );
+            if (count($nonEmptyDataRows) > self::MAX_IMPORT_ROWS) {
+                $totalRows = count($nonEmptyDataRows);
+                $failedRows = $totalRows;
+                $fileError = 'file_limit_exceeded';
+                throw new Exception('ACCOUNT_IMPORT_FILE_LIMIT_EXCEEDED');
+            }
 
             for ($i = $headerRowIndex + 1; $i < count($rows); $i++) {
                 $rowNumber = $i + 1;
@@ -239,6 +410,7 @@ class ManageUser extends Controller
                     continue;
                 }
 
+                $failedColumns = [];
                 try {
                     $data = $this->mapRowData($rowData, $mapping);
                     $data['must_change_password'] = false;
@@ -253,6 +425,7 @@ class ManageUser extends Controller
                     )));
 
                     if (($data['role'] ?? '') === 'laboran' && empty($data['privileges'])) {
+                        $failedColumns = ['role', 'privileges'];
                         throw new Exception('Role laboran wajib memiliki minimal 1 hak akses di kolom privilege.');
                     }
 
@@ -265,6 +438,10 @@ class ManageUser extends Controller
                     ]);
 
                     if ($validator->fails()) {
+                        $failedColumns = array_values(array_unique(array_map(
+                            static fn (string $field): string => explode('.', $field, 2)[0],
+                            array_keys($validator->errors()->toArray()),
+                        )));
                         throw new Exception($validator->errors()->first());
                     }
 
@@ -291,11 +468,24 @@ class ManageUser extends Controller
                     $successRows++;
                 } catch (Exception $e) {
                     $failedRows++;
-                    $rowErrors[] = ["baris ke-{$rowNumber}", $e->getMessage()];
+                    $rowErrors[] = [
+                        (string) $rowNumber,
+                        $e->getMessage(),
+                        $failedColumns ?: array_keys($mapping),
+                    ];
                 }
             }
-        } catch (Exception $e) {
-            $fileError = $e->getMessage();
+        } catch (Throwable $exception) {
+            $fileError = match ($exception->getMessage()) {
+                'ACCOUNT_IMPORT_FILE_EMPTY' => 'empty_file',
+                'ACCOUNT_IMPORT_HEADERS_MISSING' => 'missing_headers',
+                'ACCOUNT_IMPORT_FILE_LIMIT_EXCEEDED' => 'file_limit_exceeded',
+                default => 'unreadable_file',
+            };
+
+            if (! in_array($fileError, ['empty_file', 'missing_headers'], true)) {
+                report($exception);
+            }
         }
 
         $status = 'selesai';
@@ -312,33 +502,90 @@ class ManageUser extends Controller
             'baris_berhasil' => $successRows,
             'baris_gagal' => $failedRows,
             'status' => $status,
-            'detail_error' => [$fileName, $fileError, $rowErrors],
+            'detail_error' => [$fileName, $fileError, $rowErrors, $fileDiagnostics],
             'selesai_at' => now(),
-        ]);
-
-        return redirect()->route('admin.akun.index')->with([
-            'success' => $fileError ? 'Import gagal. Periksa format file dan susunan kolom.' : "Import selesai. Berhasil: {$successRows}, Gagal: {$failedRows}.",
-            'import_status' => $status,
-            'import_log_id' => $log->log_input_id,
         ]);
     }
 
-    public function showLogDetail($id)
+    public function importStatus(LogInput $logInput): JsonResponse
+    {
+        abort_unless($logInput->jenis_input === 'akun', 404);
+
+        $message = match ($logInput->status) {
+            'proses' => 'Import akun sedang diproses.',
+            'selesai' => "Import selesai. Berhasil: {$logInput->baris_berhasil}, gagal: {$logInput->baris_gagal}.",
+            'sebagian' => "Import selesai sebagian. Berhasil: {$logInput->baris_berhasil}, gagal: {$logInput->baris_gagal}.",
+            default => 'Import akun gagal diproses. Buka detail untuk melihat penyebabnya.',
+        };
+
+        return response()->json([
+            'success' => true,
+            'log_id' => $logInput->log_input_id,
+            'file_name' => $logInput->nama_file,
+            'status' => $logInput->status,
+            'total_rows' => $logInput->total_baris,
+            'success_rows' => $logInput->baris_berhasil,
+            'failed_rows' => $logInput->baris_gagal,
+            'message' => $message,
+        ]);
+    }
+
+    public function showLogDetail(string $id): JsonResponse
     {
         $log = LogInput::findOrFail($id);
         $detailError = is_array($log->detail_error) ? $log->detail_error : [];
 
-        // ASVS V16.5.1: Do not expose raw import exceptions in browser responses.
-        $detailError[1] = filled($detailError[1] ?? null)
-            ? 'File import gagal diproses. Periksa format file dan susunan kolom.'
-            : null;
-        $detailError[2] = array_map(
-            static fn (mixed $error): array => [
-                is_array($error) && is_string($error[0] ?? null) ? $error[0] : 'Baris tidak diketahui',
-                'Baris gagal diproses. Periksa format data dan username belum digunakan.',
-            ],
-            is_array($detailError[2] ?? null) ? $detailError[2] : [],
-        );
+        if ($log->jenis_input === 'akun') {
+            // ASVS V16.5.1: Do not expose raw import exceptions in browser responses.
+            $detailError[1] = match ($detailError[1] ?? null) {
+                'empty_file' => 'File tidak berisi data. Tambahkan baris judul dan data akun sebelum mengimpor.',
+                'missing_headers' => 'Baris judul belum sesuai format. Pastikan kolom username dan password tersedia, atau unduh template import akun.',
+                'unreadable_file' => 'File tidak dapat dibaca. Pastikan file tidak rusak dan berformat .csv, .xls, atau .xlsx.',
+                'file_limit_exceeded' => 'File melebihi batas pemrosesan. Maksimal 1.000 baris data, 32 kolom, dan 10 sheet.',
+                'queue_failed' => 'File gagal masuk antrean. Silakan coba kembali.',
+                'processing_failed' => 'Antrean gagal memproses file. Silakan coba import kembali.',
+                default => filled($detailError[1] ?? null)
+                    ? 'File gagal diproses. Periksa formatnya dan gunakan template import akun.'
+                    : null,
+            };
+            $allowedColumns = ['first_name', 'last_name', 'username', 'password', 'role', 'is_active', 'privileges'];
+            $detailError[2] = array_map(
+                static function (mixed $error) use ($allowedColumns): array {
+                    $sourceLabel = is_array($error) && is_string($error[0] ?? null) ? $error[0] : '';
+                    preg_match('/\d+/', $sourceLabel, $matches);
+                    $rowLabel = isset($matches[0]) ? "Baris ke-{$matches[0]}" : 'Baris tidak diketahui';
+                    $storedColumns = is_array($error) && is_array($error[2] ?? null) ? $error[2] : [];
+                    $columns = array_values(array_filter(
+                        $storedColumns,
+                        static fn (mixed $column): bool => is_string($column) && in_array($column, $allowedColumns, true),
+                    ));
+                    $message = $columns === []
+                        ? 'Baris gagal diproses. Periksa format data dan username belum digunakan.'
+                        : 'Data gagal diproses. Periksa kolom: '.implode(', ', $columns).'.';
+
+                    return [$rowLabel, $message];
+                },
+                is_array($detailError[2] ?? null) ? $detailError[2] : [],
+            );
+            $detailError[3] = is_array($detailError[3] ?? null) ? [
+                'row' => is_numeric($detailError[3]['row'] ?? null) ? (int) $detailError[3]['row'] : null,
+                'columns' => array_values(array_filter(
+                    is_array($detailError[3]['columns'] ?? null) ? $detailError[3]['columns'] : [],
+                    static fn (mixed $column): bool => is_string($column) && $column !== '',
+                )),
+                'required_columns' => array_values(array_filter(
+                    is_array($detailError[3]['required_columns'] ?? null) ? $detailError[3]['required_columns'] : [],
+                    static fn (mixed $column): bool => is_string($column) && in_array($column, ['username', 'password'], true),
+                )),
+                'missing_columns' => array_values(array_filter(
+                    is_array($detailError[3]['missing_columns'] ?? null) ? $detailError[3]['missing_columns'] : [],
+                    static fn (mixed $column): bool => is_string($column) && in_array($column, ['username', 'password'], true),
+                )),
+            ] : null;
+        } else {
+            $detailError[1] = is_string($detailError[1] ?? null) ? $detailError[1] : null;
+            $detailError[2] = is_array($detailError[2] ?? null) ? $detailError[2] : [];
+        }
 
         return response()->json([
             'success' => true,
@@ -406,6 +653,24 @@ class ManageUser extends Controller
         }
 
         return $detected;
+    }
+
+    private function hasBoundedWorksheetInfo(array $worksheets): bool
+    {
+        if ($worksheets === [] || count($worksheets) > self::MAX_IMPORT_SHEETS) {
+            return false;
+        }
+
+        foreach ($worksheets as $worksheet) {
+            if (
+                ($worksheet['totalRows'] ?? PHP_INT_MAX) > self::MAX_IMPORT_ROWS + 50
+                || ($worksheet['totalColumns'] ?? PHP_INT_MAX) > self::MAX_IMPORT_COLUMNS
+            ) {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     private function mapRowData(array $row, array $mapping)

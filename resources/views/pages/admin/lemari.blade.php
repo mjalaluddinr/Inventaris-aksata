@@ -359,7 +359,7 @@
         @submit.prevent="handleLemariDelete($event)" :aria-busy="filterLoading.toString()">
         @fragment('lemari-results')
       <div class="overflow-hidden rounded-xl border border-[#D3E3DF] bg-white shadow-sm mb-8">
-        <div class="theme-scrollbar overflow-x-auto">
+        <div class="overflow-x-auto">
           <table class="min-w-full divide-y divide-[#DCE9E6]">
             <thead class="bg-[#F1F8F6]">
               <tr>
@@ -500,13 +500,6 @@
               </select>
             </div>
             <div>
-              <label class="mb-1 block text-xs font-medium text-slate-700">Kode Lemari</label>
-              <input type="text" :value="modalMode === 'create' ? 'Otomatis dibuat (LMR-001)' : currentLemari.kode_lemari"
-                readonly
-                class="rak-form-field block w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 shadow-sm focus:border-[#08A9D6] focus:outline-none focus:ring-2 focus:ring-[#08A9D6]/20">
-              <p class="mt-1 text-xs text-slate-500">Kode lemari dibuat otomatis oleh sistem.</p>
-            </div>
-            <div>
               <label class="mb-1 block text-xs font-medium text-slate-700">Nama Lemari <span
                   class="text-rose-500">*</span></label>
               <input type="text" name="nama_lemari" x-model="currentLemari.nama_lemari" required maxlength="100"
@@ -524,12 +517,12 @@
             <button type="button" @click="closeLemariModal()"
               class="rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-slate-400">Batal</button>
             <button type="submit" :disabled="formBusy" :aria-busy="formBusy.toString()"
-                class="admin-submit-button rak-primary-button inline-flex items-center justify-center rounded-md border border-[#009F91] bg-sidebar-start px-4 py-2 text-sm font-semibold text-white shadow-sm transition focus:outline-none focus:ring-2 focus:ring-sidebar-start focus:ring-offset-2">
+                class="admin-submit-button rak-primary-button inline-flex items-center justify-center gap-2 rounded-md border border-[#009F91] bg-sidebar-start px-4 py-2 text-sm font-semibold text-white shadow-sm transition focus:outline-none focus:ring-2 focus:ring-sidebar-start focus:ring-offset-2">
               <iconify-icon x-show="formBusy" icon="mdi:loading" class="animate-spin text-lg" aria-hidden="true"></iconify-icon>
               <iconify-icon x-show="!formBusy"
                 :icon="modalMode === 'create' ? 'mdi:content-save-plus-outline' : 'mdi:content-save-edit-outline'"
                 width="18" aria-hidden="true"></iconify-icon>
-              <span x-show="!formBusy" class="ml-2" x-text="modalMode === 'create' ? 'Simpan Lemari' : 'Simpan Perubahan'"></span>
+              <span x-show="!formBusy" x-text="modalMode === 'create' ? 'Simpan Lemari' : 'Simpan Perubahan'"></span>
               <span x-show="formBusy">Menyimpan...</span>
             </button>
           </div>
@@ -553,8 +546,8 @@
           </div>
           <h3 class="text-lg font-semibold text-slate-900">Hapus Lemari?</h3>
           <p class="mt-2 text-sm text-slate-600">
-            Anda akan menghapus lemari <span class="font-bold text-slate-800" x-text="pendingDeleteLemariName"></span>.
-            Tindakan ini tidak dapat dibatalkan.
+            Apakah Anda yakin ingin menghapus lemari
+            <span class="font-bold text-slate-800" x-text="pendingDeleteLemariName"></span> dari daftar lemari?
           </p>
         </div>
         <div class="flex justify-end gap-3 border-t border-slate-200 bg-slate-50 px-6 py-4">

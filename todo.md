@@ -1,39 +1,31 @@
-TODO LIST
+### INGAT JANGAN UBAH2 DATABASE SCHEMA DAN YANG LAIN YANG BERHUBUNGAN DENGAN DATABASE HANYA UBAH YANG SAYA MINTA DI BAWAH INI YA
 
-### JANGAN SENTUH2 DATABASE NYA JANGAN UBAH SELAIN YANG ADA DI TODO LIST INI
+1. [x] saat kecil saat haya arah kan ke logo buat tamppilan nya jadi arrow kayak tadi tapi lebih keren gitu background nya samakan dengan hover saat sidebar nya besar
+2. [x] ganti pesan di notif delete di halaman wadah yang bagian ini Wadah yang masih digunakan oleh lokasi barang tidak dapat dihapus. jadi pertanyaan contoh Apakah Anda yakin ingin menghapus wadah (namawadah yang dipilih) dari daftar wadah?
+3. [x] dihalaman kategori perbaiki bug di tambah barang nya muncul toast error tapi saat saya refresh datanya masuk perbaiki itu agar tidak error tapi masuk dan tidka perlu di refresh lagi.dan pesan hapus nya berikan pertanyaan seperti yang di wadah
+4. [x] dihalaman ruangan hapus ini Kode Ruangan
+       Otomatis dibuat (RGN-001)
+       Kode ruangan dibuat otomatis oleh sistem.
+       dan di hapus nya berikan pertanyaan juga pertanyaan
+5. [x] di halaman lemari hapus ini Kode Lemari
+       Otomatis dibuat (LMR-001)
+       Kode lemari dibuat otomatis oleh sistem. dan di pop up hapus nya berikan pertanyaan juga
+6. [x] di halaman akun modal hapus nya juga berikan pertanyaan,oh ya pertanyaan nya samakan semua bedanya cuma di halaman nya jadi kalimat nya sesuaikan perhalaman.
+7. [x] masih di halaman akun saat import gagal pesan toats nya kan gagal saat notif toats nya di click muncul pop up detail nya.dan perjelas error nya untuk log import nya Kegagalan Sistem / File
 
-1. [x] perbaiki bug ini
-Stok yang sedang dipinjam/dipakai tetap di lokasi ini.
+File import gagal diproses. Periksa format file dan susunan kolom. emang tidak cocok tapi kan ada baris nya kenapa tidak ke decet baris dan column nya walaupun gagal buat kedetect 8. [x] dihalaman log mutasi buat data yang di table data nya 1 baris semua jadi tidak kek gini
+07 Nov 2026, 11:24:32 Dipindahkan Barang tidak tersedia 2
+Lokasi asal tidak tersedia
 
-padahal sudah tidak ada barang yang di pakai atau di peminjaman tapi lokasi(ruangan dan lemari) sama wadah nya tidak bisa di ganti
+→ Lokasi tujuan
 
-sudah tidak ada
-mysql> select * from barang_dipakai; select * from peminjaman; select * from detail_peminjaman;
-+--------------------------------------+--------+------------+---------+---------------------+---------------------+---------------------+---------------------+--------------------------------------+--------------------------------------+--------------------------------------+
-| barang_dipakai_id                    | jumlah | keterangan | status  | tanggal_pasang      | tanggal_tarik       | created_at          | updated_at          | barang_id                            | ruangan_id                           | akun_id                              |
-+--------------------------------------+--------+------------+---------+---------------------+---------------------+---------------------+---------------------+--------------------------------------+--------------------------------------+--------------------------------------+
-| 01a19b96-8312-70b3-84dd-97255c86bbc8 |      9 | NULL       | ditarik | 2026-11-02 00:00:00 | 2026-11-02 09:28:20 | 2026-11-02 09:28:14 | 2026-11-02 09:28:20 | 01a19b86-1666-70a1-9a79-be8f5f0fe568 | 01a18b79-bee0-72a8-aa63-fcc62f2b7336 | 01a18b55-493a-7395-9844-8fd93d862172 |
-| 01a1aac6-f098-7297-863f-a51141789b01 |      1 | NULL       | ditarik | 2026-11-05 00:00:00 | 2026-11-05 08:16:10 | 2026-11-05 08:15:26 | 2026-11-05 08:16:10 | 01a19bc2-045d-7248-b980-d2a1219fa90c | 01a18b79-bee0-72a8-aa63-fcc62f2b7336 | 01a18b55-493a-7395-9844-8fd93d862172 |
-+--------------------------------------+--------+------------+---------+---------------------+---------------------+---------------------+---------------------+--------------------------------------+--------------------------------------+--------------------------------------+
-2 rows in set (0.00 sec)
+2 0
+Petugas (Admin): Admin User
 
-Empty set (0.00 sec)
+Stok dipindahkan dari UAT-Ruangan-Barang-1821 ke UAT-Ruangan-Barang-1821-B.
 
-Empty set (0.00 sec)
+tapi lurus semua nanti bisa di scroll kalua tidak cukup seperti yang di table data dihalaman barang 9. [x] dihalaman barang untuk catat pemakaian nya buat hanya 10 data saja didropdownnya yang tampil dan data nya sesuai dengna yang table data di atas nya jadi misah di halaman 1 kan 10 isi nya itu sama dengan di halaman 1,nanti saat table data nya pindah ke halaman 2 dropdown nya itu ganti data nya dan Seterus nya untuk search juga 10. [x] perbaiki pesan di search wadah dan barang nya agar seperti ini
+Contoh nya di halaman Lemari + Filter ruangan.
+Tidak ada lemari yang cocok dengan kata kunci "ij" dan ruangan tesa. kamu sesuaikan search di wadah dan di baran(sama filter untuk barang nya)
 
-barang yang dipakai sudah di tarik jadi harus nya bisa di ganti
-
-2. [x] yang di form untuk stok perlokasinya inputannya buat agar menyesuaikan dengan ukuran teks yang di pilih jadi tidak tetap panjangnya sama saja walaupun teks yang di pilih lebih pendek inputan nya tetap panjang jagnan gitu,buat agar sesuai jadi saat yang di pilih panjang ikut memanjang jika pendek ikut memendek khusu yang di form bagian stok perlokasi saya
-
-3. [x] arrow di sidebar << yang saat sidebar besar buat agar warna nya putih tapi arrow nya << hijau dan berikan hover untuk background nya yang keren,buat agar tidak menutupi tulisan InvenTrack
-Sistem Inventaris Jurusan itu
-
-4. [x] sembunyikan scroll bar di table data log mutasi
-
-5. [x] perbaiki ajaxz di halaman barang untuk catat pemakaain barang itu masih ada yang bug dan 10 saja barang nya itu ada 11 dan yang ke 1 tidak ganti tapi yang 2-11 bisa berganti sesuai dengna table datanya
-
-6. [x] di button halaman barang untuk tambah barang,tambah wadah,Simpan import,simpan perubahan,dan hapus barang nya itu samakan dengna yang di halaman akun ada animasi muter2 nya saat di click agar button nya tidak jelek.dan untuk button hapus di semua halaman admin buat agar button hapus nya di kanan modal pop up nya bukan di tengah
-
-7. [x] animasi toast nya berikan waktu untuk hilang nya gitu biar tidak polos dan notif nya jangan hilang sebelum watku nya habis. buat animasi toast nya seperti yang saya kirimkan tampilan nya untuk yang gagal untuk yang berhasil kamu seusaikan tinggal kamu ubah jadi warna hijau
-
-ITU DULU SAJA DEH NANTI KALAU ADA YANG BELUM BENAR SAYA UPDATE LAGI
+ITU DULU SAJA MUNGKIN JANGNA UBAH YANG LAIN SELAIN YANG SAYA MINTA

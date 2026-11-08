@@ -70,6 +70,7 @@
 </head>
 
 <body class="font-sans antialiased bg-gray-100" data-admin-field-indicators>
+  <x-auth.session-notice />
   <div x-data="globalToast" x-cloak x-show="visible"
     x-transition:enter="transition ease-out duration-200"
     x-transition:enter-start="translate-x-4 opacity-0"
@@ -98,6 +99,9 @@
             <span :class="part.bold ? 'font-bold text-white' : ''" x-text="part.text"></span>
           </template>
         </p>
+        <button x-cloak x-show="actionLabel && onAction" type="button" @click="activateAction()"
+          class="mt-3 inline-flex items-center gap-1 rounded-md bg-white/15 px-2.5 py-1.5 text-xs font-semibold text-white transition hover:bg-white/25 focus:outline-none focus:ring-2 focus:ring-white/80"
+          x-text="actionLabel"></button>
       </div>
       <button type="button" @click="dismiss()"
         class="-mr-1 -mt-1 shrink-0 rounded-md p-1 text-white/80 transition hover:bg-white/15 hover:text-white focus:outline-none focus:ring-2 focus:ring-white/80"

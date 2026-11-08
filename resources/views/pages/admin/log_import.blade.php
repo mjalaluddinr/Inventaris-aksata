@@ -19,16 +19,16 @@
     <div class="p-4 sm:p-8">
 
       <div class="overflow-hidden rounded-xl border border-[#D3E3DF] bg-white shadow-sm">
-        <div class="theme-scrollbar overflow-x-auto">
+        <div class="overflow-x-auto">
           <table class="min-w-full divide-y divide-[#DCE9E6]">
             <thead class="bg-[#F1F8F6]">
               <tr>
-                <th class="px-4 py-3 text-left text-xs font-semibold text-slate-600">Waktu Mulai</th>
-                <th class="px-4 py-3 text-left text-xs font-semibold text-slate-600">Jenis Input</th>
-                <th class="px-4 py-3 text-left text-xs font-semibold text-slate-600">Nama File</th>
-                <th class="px-4 py-3 text-left text-xs font-semibold text-slate-600">Status</th>
-                <th class="px-4 py-3 text-left text-xs font-semibold text-slate-600">Statistik</th>
-                <th class="px-4 py-3 text-right text-xs font-semibold text-slate-600">Aksi</th>
+                <th class="whitespace-nowrap px-4 py-3 text-left text-xs font-semibold text-slate-600">Waktu Mulai</th>
+                <th class="whitespace-nowrap px-4 py-3 text-left text-xs font-semibold text-slate-600">Jenis Input</th>
+                <th class="whitespace-nowrap px-4 py-3 text-left text-xs font-semibold text-slate-600">Nama File</th>
+                <th class="whitespace-nowrap px-4 py-3 text-left text-xs font-semibold text-slate-600">Status</th>
+                <th class="whitespace-nowrap px-4 py-3 text-left text-xs font-semibold text-slate-600">Statistik</th>
+                <th class="whitespace-nowrap px-4 py-3 text-right text-xs font-semibold text-slate-600">Aksi</th>
               </tr>
             </thead>
             <tbody class="divide-y divide-[#E7EFED] bg-white">
@@ -206,14 +206,27 @@
 
           const fileErrorTitle = document.createElement('p');
           fileErrorTitle.className = 'mb-1 text-xs font-bold uppercase text-rose-700';
-          fileErrorTitle.textContent = 'Kegagalan Sistem / File';
+          fileErrorTitle.textContent = 'Penyebab Import Gagal';
 
           const fileErrorMessage = document.createElement('p');
-          fileErrorMessage.className = 'whitespace-pre-wrap break-words text-sm font-mono text-rose-800';
+          fileErrorMessage.className = 'whitespace-pre-wrap break-words text-sm text-rose-800';
           fileErrorMessage.textContent = fileError;
 
           fileErrorDiv.append(fileErrorTitle, fileErrorMessage);
           errorContainer.appendChild(fileErrorDiv);
+        }
+
+        const fileDiagnostics = detailError[3];
+        if (fileDiagnostics) {
+          const diagnosticsDiv = document.createElement('div');
+          diagnosticsDiv.className = 'rounded border-l-4 border-amber-500 bg-amber-50 p-3 text-sm text-amber-900';
+          const diagnosticsMessage = document.createElement('p');
+          diagnosticsMessage.textContent =
+            `Baris kandidat judul: ${fileDiagnostics.row ?? 'tidak diketahui'}. ` +
+            `Kolom terdeteksi: ${Array.isArray(fileDiagnostics.columns) && fileDiagnostics.columns.length ? fileDiagnostics.columns.join(', ') : 'tidak ada'}. ` +
+            `Kolom wajib yang belum ditemukan: ${Array.isArray(fileDiagnostics.missing_columns) ? fileDiagnostics.missing_columns.join(', ') || 'tidak ada' : 'username, password'}.`;
+          diagnosticsDiv.appendChild(diagnosticsMessage);
+          errorContainer.appendChild(diagnosticsDiv);
         }
 
         if (rowErrors.length > 0) {
@@ -237,7 +250,7 @@
             const rowLabel = document.createElement('p');
             rowLabel.className = 'text-sm font-semibold text-gray-800';
             const rowNumber = Array.isArray(error) ? error[0] : error?.row;
-            rowLabel.textContent = rowNumber ? `Baris ${rowNumber}` : 'Baris tidak diketahui';
+            rowLabel.textContent = rowNumber || 'Baris tidak diketahui';
 
             const rowMessage = document.createElement('p');
             rowMessage.className = 'mt-1 whitespace-pre-wrap break-words text-sm font-mono text-rose-600';
@@ -257,7 +270,7 @@
             rowDiv.append(indicator, messageContainer);
             errorContainer.appendChild(rowDiv);
           });
-        } else if (!fileError) {
+        } else if (!fileError && !fileDiagnostics) {
           const emptyMessage = document.createElement('p');
           emptyMessage.className = 'text-sm italic text-gray-500';
           emptyMessage.textContent = 'Tidak ada detail error spesifik yang tercatat.';

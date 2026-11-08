@@ -1,7 +1,6 @@
 <x-layout.user
   title="{{ match ($page) {'catalog' => 'Katalog Barang','apply' => 'Ajukan Peminjaman','history' => 'Riwayat Peminjaman',default => 'Beranda'} }} - InvenTrack">
   @if ($page === 'home')
-    <x-auth.login-welcome />
     <main id="beranda" class="pb-14">
       <section
         class="relative isolate overflow-hidden bg-gradient-to-r from-[#004e48] via-[#008b7a] to-[#00d5a0] px-5 pb-10 pt-[calc(88px+2.5rem)] text-white sm:px-10 sm:pb-14 sm:pt-[calc(88px+3.5rem)] lg:px-16 lg:pb-16">
@@ -160,7 +159,7 @@
                   </div>
                   <h3 class="mt-2 truncate text-sm font-bold text-slate-900" title="{{ $item->nama_barang }}">
                     {{ $item->nama_barang }}</h3>
-                  <p class="mt-1 truncate text-[10px] text-slate-500">{{ $item->kode_barang }} · {{ $item->satuan }}</p>
+                  <p class="mt-1 truncate text-[10px] text-slate-500">{{ $item->satuan }}</p>
                   <p class="mt-2 text-xs"><strong>{{ number_format($item->stok_tersedia) }}</strong><span
                       class="text-slate-500"> / {{ number_format($item->stok_total) }} tersedia</span></p>
                   <div class="mt-1.5 h-1.5 overflow-hidden rounded-full bg-slate-100" role="progressbar"
@@ -171,11 +170,11 @@
                   </div>
                   <div class="mt-auto flex items-center justify-between gap-2 pt-3">
                     <button type="button"
-                      @click="addToCart({ id: @js($item->barang_id), name: @js($item->nama_barang), code: @js($item->kode_barang), unit: @js($item->satuan), stock: {{ (int) $item->stok_tersedia }}, category: @js($item->kategori?->nama_kategori ?? 'Tanpa kategori') })"
+                      @click="addToCart({ id: @js($item->barang_id), name: @js($item->nama_barang), unit: @js($item->satuan), stock: {{ (int) $item->stok_tersedia }}, category: @js($item->kategori?->nama_kategori ?? 'Tanpa kategori') })"
                       class="rounded-full bg-[#00d69f] px-3 py-1.5 text-[10px] font-bold text-[#003f38] transition hover:bg-[#36e9b3] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#008b7a] focus-visible:ring-offset-2">+
                       Keranjang</button>
                     <button type="button"
-                      @click="openLoanModal({ id: @js($item->barang_id), name: @js($item->nama_barang), code: @js($item->kode_barang), unit: @js($item->satuan), stock: {{ (int) $item->stok_tersedia }}, category: @js($item->kategori?->nama_kategori ?? 'Tanpa kategori') })"
+                      @click="openLoanModal({ id: @js($item->barang_id), name: @js($item->nama_barang), unit: @js($item->satuan), stock: {{ (int) $item->stok_tersedia }}, category: @js($item->kategori?->nama_kategori ?? 'Tanpa kategori') })"
                       class="rounded-full border border-slate-300 px-3 py-1.5 text-[10px] font-semibold text-slate-800 transition hover:border-[#00a88f] hover:text-[#007f70] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#008b7a] focus-visible:ring-offset-2">Pinjam
                       Sekarang</button>
                   </div>

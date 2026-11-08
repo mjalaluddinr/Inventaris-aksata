@@ -85,6 +85,23 @@
         <span x-cloak x-show="filterLoading" role="status" class="sr-only">Memuat log mutasi...</span>
       </form>
 
+      <div class="rounded-lg border border-[#B9DED4] bg-white px-4 py-3 text-sm text-slate-700">
+        <p class="font-semibold text-slate-800">Keterangan jenis dan jumlah mutasi</p>
+        <ul class="mt-2 grid gap-x-6 gap-y-1 sm:grid-cols-2 lg:grid-cols-3">
+          <li><span class="font-semibold">Barang Masuk:</span> ditambahkan melalui formulir atau import.</li>
+          <li><span class="font-semibold">Dipinjam:</span> stok dialokasikan untuk peminjaman.</li>
+          <li><span class="font-semibold">Dikembalikan:</span> barang pinjaman diterima kembali.</li>
+          <li><span class="font-semibold">Dipakai:</span> barang dicatat sedang digunakan di ruangan.</li>
+          <li><span class="font-semibold">Ditarik:</span> barang yang dipakai ditarik kembali.</li>
+          <li><span class="font-semibold">Dipindahkan:</span> stok berpindah dari lokasi asal ke tujuan.</li>
+          <li><span class="font-semibold">Penyesuaian:</span> perubahan stok lain di luar jenis di atas.</li>
+        </ul>
+        <p class="mt-2">
+          Jumlah adalah unit yang terdampak pada transaksi di baris tersebut; untuk penyesuaian, jumlah adalah
+          unit yang ditambah atau dikurangi. Perubahan Stok menampilkan stok sebelum dan sesudah transaksi.
+        </p>
+      </div>
+
       <div x-cloak x-show="filterError"
         class="flex items-center justify-between rounded-lg border border-rose-200 bg-white px-4 py-3 text-sm text-rose-800"
         role="alert">
@@ -98,7 +115,7 @@
         @fragment('mutation-results')
       <div class="overflow-hidden rounded-xl border border-[#D3E3DF] bg-white shadow-sm">
         <div class="overflow-x-auto">
-          <table class="min-w-[1180px] divide-y divide-[#DCE9E6]">
+          <table class="min-w-max w-full divide-y divide-[#DCE9E6]">
             <thead class="bg-[#F1F8F6]">
               <tr>
                 <th scope="col" class="whitespace-nowrap px-4 py-3 text-left text-xs font-semibold text-slate-600">Waktu</th>
@@ -122,10 +139,10 @@
                       {{ $mutationLabels[$log->tipe] ?? ucfirst($log->tipe) }}
                     </span>
                   </td>
-                  <td class="px-4 py-3">
+                  <td class="whitespace-nowrap px-4 py-3">
                     @if ($log->barang)
-                      <p class="text-xs font-semibold text-slate-800">{{ $log->barang->nama_barang }}</p>
-                      <p class="mt-0.5 text-xs text-slate-500">{{ $log->barang->kode_barang }}</p>
+                      <span class="text-xs font-semibold text-slate-800">{{ $log->barang->nama_barang }}</span>
+                      <span class="text-xs text-slate-500">· {{ $log->barang->kode_barang }}</span>
                     @else
                       <span class="text-xs text-slate-500">Barang tidak tersedia</span>
                     @endif
@@ -133,29 +150,30 @@
                   <td class="whitespace-nowrap px-4 py-3 text-right text-sm font-semibold text-slate-700">
                     {{ number_format($log->jumlah, 0, ',', '.') }}
                   </td>
-                  <td class="px-4 py-3 text-xs text-slate-700">
+                  <td class="whitespace-nowrap px-4 py-3 text-xs text-slate-700">
                     @if ($log->tipe === 'dipindahkan')
                       @php
                         $unallocatedSource = str_contains($log->keterangan ?? '', 'belum memiliki lokasi');
                       @endphp
-                      <p>
+                      <span>
                         {{ $unallocatedSource ? 'Belum ditempatkan' : ($log->ruangan?->nama_ruangan ?? 'Lokasi asal tidak tersedia') }}
                         @if ($log->lemariAsal)
                           · {{ $log->lemariAsal->nama_lemari }}
                         @endif
-                      </p>
-                      <p class="mt-0.5 text-slate-500">
-                        → {{ $log->lemariTujuan?->ruangan?->nama_ruangan ?? 'Lokasi tujuan' }}
+                      </span>
+                      <span class="px-1 text-slate-400" aria-hidden="true">→</span>
+                      <span class="text-slate-500">
+                        {{ $log->lemariTujuan?->ruangan?->nama_ruangan ?? 'Lokasi tujuan' }}
                         @if ($log->lemariTujuan)
                           · {{ $log->lemariTujuan->nama_lemari }}
                         @endif
-                      </p>
+                      </span>
                     @else
-                      <p>{{ $log->ruangan?->nama_ruangan ?? 'Ruangan tidak tersedia' }}</p>
+                      <span>{{ $log->ruangan?->nama_ruangan ?? 'Ruangan tidak tersedia' }}</span>
                       @if ($log->lemariAsal || $log->lemariTujuan)
-                        <p class="mt-0.5 text-slate-500">
+                        <span class="text-slate-500">
                           {{ $log->lemariAsal?->nama_lemari ?? ($log->lemariTujuan?->nama_lemari ?? '—') }}
-                        </p>
+                        </span>
                       @endif
                     @endif
                   </td>
@@ -174,22 +192,21 @@
                           : null;
                     @endphp
                     @if ($log->akun)
-                      <p class="whitespace-nowrap">User: {{ $accountName }}</p>
+                      <span>User: {{ $accountName }}</span>
+                      @if ($operatorName)
+                        <span class="px-1 text-slate-400" aria-hidden="true">·</span>
+                      @endif
                     @endif
                     @if ($operatorName)
-                      <p @class([
-                          'mt-0.5' => $log->akun,
-                          'whitespace-nowrap',
-                          'text-slate-500',
-                      ])>
+                      <span class="text-slate-500">
                         Petugas ({{ ucfirst($log->olehAkun->role) }}): {{ $operatorName }}
-                      </p>
+                      </span>
                     @endif
                     @if (! $log->akun && ! $log->olehAkun)
                       <p>—</p>
                     @endif
                   </td>
-                  <td class="max-w-xs px-4 py-3 text-xs font-medium leading-5 text-slate-800">
+                  <td class="whitespace-nowrap px-4 py-3 text-xs font-medium leading-5 text-slate-800">
                     {{ $log->keterangan ?: '—' }}
                   </td>
                 </tr>
