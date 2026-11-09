@@ -194,17 +194,19 @@ Alpine.data('notificationDropdown', () => ({
     error: '',
     countUrl: '',
     readUrl: '',
+    historyUrl: '',
     csrfToken: '',
     pollTimer: null,
     visibilityListener: null,
     init() {
         this.countUrl = this.$el.dataset.countUrl || '';
         this.readUrl = this.$el.dataset.readUrl || '';
+        this.historyUrl = this.$el.dataset.historyUrl || '';
         this.csrfToken = this.$el.dataset.csrfToken || '';
         this.refreshCount();
         this.pollTimer = window.setInterval(() => {
             this.refreshCount();
-        }, 30000);
+        }, 5000);
         this.visibilityListener = () => {
             if (!document.hidden) {
                 this.refreshCount();
@@ -225,6 +227,7 @@ Alpine.data('notificationDropdown', () => ({
             const response = await fetch(this.countUrl, {
                 headers: { Accept: 'application/json' },
                 credentials: 'same-origin',
+                cache: 'no-store',
             });
             if (!response.ok) {
                 if (response.status === 503) {
@@ -268,6 +271,7 @@ Alpine.data('notificationDropdown', () => ({
                     'X-CSRF-TOKEN': this.csrfToken,
                 },
                 credentials: 'same-origin',
+                cache: 'no-store',
             });
             if (!response.ok) {
                 if (response.status === 503) {
@@ -796,12 +800,12 @@ const renderLoanQr = (element) => {
     QRCode.toCanvas(canvas, element.dataset.loanQr, {
         errorCorrectionLevel: 'M',
         margin: 4,
-        width: 152,
+        width: 240,
     }).then(() => {
         element.replaceChildren(canvas);
     }).catch((error) => {
         console.error('Failed to render the loan QR code.', error);
-        element.textContent = 'QR tidak dapat ditampilkan. Gunakan kode peminjaman di samping.';
+        element.textContent = 'QR tidak dapat ditampilkan.';
     });
 };
 

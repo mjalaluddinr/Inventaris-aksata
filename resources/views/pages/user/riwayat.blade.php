@@ -1,23 +1,32 @@
 @php
   $currentUser = auth()->user();
   $userId = $currentUser?->akun_id;
+  $historyStatus = request()->query('status') === 'finished' ? 'finished' : 'active';
   $historyLoans = $userId
       ? \App\Models\Peminjaman::query()
-          ->with(['detailPeminjamans.barang', 'diprosesAkun'])
-          ->where('akun_id', $userId)
-          ->when(request()->query('status') === 'active', fn ($query) => $query->whereHas('detailPeminjamans', fn ($details) => $details->whereIn('status', ['pending', 'dipinjam'])))
-          ->when(request()->query('status') === 'finished', fn ($query) => $query->whereHas('detailPeminjamans', fn ($details) => $details->whereIn('status', ['dikembalikan', 'ditolak', 'dibatalkan'])))
+      ->with(['detailPeminjamans.barang', 'diprosesAkun'])
+      ->where('akun_id', $userId)
+      ->when($historyStatus === 'active', fn ($query) => $query->whereHas(
+          'detailPeminjamans',
+          fn ($details) => $details->whereIn('status', ['pending', 'dipinjam']),
+      ))
+      ->when($historyStatus === 'finished', fn ($query) => $query
+          ->whereHas('detailPeminjamans')
+          ->whereDoesntHave(
+              'detailPeminjamans',
+              fn ($details) => $details->whereIn('status', ['pending', 'dipinjam']),
+          ))
           ->latest('tanggal_pengajuan')
           ->paginate(8, ['*'], 'history_page')
           ->withQueryString()
       : collect();
 @endphp
-    <main id="history-content" class="mx-auto min-h-[calc(100vh-5rem)] max-w-[1600px] pb-12">
+    <main id="history-content" class="mx-auto min-h-[calc(100vh-5rem)] w-full pb-12">
       <x-user.hero-section
         title="Riwayat Peminjaman Saya"
         description="Pantau status pengajuan aktif dan transaksi yang sudah selesai."
       />
-      <section class="mx-auto max-w-6xl px-4 py-5 sm:px-8 sm:py-6 lg:px-10">
+      <section class="mx-auto w-full px-4 py-5 sm:px-8 sm:py-6 lg:px-10">
         <div class="mb-5 flex flex-wrap items-center gap-2" aria-label="Filter riwayat peminjaman">
           <a data-history-ajax href="{{ route('user.beranda', ['page' => 'history', 'status' => 'active']) }}"
             @if (request('status', 'active') === 'active') aria-current="page" @endif
@@ -65,7 +74,7 @@
                     <span class="rounded-full px-3 py-1 text-[10px] font-semibold {{ $statusStyle }}">
                       {{ $isOverdue ? 'Jatuh tempo' : ($statusLabels[$loanStatus] ?? ucfirst($loanStatus)) }}
                     </span>
-                    @if ($loanStatus === 'dibatalkan')
+                    @if ($loan->tanggal_rencana_kembali)
                       <span class="text-right text-[10px] font-bold text-slate-700">
                         Tanggal rencana kembali: {{ $loan->tanggal_rencana_kembali?->format('d M Y') ?? '—' }}
                       </span>
@@ -137,7 +146,7 @@
                 @if ($loanStatus === 'pending')
                   <template x-teleport="body">
                     <div x-cloak x-show="qrOpen" x-transition.opacity @click.self="qrOpen = false" class="fixed inset-0 z-[110] flex items-center justify-center overflow-y-auto bg-slate-950/50 p-4 sm:p-6" role="presentation">
-                      <section x-show="qrOpen" x-transition class="my-auto max-h-[calc(100dvh-2rem)] w-full max-w-sm overflow-y-auto rounded-2xl border border-[#d1e6e1] bg-white shadow-[0_24px_80px_rgba(2,25,41,0.35)]" role="dialog" aria-modal="true" aria-labelledby="loan-qr-title-{{ $loan->peminjaman_id }}">
+                      <section x-show="qrOpen" x-transition class="my-auto max-h-[calc(100dvh-2rem)] w-full max-w-md overflow-y-auto rounded-2xl border border-[#d1e6e1] bg-white shadow-[0_24px_80px_rgba(2,25,41,0.35)]" role="dialog" aria-modal="true" aria-labelledby="loan-qr-title-{{ $loan->peminjaman_id }}">
                         <header class="flex items-center justify-between border-b border-slate-100 px-5 py-4">
                           <h2 id="loan-qr-title-{{ $loan->peminjaman_id }}" class="text-sm font-semibold text-slate-900">QR Peminjaman</h2>
                           <button type="button" @click="qrOpen = false" class="flex h-8 w-8 items-center justify-center rounded-full text-slate-500 transition hover:bg-slate-100 hover:text-slate-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#008b7a]" aria-label="Tutup QR">
@@ -145,10 +154,9 @@
                           </button>
                         </header>
                         <div class="flex flex-col items-center px-5 pb-5 pt-6 text-center">
-                          <div class="flex h-44 w-44 items-center justify-center rounded-xl border border-slate-200 bg-white p-2" data-loan-qr="{{ $loan->kode_peminjaman }}" role="img" aria-label="QR untuk pesanan peminjaman">
+                          <div class="flex h-64 w-64 max-w-full items-center justify-center rounded-xl border border-slate-200 bg-white p-3" data-loan-qr="{{ $loan->kode_peminjaman }}" role="img" aria-label="QR untuk pesanan peminjaman">
                             <span class="text-center text-xs text-slate-500">Menyiapkan QR...</span>
                           </div>
-                          <p class="mt-2 text-[10px] font-medium tracking-wide text-slate-500">{{ $loan->kode_peminjaman }}</p>
                           <div class="mt-2 space-y-1">
                             @foreach ($loan->detailPeminjamans as $detail)
                               <p class="text-sm font-semibold text-slate-900">{{ $detail->barang?->nama_barang ?? 'Barang tidak tersedia' }} × {{ $detail->jumlah_pinjam }}</p>

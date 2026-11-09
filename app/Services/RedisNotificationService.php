@@ -24,7 +24,7 @@ class RedisNotificationService
      */
     public function notifyUser(User $recipient, string $message): void
     {
-        $this->storeNotification($recipient, $message);
+        $this->storeNotification($recipient, $this->sanitizeNotificationMessage($message));
     }
 
     /**
@@ -32,6 +32,7 @@ class RedisNotificationService
      */
     public function notifyAdministrators(string $message): void
     {
+        $message = $this->sanitizeNotificationMessage($message);
         $this->administratorRecipients()
             ->where('role', 'admin')
             ->get()
@@ -43,6 +44,7 @@ class RedisNotificationService
      */
     public function notifyLoanProcessors(string $message): void
     {
+        $message = $this->sanitizeNotificationMessage($message);
         $this->administratorRecipients()
             ->where(function (Builder $query): void {
                 $query->where('role', 'admin')
@@ -68,13 +70,22 @@ class RedisNotificationService
             $count = 0;
 
             foreach ($notificationIds as $notificationId) {
-                if ($redis->get($this->notificationKey($recipient, $notificationId)) === null) {
+                $payload = $redis->get($this->notificationKey($recipient, $notificationId));
+                if ($payload === null) {
                     $redis->lrem($listKey, 0, $notificationId);
 
                     continue;
                 }
 
-                $count++;
+                try {
+                    $notification = $this->decodeNotification($payload);
+                    if (! ($notification['read'] ?? false)) {
+                        $count++;
+                    }
+                } catch (UnexpectedValueException) {
+                    $redis->lrem($listKey, 0, $notificationId);
+                    $redis->del($this->notificationKey($recipient, $notificationId));
+                }
             }
 
             return $count;
@@ -82,7 +93,7 @@ class RedisNotificationService
     }
 
     /**
-     * @return array<int, array{id: string, message: string, created_at: string}>
+     * @return array<int, array{id: string, message: string, created_at: string, read: bool}>
      */
     public function readAndClear(User $recipient): array
     {
@@ -91,18 +102,71 @@ class RedisNotificationService
             $listKey = $this->listKey($recipient);
             $notificationIds = $redis->lrange($listKey, 0, -1);
             $notifications = [];
+            $displayed = 0;
 
             foreach ($notificationIds as $notificationId) {
                 $notificationKey = $this->notificationKey($recipient, $notificationId);
                 $payload = $redis->get($notificationKey);
 
                 if ($payload !== null) {
-                    $notifications[] = $this->decodeNotification($payload);
-                    $redis->del($notificationKey);
+                    try {
+                        $notification = $this->decodeNotification($payload);
+                        $notification['message'] = $this->sanitizeNotificationMessage($notification['message']);
+                        $notification['read'] = true;
+                        $remainingTtl = (int) $redis->ttl($notificationKey);
+                        if ($remainingTtl > 0) {
+                            $redis->setex(
+                                $notificationKey,
+                                $remainingTtl,
+                                json_encode($notification, JSON_THROW_ON_ERROR),
+                            );
+                        }
+
+                        if ($displayed < 5) {
+                            $notifications[] = $notification;
+                            $displayed++;
+                        }
+                    } catch (UnexpectedValueException) {
+                        $redis->lrem($listKey, 0, $notificationId);
+                        $redis->del($notificationKey);
+                    }
+                } else {
+                    $redis->lrem($listKey, 0, $notificationId);
                 }
             }
 
-            $redis->del($listKey);
+            return $notifications;
+        });
+    }
+
+    /**
+     * @return array<int, array{id: string, message: string, created_at: string, read: bool}>
+     */
+    public function activeNotifications(User $recipient): array
+    {
+        return $this->withRecipientLock($recipient, function () use ($recipient): array {
+            $redis = Redis::connection('cache');
+            $listKey = $this->listKey($recipient);
+            $notifications = [];
+
+            foreach ($redis->lrange($listKey, 0, -1) as $notificationId) {
+                $payload = $redis->get($this->notificationKey($recipient, $notificationId));
+
+                if ($payload === null) {
+                    $redis->lrem($listKey, 0, $notificationId);
+
+                    continue;
+                }
+
+                try {
+                    $notification = $this->decodeNotification($payload);
+                    $notification['message'] = $this->sanitizeNotificationMessage($notification['message']);
+                    $notifications[] = $notification;
+                } catch (UnexpectedValueException) {
+                    $redis->lrem($listKey, 0, $notificationId);
+                    $redis->del($this->notificationKey($recipient, $notificationId));
+                }
+            }
 
             return $notifications;
         });
@@ -143,8 +207,8 @@ class RedisNotificationService
                 }
 
                 $message = $reminderStage === 'overdue'
-                    ? "Peminjaman {$loan->kode_peminjaman} terlambat dikembalikan sejak {$dueDate->format('d-m-Y')}."
-                    : "Peminjaman {$loan->kode_peminjaman} jatuh tempo dalam {$daysUntilDue} hari ({$dueDate->format('d-m-Y')}).";
+                    ? "Pengembalian peminjaman terlambat sejak {$dueDate->format('d-m-Y')}."
+                    : "Pengembalian peminjaman jatuh tempo dalam {$daysUntilDue} hari ({$dueDate->format('d-m-Y')}).";
 
                 if ($this->storeNotification(
                     $recipient,
@@ -176,11 +240,14 @@ class RedisNotificationService
 
     private function storeNotification(User $recipient, string $message, ?string $deduplicationKey = null): bool
     {
+        $notificationId = (string) Str::uuid();
+
         try {
             return $this->withRecipientLock($recipient, function () use (
                 $recipient,
                 $message,
                 $deduplicationKey,
+                $notificationId,
             ): bool {
                 $redis = Redis::connection('cache');
                 $markerKey = $deduplicationKey === null
@@ -191,11 +258,11 @@ class RedisNotificationService
                     return false;
                 }
 
-                $notificationId = (string) Str::uuid();
                 $notification = [
                     'id' => $notificationId,
                     'message' => $message,
                     'created_at' => now()->toIso8601String(),
+                    'read' => false,
                 ];
 
                 $redis->setex(
@@ -207,7 +274,7 @@ class RedisNotificationService
                 $redis->expire($this->listKey($recipient), self::NOTIFICATION_TTL_SECONDS);
 
                 if ($markerKey !== null) {
-                    $redis->set($markerKey, '1');
+                    $redis->setex($markerKey, self::NOTIFICATION_TTL_SECONDS, '1');
                 }
 
                 return true;
@@ -251,6 +318,18 @@ class RedisNotificationService
         return 'inventrack:notifications:'.$recipientId.':event:'.hash('sha256', $eventKey);
     }
 
+    public function sanitizeNotificationMessage(string $message): string
+    {
+        $message = preg_replace('/Pengajuan peminjaman\s+PJM-[0-9]{8}-[0-9]{4,}\b/u', 'Pengajuan peminjaman', $message) ?? $message;
+        $message = preg_replace('/Peminjaman\s+PJM-[0-9]{8}-[0-9]{4,}\b/u', 'Peminjaman', $message) ?? $message;
+        $message = preg_replace('/\bPJM-[0-9]{8}-[0-9]{4,}\b/u', '', $message) ?? $message;
+        $message = preg_replace('/\s{2,}/', ' ', $message) ?? $message;
+        $message = preg_replace('/\s+([,.])/u', '$1', $message) ?? $message;
+        $message = preg_replace('/\(\s*\)/u', '', $message) ?? $message;
+
+        return trim($message);
+    }
+
     /**
      * @return array{id: string, message: string, created_at: string}
      */
@@ -266,6 +345,8 @@ class RedisNotificationService
         ) {
             throw new UnexpectedValueException('Redis contains an invalid notification payload.');
         }
+
+        $notification['read'] = $notification['read'] ?? false;
 
         return $notification;
     }

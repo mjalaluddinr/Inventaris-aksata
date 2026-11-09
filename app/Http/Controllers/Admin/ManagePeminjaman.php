@@ -187,7 +187,7 @@ class ManagePeminjaman extends Controller
 
         return redirect()
             ->route('admin.peminjaman', ['tab' => 'borrowed'])
-            ->with('success', "Peminjaman {$peminjaman->kode_peminjaman} berhasil dikonfirmasi.");
+            ->with('success', 'Peminjaman berhasil dikonfirmasi.');
     }
 
     public function reject(RejectPeminjamanRequest $request, Peminjaman $peminjaman): RedirectResponse
@@ -221,14 +221,14 @@ class ManagePeminjaman extends Controller
 
         $this->notifyBorrower(
             $loan->akun_id,
-            "Peminjaman {$loan->kode_peminjaman} ditolak. Alasan: {$reason}",
+            "Pengajuan peminjaman ditolak. Alasan: {$reason}",
         );
 
         return redirect()
             ->route('admin.peminjaman', ['tab' => 'pending'])
             ->with(
                 'success',
-                "Peminjaman {$peminjaman->kode_peminjaman} ditolak dan stok dikembalikan.",
+                'Pengajuan peminjaman ditolak dan stok dikembalikan.',
             );
     }
 
@@ -307,7 +307,7 @@ class ManagePeminjaman extends Controller
             ->where('status', 'dipinjam')
             ->exists();
         $this->notifications->notifyLoanProcessors(
-            "Barang dari peminjaman {$peminjaman->kode_peminjaman} telah dicatat kembali.",
+            'Barang peminjaman telah dicatat kembali.',
         );
 
         if (! $hasRemainingItems) {
@@ -318,8 +318,12 @@ class ManagePeminjaman extends Controller
         }
 
         $returnMessage = $hasRemainingItems
-            ? "Peminjaman {$peminjaman->kode_peminjaman} berhasil dikembalikan sebagian."
-            : "Peminjaman {$peminjaman->kode_peminjaman} berhasil dikembalikan sepenuhnya.";
+            ? 'Peminjaman berhasil dikembalikan sebagian.'
+            : 'Peminjaman berhasil dikembalikan sepenuhnya.';
+        $this->notifyBorrower(
+            $peminjaman->akun_id,
+            $returnMessage,
+        );
 
         return redirect()
             ->route('admin.peminjaman', ['tab' => $hasRemainingItems ? 'borrowed' : 'history'])
@@ -382,7 +386,7 @@ class ManagePeminjaman extends Controller
             DB::afterCommit(function () use ($loan): void {
                 $this->notifyBorrower(
                     $loan->akun_id,
-                    "Peminjaman {$loan->kode_peminjaman} telah disetujui.",
+                    'Peminjaman telah disetujui.',
                 );
             });
         }, 3);

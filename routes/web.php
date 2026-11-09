@@ -156,6 +156,8 @@ Route::middleware('auth')->group(function () {
         ->name('notifications.count');
     Route::post('/notifications/read', [NotificationController::class, 'read'])
         ->name('notifications.read');
+    Route::get('/notifications/detail', [NotificationController::class, 'index'])
+        ->name('notifications.detail');
 
     Route::get('/dashboard', function (Request $request) {
         $user = $request->user();

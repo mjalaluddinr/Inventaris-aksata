@@ -85,23 +85,6 @@
         <span x-cloak x-show="filterLoading" role="status" class="sr-only">Memuat log mutasi...</span>
       </form>
 
-      <div class="rounded-lg border border-[#B9DED4] bg-white px-4 py-3 text-sm text-slate-700">
-        <p class="font-semibold text-slate-800">Keterangan jenis dan jumlah mutasi</p>
-        <ul class="mt-2 grid gap-x-6 gap-y-1 sm:grid-cols-2 lg:grid-cols-3">
-          <li><span class="font-semibold">Barang Masuk:</span> ditambahkan melalui formulir atau import.</li>
-          <li><span class="font-semibold">Dipinjam:</span> stok dialokasikan untuk peminjaman.</li>
-          <li><span class="font-semibold">Dikembalikan:</span> barang pinjaman diterima kembali.</li>
-          <li><span class="font-semibold">Dipakai:</span> barang dicatat sedang digunakan di ruangan.</li>
-          <li><span class="font-semibold">Ditarik:</span> barang yang dipakai ditarik kembali.</li>
-          <li><span class="font-semibold">Dipindahkan:</span> stok berpindah dari lokasi asal ke tujuan.</li>
-          <li><span class="font-semibold">Penyesuaian:</span> perubahan stok lain di luar jenis di atas.</li>
-        </ul>
-        <p class="mt-2">
-          Jumlah adalah unit yang terdampak pada transaksi di baris tersebut; untuk penyesuaian, jumlah adalah
-          unit yang ditambah atau dikurangi. Perubahan Stok menampilkan stok sebelum dan sesudah transaksi.
-        </p>
-      </div>
-
       <div x-cloak x-show="filterError"
         class="flex items-center justify-between rounded-lg border border-rose-200 bg-white px-4 py-3 text-sm text-rose-800"
         role="alert">

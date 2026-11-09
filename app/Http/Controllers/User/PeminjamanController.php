@@ -145,11 +145,11 @@ class PeminjamanController extends Controller
 
         $this->notifications->notifyUser(
             $user,
-            "Pengajuan peminjaman {$loan->kode_peminjaman} berhasil dikirim dan menunggu konfirmasi admin.",
+            'Pengajuan peminjaman berhasil dikirim dan menunggu konfirmasi admin.',
         );
         $borrowerName = trim($user->first_name.' '.$user->last_name);
         $this->notifications->notifyLoanProcessors(
-            "Pengajuan peminjaman baru dari {$borrowerName} ({$loan->kode_peminjaman}) menunggu konfirmasi.",
+            "Pengajuan peminjaman baru dari {$borrowerName} menunggu konfirmasi.",
         );
 
         $redirect = redirect()->route('user.beranda', ['page' => 'history']);
@@ -243,6 +243,20 @@ class PeminjamanController extends Controller
 
             $loan->clearCancellationRequest();
         }, 3);
+
+        $loan = Peminjaman::query()
+            ->whereKey($peminjamanId)
+            ->where('akun_id', $user->akun_id)
+            ->firstOrFail();
+
+        $this->notifications->notifyUser(
+            $user,
+            'Peminjaman berhasil dibatalkan.',
+        );
+        $borrowerName = trim($user->first_name.' '.$user->last_name);
+        $this->notifications->notifyLoanProcessors(
+            "Peminjaman dibatalkan oleh {$borrowerName}.",
+        );
 
         $redirect = redirect()
             ->route('user.beranda', ['page' => 'history'])

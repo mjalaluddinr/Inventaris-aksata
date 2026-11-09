@@ -1,7 +1,12 @@
+@php
+  $notificationUser = request()->user();
+  $notificationHistoryUrl = route('notifications.detail');
+@endphp
 <div
   x-data="notificationDropdown"
   data-count-url="{{ route('notifications.count') }}"
   data-read-url="{{ route('notifications.read') }}"
+  data-history-url="{{ $notificationHistoryUrl }}"
   data-csrf-token="{{ csrf_token() }}"
   class="relative"
   @keydown.escape.window="open = false"
@@ -41,23 +46,31 @@
     <div class="max-h-[min(27rem,calc(100vh-11rem))] overflow-y-auto">
       <p x-show="loading" class="px-4 py-6 text-center text-sm text-slate-500">Memuat notifikasi...</p>
       <p x-show="error" x-text="error" role="status" class="px-4 py-6 text-center text-sm text-rose-600"></p>
-      <p
-        x-show="!loading && !error && notifications.length === 0"
-        class="px-4 py-6 text-center text-sm text-slate-500"
-      >Tidak ada notifikasi baru.</p>
+      <div x-show="!loading && !error">
+        <p
+          x-show="notifications.length === 0"
+          class="px-4 py-6 text-center text-sm text-slate-500"
+        >Tidak ada notifikasi baru.</p>
 
-      <ul x-show="!loading && !error && notifications.length > 0" class="divide-y divide-[#edf2f1]">
-        <template x-for="notification in notifications" :key="notification.id">
-          <li class="px-4 py-3">
-            <p x-text="notification.message" class="text-sm leading-5 text-slate-700"></p>
-            <time
-              :datetime="notification.created_at"
-              x-text="formattedDate(notification.created_at)"
-              class="mt-1 block text-xs text-slate-400"
-            ></time>
-          </li>
-        </template>
-      </ul>
+        <ul x-show="notifications.length > 0" class="divide-y divide-[#edf2f1]">
+          <template x-for="notification in notifications" :key="notification.id">
+            <li>
+              <a :href="historyUrl" class="block w-full px-4 py-3 text-left transition hover:bg-[#f7fbfa]">
+                <p x-text="notification.message" class="text-sm leading-5 text-slate-700"></p>
+                <time
+                  :datetime="notification.created_at"
+                  x-text="formattedDate(notification.created_at)"
+                  class="mt-1 block text-xs text-slate-400"
+                ></time>
+              </a>
+            </li>
+          </template>
+        </ul>
+        <a
+          :href="historyUrl"
+          class="block border-t border-[#edf2f1] px-4 py-3 text-center text-xs font-bold text-[#007f70] transition hover:bg-[#f3faf8]"
+        >Lihat detail semua notifikasi</a>
+      </div>
     </div>
   </section>
 </div>
