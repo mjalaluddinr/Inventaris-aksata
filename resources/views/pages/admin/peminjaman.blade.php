@@ -278,42 +278,91 @@
                                     <h2 id="confirm-title-{{ $loan->peminjaman_id }}" class="font-bold text-slate-900">Konfirmasi Pengambilan Barang</h2>
                                     <p class="mt-1 text-xs text-slate-500">{{ $loan->kode_peminjaman }}</p>
                                   </div>
-                                  <button type="button" @click="confirmOpen = false" class="flex h-9 w-9 items-center justify-center rounded-full text-slate-500 hover:bg-slate-100" aria-label="Tutup konfirmasi">
+                                  <button type="button" @click="confirmOpen = false" class="flex h-9 w-9 items-center justify-center rounded-full text-slate-500 hover:bg-slate-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#008b7a]" aria-label="Tutup konfirmasi">
                                     <iconify-icon icon="mdi:close" class="text-xl" aria-hidden="true"></iconify-icon>
                                   </button>
                                 </header>
-                                <div class="max-h-[55vh] space-y-3 overflow-y-auto p-5">
-                                  @foreach ($loan->detailPeminjamans as $detail)
-                                    <div class="rounded-xl border border-[#dce7e4] bg-[#fbfefd] p-3.5">
-                                      <p class="text-sm font-bold text-slate-900">{{ $detail->barang?->nama_barang ?? 'Barang tidak tersedia' }}</p>
-                                      @forelse ($detail->logMutasiBarangs as $reservation)
-                                        <div class="mt-2 flex items-center justify-between gap-3 rounded-lg border border-slate-100 bg-white px-3 py-2.5 text-xs">
-                                          <div class="min-w-0">
-                                            <p class="font-semibold text-slate-800">
-                                              {{ $reservation->ruangan?->nama_ruangan ?? 'Lokasi tidak tersedia' }}
-                                              @if ($reservation->lemariAsal)
-                                                · {{ $reservation->lemariAsal->nama_lemari }}
-                                              @endif
-                                            </p>
-                                          </div>
-                                          <span class="shrink-0 rounded-full bg-emerald-100 px-2.5 py-1 font-bold text-emerald-800">×{{ number_format($reservation->jumlah, 0, ',', '.') }}</span>
+                                <form method="POST" action="{{ route('admin.peminjaman.confirm', $loan) }}">
+                                  @csrf
+                                  <div class="max-h-[55vh] space-y-3 overflow-y-auto p-5">
+                                    @foreach ($loan->detailPeminjamans as $detail)
+                                      @php
+                                        $locations = $detail->barang?->lokasiBarangs ?? collect();
+                                        $reservedByRoom = $detail->logMutasiBarangs
+                                          ->filter(static fn ($reservation): bool => $reservation->ruangan_id !== null)
+                                          ->groupBy('ruangan_id')
+                                          ->map(static fn ($reservations): int => (int) $reservations->sum('jumlah'));
+                                        $roomOptions = $locations
+                                          ->filter(static fn ($location): bool => $location->ruangan !== null)
+                                          ->groupBy('ruangan_id')
+                                          ->map(static fn ($roomLocations, $roomId): array => [
+                                            'room' => $roomLocations->first()->ruangan,
+                                            'available' => (int) $roomLocations->sum('stok_tersedia') + (int) ($reservedByRoom[$roomId] ?? 0),
+                                          ])
+                                          ->filter(static fn (array $room): bool => $room['available'] >= $detail->jumlah_pinjam);
+                                        $currentRoomIds = $detail->logMutasiBarangs->pluck('ruangan_id')->filter()->unique();
+                                        $selectedRoomId = $currentRoomIds->count() === 1 && $roomOptions->has($currentRoomIds->first())
+                                          ? (string) $currentRoomIds->first()
+                                          : ($roomOptions->count() === 1 ? (string) $roomOptions->keys()->first() : '');
+                                        $canChooseRoom = $locations->isNotEmpty()
+                                          && $detail->logMutasiBarangs->isNotEmpty()
+                                          && $detail->logMutasiBarangs->every(static fn ($reservation): bool => $reservation->ruangan_id !== null);
+                                      @endphp
+                                      <div class="rounded-xl border border-[#dce7e4] bg-[#fbfefd] p-3.5">
+                                        <div class="flex items-start justify-between gap-3">
+                                          <p class="text-sm font-bold text-slate-900">{{ $detail->barang?->nama_barang ?? 'Barang tidak tersedia' }}</p>
+                                          <span class="shrink-0 rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-bold text-emerald-800">×{{ number_format($detail->jumlah_pinjam, 0, ',', '.') }}</span>
                                         </div>
-                                      @empty
-                                        <p class="mt-2 rounded-lg bg-slate-100 px-3 py-2 text-xs text-slate-500">Lokasi reservasi belum tercatat.</p>
-                                      @endforelse
-                                    </div>
-                                  @endforeach
-                                </div>
-                                <footer class="flex justify-end gap-2 border-t border-slate-100 px-5 py-4">
-                                  <button type="button" @click="confirmOpen = false" class="rounded-lg border border-slate-200 px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-50">Batal</button>
-                                  <form method="POST" action="{{ route('admin.peminjaman.confirm', $loan) }}">
-                                    @csrf
-                                    <button type="submit" class="inline-flex items-center gap-1.5 rounded-lg bg-[#00d69f] px-4 py-2 text-xs font-bold text-[#003f38] transition hover:bg-[#36e9b3]">
+                                        @if ($canChooseRoom && $roomOptions->isNotEmpty())
+                                          <label for="pickup-room-{{ $detail->detail_peminjaman_id }}" class="mt-3 block text-xs font-semibold text-slate-700">Ruangan pengambilan</label>
+                                          <select id="pickup-room-{{ $detail->detail_peminjaman_id }}" name="locations[{{ $detail->detail_peminjaman_id }}]" required class="mt-1.5 block w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-xs text-slate-800 focus:border-[#008b7a] focus:outline-none focus:ring-2 focus:ring-[#008b7a]/25">
+                                            <option value="" disabled @selected($selectedRoomId === '')>Pilih ruangan pengambilan</option>
+                                            @foreach ($roomOptions as $roomId => $roomOption)
+                                              <option value="{{ $roomId }}" @selected($selectedRoomId === (string) $roomId)>
+                                                {{ $roomOption['room']->nama_ruangan }} · stok untuk pesanan: {{ number_format($roomOption['available'], 0, ',', '.') }}
+                                              </option>
+                                            @endforeach
+                                          </select>
+                                          <p class="mt-2 text-xs text-slate-500">Jumlah yang dipinjam: {{ number_format($detail->jumlah_pinjam, 0, ',', '.') }}. Pilihan hanya menampilkan ruangan yang stoknya mencukupi.</p>
+                                          @if ($errors->has('locations.'.$detail->detail_peminjaman_id))
+                                              <p class="mt-2 text-xs font-medium text-rose-600">{{ $errors->first('locations.'.$detail->detail_peminjaman_id) }}</p>
+                                          @endif
+                                        @elseif ($canChooseRoom)
+                                          <p class="mt-2 text-xs text-amber-700">Tidak ada satu ruangan dengan stok yang cukup; lokasi reservasi saat ini akan dipertahankan.</p>
+                                          @foreach ($detail->logMutasiBarangs as $reservation)
+                                              <div class="mt-2 flex items-center justify-between gap-3 rounded-lg border border-slate-100 bg-white px-3 py-2.5 text-xs">
+                                                <p class="min-w-0 font-semibold text-slate-800">{{ $reservation->ruangan?->nama_ruangan ?? 'Lokasi tidak tersedia' }}</p>
+                                                <span class="shrink-0 rounded-full bg-emerald-100 px-2.5 py-1 font-bold text-emerald-800">×{{ number_format($reservation->jumlah, 0, ',', '.') }}</span>
+                                              </div>
+                                          @endforeach
+                                        @else
+                                          @forelse ($detail->logMutasiBarangs as $reservation)
+                                            <div class="mt-2 flex items-center justify-between gap-3 rounded-lg border border-slate-100 bg-white px-3 py-2.5 text-xs">
+                                              <p class="min-w-0 font-semibold text-slate-800">
+                                                {{ $reservation->ruangan?->nama_ruangan ?? 'Lokasi tidak tersedia' }}
+                                                @if ($reservation->lemariAsal)
+                                                  · {{ $reservation->lemariAsal->nama_lemari }}
+                                                @elseif ($reservation->reservationToolboxId())
+                                                  · Toolbox {{ $reservation->reservationToolboxId() }}
+                                                @endif
+                                              </p>
+                                              <span class="shrink-0 rounded-full bg-emerald-100 px-2.5 py-1 font-bold text-emerald-800">×{{ number_format($reservation->jumlah, 0, ',', '.') }}</span>
+                                            </div>
+                                          @empty
+                                            <p class="mt-2 rounded-lg bg-slate-100 px-3 py-2 text-xs text-slate-500">Lokasi reservasi belum tercatat.</p>
+                                          @endforelse
+                                        @endif
+                                      </div>
+                                    @endforeach
+                                  </div>
+                                  <footer class="flex justify-end gap-2 border-t border-slate-100 px-5 py-4">
+                                    <button type="button" @click="confirmOpen = false" class="rounded-lg border border-slate-200 px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#008b7a]">Batal</button>
+                                    <button type="submit" class="inline-flex items-center gap-1.5 rounded-lg bg-[#00d69f] px-4 py-2 text-xs font-bold text-[#003f38] transition hover:bg-[#36e9b3] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#008b7a]">
                                       <iconify-icon icon="mdi:check-circle-outline" aria-hidden="true"></iconify-icon>
                                       Konfirmasi Peminjaman
                                     </button>
-                                  </form>
-                                </footer>
+                                  </footer>
+                                </form>
                               </section>
                             </div>
                           </template>

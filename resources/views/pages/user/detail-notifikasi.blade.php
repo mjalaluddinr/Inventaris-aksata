@@ -1,8 +1,5 @@
 @php
   $isAdminNotification = in_array(auth()->user()?->role, ['admin', 'laboran'], true);
-  $relatedUrl = $isAdminNotification
-      ? route('admin.peminjaman')
-      : route('user.beranda', ['page' => 'history']);
 @endphp
 
 <x-dynamic-component
@@ -57,10 +54,6 @@
                           </span>
                           <div class="min-w-0">
                             <p class="text-sm font-semibold leading-6 text-slate-700">{{ $notification['message'] }}</p>
-                            <a href="{{ $relatedUrl }}" class="mt-1 inline-flex items-center gap-1 text-xs font-bold text-[#008b7a] transition hover:text-[#00695c]">
-                              Lihat riwayat terkait
-                              <iconify-icon icon="mdi:arrow-right" width="14" aria-hidden="true"></iconify-icon>
-                            </a>
                           </div>
                         </div>
                       </td>
@@ -100,10 +93,6 @@
                       <time datetime="{{ $notification['created_at']->toIso8601String() }}" class="mt-1 block text-xs text-slate-400">
                         {{ $notification['created_at']->translatedFormat('d M Y, H:i') }}
                       </time>
-                      <a href="{{ $relatedUrl }}" class="mt-2 inline-flex items-center gap-1 text-xs font-bold text-[#008b7a]">
-                        Lihat riwayat terkait
-                        <iconify-icon icon="mdi:arrow-right" width="14" aria-hidden="true"></iconify-icon>
-                      </a>
                     </div>
                   </div>
                 </article>

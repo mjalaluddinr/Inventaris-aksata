@@ -12,6 +12,40 @@
   @fonts('poppins')
   @vite(['resources/css/app.css', 'resources/js/app.js'])
   <style>
+    [x-cloak] {
+      display: none !important;
+    }
+
+    @view-transition {
+      navigation: none;
+    }
+
+    ::view-transition {
+      background-color: #e9faf5;
+    }
+
+    ::view-transition-old(root),
+    ::view-transition-new(root) {
+      animation: none;
+    }
+
+    .user-navbar {
+      view-transition-name: user-navbar;
+    }
+
+    ::view-transition-group(user-navbar) {
+      animation: none;
+    }
+
+    ::view-transition-old(user-navbar) {
+      visibility: hidden;
+    }
+
+    ::view-transition-new(user-navbar) {
+      animation: none;
+      mix-blend-mode: normal;
+    }
+
     html {
       scroll-padding-top: 5rem;
     }
@@ -253,7 +287,6 @@
         notice: '',
         noticeTimer: null,
         cartStorageKey: 'inventrack-user-cart-v1',
-        catalogSearchTimer: null,
         catalogRequestController: null,
         historyPollTimer: null,
         historyRequestController: null,
@@ -577,23 +610,7 @@
             }
 
             event.preventDefault();
-            window.clearTimeout(this.catalogSearchTimer);
             this.loadCatalog(this.catalogUrl(form));
-          });
-          document.addEventListener('input', event => {
-            if (event.target.name !== 'q') {
-              return;
-            }
-
-            const form = event.target.closest('form[data-catalog-filter]');
-            if (!form) {
-              return;
-            }
-
-            window.clearTimeout(this.catalogSearchTimer);
-            this.catalogSearchTimer = window.setTimeout(() => {
-              this.loadCatalog(this.catalogUrl(form), true, true);
-            }, 350);
           });
           window.addEventListener('popstate', () => {
             if (document.getElementById('catalog-content')) {
@@ -658,11 +675,21 @@
             const scrollPosition = window.scrollY;
             const horizontalScrollPosition = window.scrollX;
             const categoryStripScrollPosition = catalog.querySelector('[x-ref="catalogCategoryStrip"]')?.scrollLeft ?? 0;
-            catalog.replaceWith(nextCatalog);
-            window.Alpine.initTree(nextCatalog);
-            const nextCategoryStrip = nextCatalog.querySelector('[x-ref="catalogCategoryStrip"]');
-            if (nextCategoryStrip) {
-              nextCategoryStrip.scrollLeft = categoryStripScrollPosition;
+            const replaceCatalog = () => {
+              catalog.replaceWith(nextCatalog);
+              window.Alpine.initTree(nextCatalog);
+              window.dispatchEvent(new CustomEvent('catalog:updated', { detail: { root: nextCatalog } }));
+              const nextCategoryStrip = nextCatalog.querySelector('[x-ref="catalogCategoryStrip"]');
+              if (nextCategoryStrip) {
+                nextCategoryStrip.scrollLeft = categoryStripScrollPosition;
+              }
+            };
+            const supportsViewTransition = typeof document.startViewTransition === 'function'
+              && !window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+            if (supportsViewTransition) {
+              await document.startViewTransition(replaceCatalog).updateCallbackDone;
+            } else {
+              replaceCatalog();
             }
             if (updateHistory) {
               const method = replaceHistory ? 'replaceState' : 'pushState';

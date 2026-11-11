@@ -890,12 +890,16 @@
               0
           );
           const isPartial = importedRows > 0;
+          const failureSummaries = failedJobs.slice(0, 2).map(job =>
+              `${job.file_name || 'File import'}: ${job.message || 'Buka Log Import untuk melihat baris dan penyebab kegagalan.'}`
+          );
+          if (failedJobs.length > failureSummaries.length) {
+              failureSummaries.push(`Ada ${failedJobs.length - failureSummaries.length} file gagal lainnya; buka Log Import untuk detail.`);
+          }
           window.showToast(
-              isPartial ?
-              'Import selesai sebagian. Periksa ringkasan pada Log Import.' :
-              'Import gagal. Periksa ringkasan pada Log Import.',
+              failureSummaries.join(' '),
               isPartial ? 'warning' : 'error',
-              2500,
+              10000,
               isPartial ? 'Import selesai sebagian' : 'Import gagal'
           );
       },

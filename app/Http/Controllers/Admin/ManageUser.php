@@ -400,6 +400,7 @@ class ManageUser extends Controller
                 throw new Exception('ACCOUNT_IMPORT_FILE_LIMIT_EXCEEDED');
             }
 
+            $dataRowNumber = 0;
             for ($i = $headerRowIndex + 1; $i < count($rows); $i++) {
                 $rowNumber = $i + 1;
                 $rowData = $rows[$i];
@@ -410,7 +411,9 @@ class ManageUser extends Controller
                     continue;
                 }
 
+                $dataRowNumber++;
                 $failedColumns = [];
+                $safeErrorMessage = null;
                 try {
                     $data = $this->mapRowData($rowData, $mapping);
                     $data['must_change_password'] = false;
@@ -426,7 +429,8 @@ class ManageUser extends Controller
 
                     if (($data['role'] ?? '') === 'laboran' && empty($data['privileges'])) {
                         $failedColumns = ['role', 'privileges'];
-                        throw new Exception('Role laboran wajib memiliki minimal 1 hak akses di kolom privilege.');
+                        $safeErrorMessage = 'Role laboran wajib memiliki minimal 1 hak akses di kolom privilege.';
+                        throw new Exception($safeErrorMessage);
                     }
 
                     $validator = Validator::make($data, [
@@ -435,6 +439,14 @@ class ManageUser extends Controller
                         'role' => 'required|in:admin,laboran,peminjam',
                         'privileges' => ['nullable', 'array'],
                         'privileges.*' => ['string', Rule::in(['melihat', 'meminjamkan', 'manajemen'])],
+                    ], [
+                        'username.required' => 'Username wajib diisi.',
+                        'username.unique' => 'Username sudah digunakan.',
+                        'password.required' => 'Password wajib diisi.',
+                        'password.min' => 'Password minimal 6 karakter.',
+                        'role.required' => 'Role wajib diisi.',
+                        'role.in' => 'Role harus admin, laboran, atau peminjam.',
+                        'privileges.*.in' => 'Hak akses berisi nilai yang tidak dikenal.',
                     ]);
 
                     if ($validator->fails()) {
@@ -442,7 +454,8 @@ class ManageUser extends Controller
                             static fn (string $field): string => explode('.', $field, 2)[0],
                             array_keys($validator->errors()->toArray()),
                         )));
-                        throw new Exception($validator->errors()->first());
+                        $safeErrorMessage = $validator->errors()->first();
+                        throw new Exception($safeErrorMessage);
                     }
 
                     DB::transaction(function () use ($data, $successRows, $importCreatedAt) {
@@ -472,6 +485,8 @@ class ManageUser extends Controller
                         (string) $rowNumber,
                         $e->getMessage(),
                         $failedColumns ?: array_keys($mapping),
+                        $dataRowNumber,
+                        $safeErrorMessage,
                     ];
                 }
             }
@@ -511,12 +526,38 @@ class ManageUser extends Controller
     {
         abort_unless($logInput->jenis_input === 'akun', 404);
 
+        $rowErrors = is_array($logInput->detail_error[2] ?? null)
+            ? $logInput->detail_error[2]
+            : [];
+        $formattedRowErrors = $this->formatAccountImportRowErrors($rowErrors);
         $message = match ($logInput->status) {
             'proses' => 'Import akun sedang diproses.',
             'selesai' => "Import selesai. Berhasil: {$logInput->baris_berhasil}, gagal: {$logInput->baris_gagal}.",
             'sebagian' => "Import selesai sebagian. Berhasil: {$logInput->baris_berhasil}, gagal: {$logInput->baris_gagal}.",
             default => 'Import akun gagal diproses. Buka detail untuk melihat penyebabnya.',
         };
+
+        if (in_array($logInput->status, ['sebagian', 'gagal'], true) && $formattedRowErrors !== []) {
+            $failureSummaries = array_map(
+                static fn (array $error): string => "{$error[0]}: {$error[1]}",
+                array_slice($formattedRowErrors, 0, 3),
+            );
+            $message .= ' '.implode(' ', $failureSummaries);
+
+            if (count($formattedRowErrors) > count($failureSummaries)) {
+                $message .= ' Dan '.(count($formattedRowErrors) - count($failureSummaries)).' kegagalan lainnya; buka Log Import untuk detail lengkap.';
+            }
+        } elseif ($logInput->status === 'gagal') {
+            $message .= ' '.match ($logInput->detail_error[1] ?? null) {
+                'empty_file' => 'File tidak berisi data.',
+                'missing_headers' => 'Kolom username dan password tidak ditemukan pada baris judul.',
+                'unreadable_file' => 'File tidak dapat dibaca atau formatnya tidak valid.',
+                'file_limit_exceeded' => 'File melebihi batas 1.000 baris data, 32 kolom, atau 10 sheet.',
+                'queue_failed' => 'File gagal masuk antrean. Silakan coba kembali.',
+                'processing_failed' => 'Antrean gagal memproses file. Silakan coba import kembali.',
+                default => 'Periksa format file dan gunakan template import akun.',
+            };
+        }
 
         return response()->json([
             'success' => true,
@@ -548,23 +589,7 @@ class ManageUser extends Controller
                     ? 'File gagal diproses. Periksa formatnya dan gunakan template import akun.'
                     : null,
             };
-            $allowedColumns = ['first_name', 'last_name', 'username', 'password', 'role', 'is_active', 'privileges'];
-            $detailError[2] = array_map(
-                static function (mixed $error) use ($allowedColumns): array {
-                    $sourceLabel = is_array($error) && is_string($error[0] ?? null) ? $error[0] : '';
-                    preg_match('/\d+/', $sourceLabel, $matches);
-                    $rowLabel = isset($matches[0]) ? "Baris ke-{$matches[0]}" : 'Baris tidak diketahui';
-                    $storedColumns = is_array($error) && is_array($error[2] ?? null) ? $error[2] : [];
-                    $columns = array_values(array_filter(
-                        $storedColumns,
-                        static fn (mixed $column): bool => is_string($column) && in_array($column, $allowedColumns, true),
-                    ));
-                    $message = $columns === []
-                        ? 'Baris gagal diproses. Periksa format data dan username belum digunakan.'
-                        : 'Data gagal diproses. Periksa kolom: '.implode(', ', $columns).'.';
-
-                    return [$rowLabel, $message];
-                },
+            $detailError[2] = $this->formatAccountImportRowErrors(
                 is_array($detailError[2] ?? null) ? $detailError[2] : [],
             );
             $detailError[3] = is_array($detailError[3] ?? null) ? [
@@ -598,6 +623,40 @@ class ManageUser extends Controller
                 'detail_error' => $detailError,
             ],
         ]);
+    }
+
+    /**
+     * @param  array<int, mixed>  $rowErrors
+     * @return array<int, array{0: string, 1: string}>
+     */
+    private function formatAccountImportRowErrors(array $rowErrors): array
+    {
+        $allowedColumns = ['first_name', 'last_name', 'username', 'password', 'role', 'is_active', 'privileges'];
+
+        return array_map(
+            static function (mixed $error) use ($allowedColumns): array {
+                $sourceLabel = is_array($error) && is_string($error[0] ?? null) ? $error[0] : '';
+                preg_match('/\d+/', $sourceLabel, $matches);
+                $excelRow = isset($matches[0]) ? (int) $matches[0] : null;
+                $dataRow = is_array($error) && is_numeric($error[3] ?? null) ? (int) $error[3] : null;
+                $rowLabel = $dataRow !== null && $excelRow !== null
+                    ? "Data ke-{$dataRow} (baris Excel ke-{$excelRow})"
+                    : ($excelRow !== null ? "Baris Excel ke-{$excelRow}" : 'Baris tidak diketahui');
+                $storedColumns = is_array($error) && is_array($error[2] ?? null) ? $error[2] : [];
+                $columns = array_values(array_filter(
+                    $storedColumns,
+                    static fn (mixed $column): bool => is_string($column) && in_array($column, $allowedColumns, true),
+                ));
+                $message = is_array($error) && is_string($error[4] ?? null)
+                    ? $error[4]
+                    : ($columns === []
+                        ? 'Baris gagal diproses. Periksa format data dan username belum digunakan.'
+                        : 'Data gagal diproses. Periksa kolom: '.implode(', ', $columns).'.');
+
+                return [$rowLabel, $message];
+            },
+            $rowErrors,
+        );
     }
 
     private function syncPrivilege(User $user, string $role, array $requestedPrivileges = [])

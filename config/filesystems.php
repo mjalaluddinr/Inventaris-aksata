@@ -1,5 +1,8 @@
 <?php
 
+$supabaseProjectRef = env('SUPABASE_PROJECT_REF');
+$supabaseBucket = env('SUPABASE_BUCKET');
+
 return [
 
     /*
@@ -58,6 +61,29 @@ return [
             'use_path_style_endpoint' => env('AWS_USE_PATH_STYLE_ENDPOINT', false),
             'throw' => false,
             'report' => false,
+        ],
+
+        'supabase' => [
+            'driver' => 's3',
+            'key' => env('SUPABASE_S3_ACCESS_KEY_ID'),
+            'secret' => env('SUPABASE_S3_SECRET_ACCESS_KEY'),
+            'region' => env('SUPABASE_S3_REGION', 'us-east-1'),
+            'bucket' => $supabaseBucket,
+            'url' => env(
+                'SUPABASE_PUBLIC_STORAGE_URL',
+                $supabaseProjectRef && $supabaseBucket
+                    ? "https://{$supabaseProjectRef}.supabase.co/storage/v1/object/public/{$supabaseBucket}"
+                    : null,
+            ),
+            'endpoint' => env(
+                'SUPABASE_S3_ENDPOINT',
+                $supabaseProjectRef
+                    ? "https://{$supabaseProjectRef}.supabase.co/storage/v1/s3"
+                    : null,
+            ),
+            'use_path_style_endpoint' => true,
+            'throw' => true,
+            'report' => true,
         ],
 
     ],

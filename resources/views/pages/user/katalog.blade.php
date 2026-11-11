@@ -16,6 +16,159 @@
       ->withQueryString();
 @endphp
 
+<style>
+  @keyframes catalog-card-enter {
+    from {
+      opacity: 0;
+      filter: blur(2px);
+      transform: translate3d(0, 20px, 0) scale(.99);
+    }
+
+    to {
+      opacity: 1;
+      filter: blur(0);
+      transform: translate3d(0, 0, 0) scale(1);
+    }
+  }
+
+  @keyframes catalog-image-shimmer {
+    to {
+      background-position: -200% 0;
+    }
+  }
+
+  @keyframes catalog-results-enter {
+    from {
+      opacity: 0;
+      transform: translate3d(0, 8px, 0) scale(.995);
+    }
+
+    to {
+      opacity: 1;
+      transform: translate3d(0, 0, 0) scale(1);
+    }
+  }
+
+  @keyframes catalog-results-exit {
+    to {
+      opacity: 0;
+      transform: translate3d(0, -4px, 0) scale(.995);
+    }
+  }
+
+  html.catalog-reveal-enabled .catalog-scroll-reveal:not(.catalog-revealed):not(.is-visible) {
+    animation: none !important;
+    opacity: 0;
+    filter: blur(2px);
+    transform: translate3d(0, 20px, 0) scale(.99);
+  }
+
+  .catalog-scroll-reveal.is-visible {
+    animation: catalog-card-enter 800ms both cubic-bezier(.16, 1, .3, 1);
+    animation-delay: var(--catalog-card-delay, 0ms);
+    backface-visibility: hidden;
+  }
+
+  .catalog-scroll-reveal.catalog-revealed {
+    opacity: 1;
+    filter: none;
+    transform: none;
+  }
+
+  html.catalog-reveal-enabled .catalog-scroll-reveal.catalog-revealed {
+    animation: none !important;
+  }
+
+  .catalog-image-skeleton {
+    background: linear-gradient(90deg, #dcefe9 25%, #f7fffc 50%, #dcefe9 75%);
+    background-size: 200% 100%;
+    animation: catalog-image-shimmer 1.2s ease-in-out infinite;
+  }
+
+  @supports (view-transition-name: none) {
+    #catalog-content [aria-label="Daftar barang"] {
+      view-transition-name: catalog-results;
+    }
+
+    ::view-transition-old(catalog-results) {
+      animation: catalog-results-exit 160ms ease-in both;
+    }
+
+    ::view-transition-new(catalog-results) {
+      animation: catalog-results-enter 420ms cubic-bezier(.16, 1, .3, 1) both;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .catalog-scroll-reveal,
+    .catalog-scroll-reveal.is-visible,
+    .catalog-scroll-reveal.catalog-revealed {
+      animation: none;
+      opacity: 1;
+      filter: none;
+      transform: none;
+    }
+
+    .catalog-image-skeleton {
+      animation: none;
+    }
+
+    ::view-transition-old(catalog-results),
+    ::view-transition-new(catalog-results) {
+      animation: none;
+    }
+  }
+</style>
+
+<script>
+  (() => {
+    const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
+
+    if (!reducedMotion.matches) {
+      document.documentElement.classList.add('catalog-reveal-enabled');
+    }
+
+    window.initCatalogReveals = (root) => {
+      const cards = root.querySelectorAll('.catalog-scroll-reveal');
+
+      if (!('IntersectionObserver' in window) || reducedMotion.matches) {
+        cards.forEach((card) => card.classList.add('catalog-revealed'));
+        return;
+      }
+
+      const observer = new IntersectionObserver((entries, currentObserver) => {
+        entries.forEach((entry) => {
+          if (!entry.isIntersecting) {
+            return;
+          }
+
+          currentObserver.unobserve(entry.target);
+          entry.target.classList.add('is-visible');
+          entry.target.addEventListener('animationend', () => {
+            entry.target.classList.remove('is-visible');
+            entry.target.classList.add('catalog-revealed');
+          }, { once: true });
+        });
+      }, { threshold: 0.04, rootMargin: '0px 0px 72px 0px' });
+
+      cards.forEach((card) => observer.observe(card));
+    };
+
+    window.addEventListener('catalog:updated', (event) => {
+      if (event.detail && event.detail.root) {
+        window.initCatalogReveals(event.detail.root);
+      }
+    });
+
+    document.addEventListener('DOMContentLoaded', () => {
+      const catalog = document.getElementById('catalog-content');
+      if (catalog) {
+        window.initCatalogReveals(catalog);
+      }
+    });
+  })();
+</script>
+
     <main id="catalog-content" class="min-h-[calc(100vh-5rem)] w-full pb-12">
       <x-user.hero-section
         title="Katalog Barang"
@@ -57,11 +210,28 @@
         @if ($catalogItems->isNotEmpty())
           <div class="grid min-w-0 grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
             @foreach ($catalogItems as $item)
-              <article class="flex min-h-44 flex-col overflow-hidden rounded-xl border border-[#c7e4dc] border-t-[5px] border-t-[#00b19c] bg-white shadow-[0_2px_4px_rgba(20,55,48,0.14)]">
-                <div class="aspect-[16/10] w-full overflow-hidden bg-gradient-to-br from-[#dff7ef] to-[#f2fbf8]">
+              <article
+                class="catalog-scroll-reveal flex min-h-44 flex-col overflow-hidden rounded-xl border border-[#c7e4dc] border-t-[5px] border-t-[#00b19c] bg-white shadow-[0_2px_4px_rgba(20,55,48,0.14)]"
+                style="--catalog-card-delay: {{ min($loop->index * 100, 400) }}ms">
+                <div
+                  class="relative aspect-[16/10] w-full overflow-hidden bg-gradient-to-br from-[#dff7ef] to-[#f2fbf8]"
                   @if ($item->image_url)
-                    <img src="{{ $item->image_url }}" alt="Foto {{ $item->nama_barang }}" loading="lazy"
-                      decoding="async" class="h-full w-full object-cover object-center">
+                    x-data="{ imageLoaded: false, imageFailed: false }"
+                    x-init="$nextTick(() => { if ($refs.catalogImage.complete) { imageLoaded = $refs.catalogImage.naturalWidth > 0; imageFailed = !imageLoaded; } })"
+                  @endif
+                >
+                  @if ($item->image_url)
+                    <div x-cloak x-show="!imageLoaded && !imageFailed"
+                      class="catalog-image-skeleton absolute inset-0" aria-hidden="true"></div>
+                    <img x-ref="catalogImage" src="{{ $item->image_url }}" alt="Foto {{ $item->nama_barang }}"
+                      loading="lazy" decoding="async" :class="imageLoaded ? 'opacity-100' : 'opacity-0'"
+                      x-on:load="imageLoaded = true" x-on:error="imageFailed = true"
+                      class="h-full w-full object-cover object-center transition-opacity duration-300">
+                    <div x-cloak x-show="imageFailed"
+                      class="flex h-full items-center justify-center text-[#538b7d]" role="img"
+                      aria-label="Foto {{ $item->nama_barang }} belum tersedia">
+                      <iconify-icon icon="mdi:image-outline" class="text-4xl" aria-hidden="true"></iconify-icon>
+                    </div>
                   @else
                     <div class="flex h-full items-center justify-center text-[#538b7d]" role="img"
                       aria-label="Foto {{ $item->nama_barang }} belum tersedia">

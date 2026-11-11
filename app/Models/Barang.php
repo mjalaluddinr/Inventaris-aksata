@@ -9,11 +9,14 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 
 class Barang extends Model
 {
     use HasFactory, HasUuids, SoftDeletes;
+
+    public const SUPABASE_IMAGE_PATH_PREFIX = 'supabase:';
 
     protected $table = 'barang';
 
@@ -63,8 +66,21 @@ class Barang extends Model
     {
         return Attribute::make(get: function (): ?string {
             $imagePath = $this->image_path;
-            if (! is_string($imagePath) || ! str_starts_with($imagePath, 'barang_img/')) {
+            if (! is_string($imagePath)) {
                 return null;
+            }
+
+            $isSupabaseImage = str_starts_with($imagePath, self::SUPABASE_IMAGE_PATH_PREFIX);
+            if ($isSupabaseImage) {
+                $imagePath = substr($imagePath, strlen(self::SUPABASE_IMAGE_PATH_PREFIX));
+            }
+
+            if (preg_match('/\Abarang_img\/[A-Za-z0-9._-]+\.(?:jpe?g|png|webp)\z/i', $imagePath) !== 1) {
+                return null;
+            }
+
+            if ($isSupabaseImage) {
+                return Storage::disk('supabase')->url($imagePath);
             }
 
             $pathSegments = explode('/', $imagePath);

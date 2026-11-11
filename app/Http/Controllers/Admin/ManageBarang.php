@@ -184,6 +184,7 @@ class ManageBarang extends Controller
                     ->get();
                 $usageLocations = $ruangans;
             }
+
         }
 
         /** @var View $renderedView */
@@ -931,9 +932,10 @@ class ManageBarang extends Controller
 
                 $totalRows++;
                 $rowNumber = $headerRowIndex + $index + 2;
+                $rowErrorContext = ['row' => $rowNumber, 'data_row' => $totalRows];
                 if (isset($inconsistentNameRows[$index])) {
                     $failedRows++;
-                    $rowErrors[] = ['row' => $rowNumber, 'code' => 'inconsistent_group'];
+                    $rowErrors[] = $rowErrorContext + ['code' => 'inconsistent_group'];
 
                     continue;
                 }
@@ -1039,7 +1041,9 @@ class ManageBarang extends Controller
 
                 if ($validator->fails()) {
                     $failedRows++;
-                    $rowErrors[] = ['row' => $rowNumber, 'message' => implode(' | ', $validator->errors()->all())];
+                    $rowErrors[] = $rowErrorContext + [
+                        'message' => implode(' | ', $validator->errors()->all()),
+                    ];
 
                     continue;
                 }
@@ -1047,7 +1051,7 @@ class ManageBarang extends Controller
                 $normalizedCode = Str::upper($code);
                 if (isset($usedCodes[$normalizedCode]) && $existingGroup === null) {
                     $failedRows++;
-                    $rowErrors[] = ['row' => $rowNumber, 'code' => 'duplicate_code'];
+                    $rowErrors[] = $rowErrorContext + ['code' => 'duplicate_code'];
 
                     continue;
                 }
@@ -1060,7 +1064,7 @@ class ManageBarang extends Controller
                     )
                 )) {
                     $failedRows++;
-                    $rowErrors[] = ['row' => $rowNumber, 'code' => 'inconsistent_group'];
+                    $rowErrors[] = $rowErrorContext + ['code' => 'inconsistent_group'];
 
                     continue;
                 }
@@ -1072,7 +1076,7 @@ class ManageBarang extends Controller
                     && $existingGroup['master_fingerprint'] !== $masterFingerprint
                 ) {
                     $failedRows++;
-                    $rowErrors[] = ['row' => $rowNumber, 'code' => 'inconsistent_group'];
+                    $rowErrors[] = $rowErrorContext + ['code' => 'inconsistent_group'];
 
                     continue;
                 }
@@ -1080,7 +1084,7 @@ class ManageBarang extends Controller
                 $itemFingerprint = $this->importItemFingerprint($validated, $roomName, $cabinetName);
                 if (isset($importedItems[$itemFingerprint])) {
                     $failedRows++;
-                    $rowErrors[] = ['row' => $rowNumber, 'code' => 'duplicate_item'];
+                    $rowErrors[] = $rowErrorContext + ['code' => 'duplicate_item'];
 
                     continue;
                 }
@@ -1089,7 +1093,7 @@ class ManageBarang extends Controller
                     .Str::lower(trim((string) $cabinetName));
                 if ($existingGroup !== null && isset($existingGroup['locations'][$locationKey])) {
                     $failedRows++;
-                    $rowErrors[] = ['row' => $rowNumber, 'code' => 'duplicate_location'];
+                    $rowErrors[] = $rowErrorContext + ['code' => 'duplicate_location'];
 
                     continue;
                 }
@@ -1101,7 +1105,7 @@ class ManageBarang extends Controller
                     && $existingGroup['image_reference'] !== $imageReference
                 ) {
                     $failedRows++;
-                    $rowErrors[] = ['row' => $rowNumber, 'code' => 'inconsistent_group'];
+                    $rowErrors[] = $rowErrorContext + ['code' => 'inconsistent_group'];
 
                     continue;
                 }
@@ -1115,15 +1119,9 @@ class ManageBarang extends Controller
                         $cleanImageName = $imageReference;
                         if (isset($extractedImages[$cleanImageName])) {
                             $imgData = $extractedImages[$cleanImageName];
-                            $storageFileName = Str::uuid().'.'.$imgData['ext'];
-                            $imagePathStored = Storage::disk('public')->putFileAs(
-                                'barang_img',
+                            $imagePathStored = $this->storeSupabaseImage(
                                 new File($imgData['path']),
-                                $storageFileName,
                             );
-                            if ($imagePathStored === false) {
-                                throw new \RuntimeException('Gagal menyimpan file gambar.');
-                            }
                         }
                     }
 
@@ -1224,12 +1222,11 @@ class ManageBarang extends Controller
                     });
                 } catch (\Throwable $ex) {
                     if (isset($imagePathStored) && is_string($imagePathStored)) {
-                        Storage::disk('public')->delete($imagePathStored);
+                        $this->deleteStoredImage($imagePathStored);
                     }
 
                     $failedRows++;
-                    $rowErrors[] = [
-                        'row' => $rowNumber,
+                    $rowErrors[] = $rowErrorContext + [
                         'message' => 'Baris gagal diproses. Periksa data dan pastikan kode barang belum digunakan.',
                     ];
 
@@ -1267,13 +1264,53 @@ class ManageBarang extends Controller
         abort_unless($logInput->jenis_input === 'barang', 404);
 
         $status = $logInput->status;
-
         $message = match ($status) {
             'proses' => 'Import sedang diproses.',
             'selesai' => "Import selesai. Berhasil: {$logInput->baris_berhasil}, gagal: {$logInput->baris_gagal}.",
             'sebagian' => "Import selesai sebagian. Berhasil: {$logInput->baris_berhasil}, gagal: {$logInput->baris_gagal}.",
             default => 'Import gagal diproses. Periksa format file, kolom wajib, dan arsip ZIP.',
         };
+        $rowErrors = is_array($logInput->detail_error[2] ?? null)
+            ? $logInput->detail_error[2]
+            : [];
+        $rowErrorMessages = [
+            'inconsistent_group' => 'Data barang dengan nama sama memiliki kategori, satuan, spesifikasi, kondisi, kelayakan, atau kode yang tidak konsisten.',
+            'duplicate_code' => 'Kode barang sudah digunakan.',
+            'duplicate_item' => 'Barang dengan nama, kategori, satuan, stok, kondisi, kelayakan, spesifikasi, dan lokasi yang sama sudah tercatat di inventaris. Baris ini dilewati agar tidak terjadi duplikasi.',
+            'duplicate_location' => 'Lokasi barang yang sama tercantum lebih dari sekali.',
+        ];
+        $failureSummaries = [];
+
+        foreach (array_slice($rowErrors, 0, 3) as $rowError) {
+            if (! is_array($rowError)) {
+                continue;
+            }
+
+            $excelRow = is_numeric($rowError['row'] ?? null) ? (int) $rowError['row'] : null;
+            $dataRow = is_numeric($rowError['data_row'] ?? null) ? (int) $rowError['data_row'] : null;
+            $rowLabel = $dataRow !== null && $excelRow !== null
+                ? "Data ke-{$dataRow} (baris Excel ke-{$excelRow})"
+                : ($excelRow !== null ? "Baris Excel ke-{$excelRow}" : 'Baris tidak diketahui');
+            $reason = $rowErrorMessages[$rowError['code'] ?? '']
+                ?? (is_string($rowError['message'] ?? null) ? $rowError['message'] : '');
+
+            if (str_contains($reason, 'SQLSTATE[')) {
+                $reason = 'Kesalahan database saat memproses baris ini. Periksa data wajib dan format file.';
+            }
+
+            if ($reason !== '') {
+                $failureSummaries[] = "{$rowLabel}: {$reason}";
+            }
+        }
+
+        if ($failureSummaries !== []) {
+            $message .= ' '.implode(' ', $failureSummaries);
+            if (count($rowErrors) > count($failureSummaries)) {
+                $message .= ' Dan '.(count($rowErrors) - count($failureSummaries)).' kegagalan lainnya; buka Log Import untuk detail lengkap.';
+            }
+        } elseif ($status === 'gagal' && is_string($logInput->detail_error[1] ?? null)) {
+            $message .= ' '.$logInput->detail_error[1];
+        }
 
         return response()->json([
             'success' => $status !== 'gagal',
@@ -1300,12 +1337,7 @@ class ManageBarang extends Controller
                 $attributes['kode_barang'] = $this->nextBarangCode();
 
                 if ($request->hasFile('image')) {
-                    $storedImagePath = $request->file('image')->store('barang_img', 'public');
-                    if (! is_string($storedImagePath)) {
-                        throw new \RuntimeException('Gambar barang gagal disimpan.');
-                    }
-
-                    $imagePathStored = $storedImagePath;
+                    $imagePathStored = $this->storeSupabaseImage($request->file('image'));
                     $attributes['image_path'] = $imagePathStored;
                 }
 
@@ -1333,7 +1365,7 @@ class ManageBarang extends Controller
             });
         } catch (\Throwable $exception) {
             if (is_string($imagePathStored)) {
-                Storage::disk('public')->delete($imagePathStored);
+                $this->deleteStoredImage($imagePathStored);
             }
 
             throw $exception;
@@ -1366,6 +1398,58 @@ class ManageBarang extends Controller
         return $code;
     }
 
+    private function storeSupabaseImage(\Symfony\Component\HttpFoundation\File\File $file): string
+    {
+        $diskConfig = config('filesystems.disks.supabase', []);
+        if (($diskConfig['driver'] ?? null) === 's3') {
+            foreach (['key', 'secret', 'bucket', 'endpoint', 'url'] as $requiredConfig) {
+                if (blank($diskConfig[$requiredConfig] ?? null)) {
+                    throw new \RuntimeException(
+                        'Konfigurasi Supabase Storage belum lengkap. Isi SUPABASE_PROJECT_REF, SUPABASE_BUCKET, SUPABASE_S3_ACCESS_KEY_ID, dan SUPABASE_S3_SECRET_ACCESS_KEY.',
+                    );
+                }
+            }
+        }
+
+        $extension = $file->guessExtension();
+        if (! in_array($extension, ['jpg', 'jpeg', 'png', 'webp'], true)) {
+            throw new \RuntimeException('Format gambar barang tidak didukung.');
+        }
+
+        // ASVS 5.3.2: Generate object names on the server instead of trusting uploaded filenames.
+        $path = Storage::disk('supabase')->putFileAs(
+            'barang_img',
+            $file,
+            Str::uuid().'.'.$extension,
+        );
+
+        if (! is_string($path) || $path === '') {
+            throw new \RuntimeException('Gambar barang gagal disimpan ke Supabase Storage.');
+        }
+
+        return Barang::SUPABASE_IMAGE_PATH_PREFIX.$path;
+    }
+
+    private function deleteStoredImage(string $imageReference): void
+    {
+        $disk = 'public';
+        $path = $imageReference;
+
+        if (str_starts_with($imageReference, Barang::SUPABASE_IMAGE_PATH_PREFIX)) {
+            $disk = 'supabase';
+            $path = substr($imageReference, strlen(Barang::SUPABASE_IMAGE_PATH_PREFIX));
+        }
+
+        if (preg_match('/\Abarang_img\/[A-Za-z0-9._-]+\.(?:jpe?g|png|webp)\z/i', $path) !== 1) {
+            throw new \RuntimeException('Referensi gambar barang tidak valid.');
+        }
+
+        $storage = Storage::disk($disk);
+        if ($storage->exists($path) && ! $storage->delete($path)) {
+            throw new \RuntimeException('Gambar barang lama gagal dihapus dari penyimpanan.');
+        }
+    }
+
     public function update(UpdateRequest $request, Barang $barang): RedirectResponse
     {
         $actor = $request->user();
@@ -1394,11 +1478,7 @@ class ManageBarang extends Controller
 
                 if ($request->hasFile('image')) {
                     $previousImagePath = $lockedBarang->image_path;
-                    $newImagePathStored = $request->file('image')->store('barang_img', 'public');
-                    if (! is_string($newImagePathStored)) {
-                        throw new \RuntimeException('Gambar barang gagal disimpan.');
-                    }
-
+                    $newImagePathStored = $this->storeSupabaseImage($request->file('image'));
                     $attributes['image_path'] = $newImagePathStored;
                 }
 
@@ -1410,14 +1490,14 @@ class ManageBarang extends Controller
             });
         } catch (\Throwable $exception) {
             if (is_string($newImagePathStored)) {
-                Storage::disk('public')->delete($newImagePathStored);
+                $this->deleteStoredImage($newImagePathStored);
             }
 
             throw $exception;
         }
 
-        if (is_string($previousImagePath) && Storage::disk('public')->exists($previousImagePath)) {
-            Storage::disk('public')->delete($previousImagePath);
+        if (is_string($previousImagePath)) {
+            $this->deleteStoredImage($previousImagePath);
         }
 
         return redirect()->route('admin.barang')

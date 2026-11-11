@@ -19,10 +19,10 @@
   @scroll.window.passive="handleScroll()"
   @keydown.escape.window="mobileMenuOpen = false"
   :class="[
-    isScrolled ? 'border-b border-white/15 text-white shadow-md' : 'border-b border-transparent text-white shadow-none',
+    isScrolled ? 'shadow-md' : 'shadow-none',
   ]"
   :style="isScrolled ? 'background: linear-gradient(90deg, #008b7a, #00d5a0)' : 'background: transparent'"
-  class="fixed inset-x-0 top-0 z-50 transition-[height,transform,background-color,border-color,box-shadow] duration-300 ease-out"
+  class="user-navbar fixed inset-x-0 top-0 z-50 text-white shadow-none transition-[height,transform,background-color,box-shadow] duration-300 ease-out"
 >
   <nav class="flex w-full items-center justify-between gap-2 px-3 transition-[height] duration-300 sm:gap-5 sm:px-8 lg:px-10"
     :class="isScrolled ? 'h-20' : 'h-[88px]'">

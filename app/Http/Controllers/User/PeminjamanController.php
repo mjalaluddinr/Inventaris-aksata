@@ -281,9 +281,10 @@ class PeminjamanController extends Controller
         $reservations = LogMutasiBarang::query()
             ->where('detail_peminjaman_id', $detail->detail_peminjaman_id)
             ->where('tipe', 'dipinjam')
-            ->where('keterangan', self::RESERVATION_NOTE)
+            ->where('keterangan', 'like', self::RESERVATION_NOTE.'%')
             ->orderBy('created_at')
             ->orderBy('log_mutasi_barang_id')
+            ->lockForUpdate()
             ->get();
 
         if ($reservations->isEmpty()) {
@@ -308,15 +309,7 @@ class PeminjamanController extends Controller
         foreach ($reservations as $reservation) {
             $location = null;
             if ($reservation->ruangan_id !== null) {
-                $locationQuery = LokasiBarang::query()
-                    ->where('barang_id', $barang->barang_id)
-                    ->where('ruangan_id', $reservation->ruangan_id);
-
-                $locationQuery = $reservation->lemari_asal_id === null
-                    ? $locationQuery->whereNull('lemari_id')
-                    : $locationQuery->where('lemari_id', $reservation->lemari_asal_id);
-
-                $location = $locationQuery->lockForUpdate()->first();
+                $location = $this->findReservationLocation($barang, $reservation);
 
                 if (! $location) {
                     throw ValidationException::withMessages([
@@ -352,12 +345,53 @@ class PeminjamanController extends Controller
                 'jumlah' => $reservation->jumlah,
                 'stok_sebelum' => $stockBefore,
                 'stok_sesudah' => $stockAfter,
-                'keterangan' => self::CANCELLATION_MUTATION_NOTE,
+                'keterangan' => LogMutasiBarang::keteranganWithToolbox(
+                    self::CANCELLATION_MUTATION_NOTE,
+                    $reservation->reservationToolboxId(),
+                ),
                 'created_at' => now(),
             ]);
         }
 
         $barang->save();
+    }
+
+    private function findReservationLocation(Barang $barang, LogMutasiBarang $reservation): ?LokasiBarang
+    {
+        $locationQuery = LokasiBarang::query()
+            ->where('barang_id', $barang->barang_id)
+            ->where('ruangan_id', $reservation->ruangan_id);
+
+        $locationQuery = $reservation->lemari_asal_id === null
+            ? $locationQuery->whereNull('lemari_id')
+            : $locationQuery->where('lemari_id', $reservation->lemari_asal_id);
+
+        $toolboxId = $reservation->reservationToolboxId();
+        if ($toolboxId !== null) {
+            $locationQuery->where('toolbox_id', $toolboxId);
+        }
+
+        $locations = $locationQuery->lockForUpdate()->get();
+        if ($locations->isEmpty() && $toolboxId === null) {
+            $locations = LokasiBarang::query()
+                ->where('barang_id', $barang->barang_id)
+                ->where('ruangan_id', $reservation->ruangan_id)
+                ->when(
+                    $reservation->lemari_asal_id === null,
+                    static fn ($query) => $query->whereNull('lemari_id'),
+                    static fn ($query) => $query->where('lemari_id', $reservation->lemari_asal_id),
+                )
+                ->lockForUpdate()
+                ->get();
+        }
+
+        if ($locations->count() > 1) {
+            throw ValidationException::withMessages([
+                'peminjaman' => 'Lokasi stok reservasi tidak dapat dipastikan. Periksa data inventaris sebelum melanjutkan.',
+            ]);
+        }
+
+        return $locations->first();
     }
 
     /**
@@ -449,7 +483,7 @@ class PeminjamanController extends Controller
             'jumlah' => $quantity,
             'stok_sebelum' => $stockBefore,
             'stok_sesudah' => $stockAfter,
-            'keterangan' => $description,
+            'keterangan' => LogMutasiBarang::keteranganWithToolbox($description, $location?->toolbox_id),
             'created_at' => now(),
         ]);
     }
@@ -464,6 +498,6 @@ class PeminjamanController extends Controller
             ->map(static fn (string $code): int => (int) substr($code, strlen($prefix)))
             ->max() ?? 0;
 
-        return $prefix.str_pad((string) ($highestSequence + 1), 4, '0', STR_PAD_LEFT);
+        return $prefix.str_pad((string) ($highestSequence + 1), 3, '0', STR_PAD_LEFT);
     }
 }

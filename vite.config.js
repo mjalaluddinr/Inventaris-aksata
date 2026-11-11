@@ -1,6 +1,6 @@
 import { defineConfig } from 'vite';
 import laravel from 'laravel-vite-plugin';
-import { fontsource } from 'laravel-vite-plugin/fonts';
+import { local } from 'laravel-vite-plugin/fonts';
 import tailwindcss from '@tailwindcss/vite';
 
 export default defineConfig({
@@ -8,10 +8,13 @@ export default defineConfig({
         laravel({
             input: ['resources/css/app.css', 'resources/js/app.js'],
             fonts: [
-                fontsource('Poppins', {
+                local('Poppins', {
                     alias: 'poppins',
-                    weights: [100, 200, 300, 400, 500, 600, 700, 800, 900],
-                    preload: [{ weight: 400 }],
+                    variants: [400, 500, 600, 700, 800].map((weight) => ({
+                        weight,
+                        src: `node_modules/@fontsource/poppins/files/poppins-latin-${weight}-normal.woff2`,
+                    })),
+                    preload: [400, 500, 600, 700, 800].map((weight) => ({ weight })),
                     optimizedFallbacks: false,
                 }),
             ],

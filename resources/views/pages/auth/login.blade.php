@@ -325,6 +325,16 @@
       transform: translateY(0);
     }
 
+    @keyframes login-error-countdown {
+      to {
+        transform: scaleX(0);
+      }
+    }
+
+    .login-error-countdown {
+      animation: login-error-countdown 4000ms linear forwards;
+    }
+
     @media (max-height: 680px) {
       .login-form-card {
         padding-top: 1.25rem;
@@ -350,6 +360,11 @@
         animation-iteration-count: 1 !important;
         transition-duration: 0.01ms !important;
         will-change: auto !important;
+      }
+
+      .login-error-countdown {
+        animation: none;
+        transform: scaleX(1);
       }
     }
   </style>
@@ -440,16 +455,29 @@
         @endif
 
         @if ($errors->any())
-          <div x-data="{ visible: true }">
+          <div x-data="{ visible: true }" x-init="window.setTimeout(() => visible = false, 4000)">
             <template x-teleport="body">
-              <div x-show="visible" x-transition.opacity
-                class="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/45 p-4"
+              <div x-show="visible"
+                x-transition:enter="transition ease-out duration-500"
+                x-transition:enter-start="opacity-0"
+                x-transition:enter-end="opacity-100"
+                x-transition:leave="transition ease-in duration-300"
+                x-transition:leave-start="opacity-100"
+                x-transition:leave-end="opacity-0"
+                class="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/45 p-4 backdrop-blur-sm"
                 @click.self="visible = false" role="presentation">
-            <section x-show="visible" x-transition
+            <section x-show="visible"
+              x-transition:enter="transition ease-out duration-500"
+              x-transition:enter-start="translate-y-6 scale-95 opacity-0"
+              x-transition:enter-end="translate-y-0 scale-100 opacity-100"
+              x-transition:leave="transition ease-in duration-300"
+              x-transition:leave-start="translate-y-0 scale-100 opacity-100"
+              x-transition:leave-end="translate-y-4 scale-95 opacity-0"
               class="relative w-full max-w-lg overflow-hidden rounded-2xl border border-rose-200 bg-gradient-to-br from-white via-rose-50 to-orange-50 p-5 shadow-[0_24px_70px_rgba(190,24,93,0.18)] sm:p-6"
               role="dialog" aria-modal="true" aria-labelledby="login-error-title">
-              <div class="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-rose-500 to-orange-400"
-                aria-hidden="true"></div>
+              <div class="absolute inset-x-0 top-0 h-1 overflow-hidden bg-rose-100" aria-hidden="true">
+                <span class="login-error-countdown block h-full origin-left bg-gradient-to-r from-rose-500 to-orange-400"></span>
+              </div>
               <div class="flex items-start gap-3">
                 <span class="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-rose-100 text-rose-600">
                   <iconify-icon icon="mdi:alert-circle" width="25" aria-hidden="true"></iconify-icon>

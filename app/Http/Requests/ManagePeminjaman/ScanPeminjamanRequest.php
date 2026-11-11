@@ -22,7 +22,7 @@ class ScanPeminjamanRequest extends FormRequest
     {
         return [
             // ASVS 2.2.1/2.2.2: accept only the code format issued by the trusted loan workflow.
-            'code' => ['required', 'string', 'max:30', 'regex:/\A(?:PJM-[0-9]{8}-[0-9]{4,}|[A-Z0-9]{26})\z/'],
+            'code' => ['required', 'string', 'max:30', 'regex:/\A(?:PJM-[0-9]{8}-[0-9]{3,}|[A-Z0-9]{26})\z/'],
         ];
     }
 

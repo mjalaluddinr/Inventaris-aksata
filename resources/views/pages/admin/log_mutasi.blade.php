@@ -143,6 +143,9 @@
                         @if ($log->lemariAsal)
                           · {{ $log->lemariAsal->nama_lemari }}
                         @endif
+                        @if ($log->reservationToolboxId())
+                          · Toolbox {{ $log->reservationToolboxId() }}
+                        @endif
                       </span>
                       <span class="px-1 text-slate-400" aria-hidden="true">→</span>
                       <span class="text-slate-500">
@@ -152,11 +155,16 @@
                         @endif
                       </span>
                     @else
-                      <span>{{ $log->ruangan?->nama_ruangan ?? 'Ruangan tidak tersedia' }}</span>
+                      <span>
+                        {{ $log->ruangan?->nama_ruangan ?? ($log->ruangan_id === null ? 'Stok umum / lokasi belum dicatat' : 'Ruangan tidak tersedia') }}
+                      </span>
                       @if ($log->lemariAsal || $log->lemariTujuan)
                         <span class="text-slate-500">
                           {{ $log->lemariAsal?->nama_lemari ?? ($log->lemariTujuan?->nama_lemari ?? '—') }}
                         </span>
+                      @endif
+                      @if ($log->reservationToolboxId())
+                        <span class="text-slate-500">· Toolbox {{ $log->reservationToolboxId() }}</span>
                       @endif
                     @endif
                   </td>
@@ -164,6 +172,9 @@
                     <span class="text-slate-500">{{ number_format($log->stok_sebelum, 0, ',', '.') }}</span>
                     <iconify-icon icon="mdi:arrow-right" class="mx-1 text-slate-400" aria-hidden="true"></iconify-icon>
                     <span class="font-semibold">{{ number_format($log->stok_sesudah, 0, ',', '.') }}</span>
+                    <span class="block text-xs text-slate-500">
+                      {{ $log->ruangan_id === null ? 'Stok umum / lokasi belum dicatat' : 'Stok lokasi' }}
+                    </span>
                   </td>
                   <td class="whitespace-nowrap px-4 py-3 text-xs text-slate-700">
                     @php
@@ -190,7 +201,10 @@
                     @endif
                   </td>
                   <td class="whitespace-nowrap px-4 py-3 text-xs font-medium leading-5 text-slate-800">
-                    {{ $log->keterangan ?: '—' }}
+                    @if ($log->detailPeminjaman?->peminjaman?->kode_peminjaman)
+                      <span class="block text-slate-500">Pesanan: {{ $log->detailPeminjaman->peminjaman->kode_peminjaman }}</span>
+                    @endif
+                    {{ $log->displayKeterangan() ?: '—' }}
                   </td>
                 </tr>
               @empty

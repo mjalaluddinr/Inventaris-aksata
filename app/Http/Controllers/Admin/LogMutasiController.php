@@ -37,6 +37,7 @@ class LogMutasiController extends Controller
                 'lemariTujuan.ruangan',
                 'akun',
                 'olehAkun',
+                'detailPeminjaman.peminjaman',
             ])
             ->when($filters['tipe'] ?? null, fn (Builder $query, string $type) => $query->where('tipe', $type))
             ->when($search !== '', function (Builder $query) use ($search): void {

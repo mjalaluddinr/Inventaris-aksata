@@ -255,9 +255,9 @@
             const rowMessage = document.createElement('p');
             rowMessage.className = 'mt-1 whitespace-pre-wrap break-words text-sm font-mono text-rose-600';
             const errorMessages = {
-              inconsistent_group: 'Data barang dengan nama sama harus memiliki kategori, satuan, spesifikasi, kondisi, dan kode yang konsisten.',
+              inconsistent_group: 'Data barang dengan nama sama harus memiliki kategori, satuan, spesifikasi, kondisi, kelayakan, dan kode yang konsisten.',
               duplicate_code: 'Kode barang sudah digunakan.',
-              duplicate_item: 'Data barang dan lokasi ini sudah pernah diimpor.',
+              duplicate_item: 'Barang dengan nama, kategori, satuan, stok, kondisi, kelayakan, spesifikasi, dan lokasi yang sama sudah tercatat di inventaris. Baris ini dilewati agar tidak terjadi duplikasi.',
               duplicate_location: 'Lokasi barang yang sama tercantum lebih dari sekali.'
             };
             const message = Array.isArray(error) ?
@@ -266,6 +266,12 @@
             rowMessage.textContent = message.includes('SQLSTATE[') ?
               'Kesalahan database saat memproses baris ini. Periksa data wajib dan format file.' :
               message;
+            // ASVS 1.2.1/1.2.3: Keep workbook-derived labels in the text context.
+            rowLabel.textContent = Array.isArray(error) ?
+              String(rowNumber || 'Baris Excel tidak diketahui') :
+              (error?.data_row && rowNumber ?
+                `Data ke-${error.data_row} (baris Excel ke-${rowNumber})` :
+                (rowNumber ? `Baris Excel ke-${rowNumber}` : 'Baris tidak diketahui'));
             messageContainer.append(rowLabel, rowMessage);
             rowDiv.append(indicator, messageContainer);
             errorContainer.appendChild(rowDiv);

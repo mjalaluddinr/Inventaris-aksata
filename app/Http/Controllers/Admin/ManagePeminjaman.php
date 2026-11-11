@@ -44,15 +44,20 @@ class ManagePeminjaman extends Controller
         $activeTab = $filters['tab'] ?? 'pending';
         $year = (int) ($filters['year'] ?? ($reportYears[0] ?? now()->year));
 
+        $loanRelations = [
+            'akun',
+            'diprosesAkun',
+            'detailPeminjamans.barang',
+            'detailPeminjamans.logMutasiBarangs' => fn (HasMany $query) => $query
+                ->where('tipe', 'dipinjam')
+                ->with(['ruangan', 'lemariAsal']),
+        ];
+        if ($activeTab === 'pending') {
+            $loanRelations[] = 'detailPeminjamans.barang.lokasiBarangs.ruangan';
+        }
+
         $peminjamans = $this->loanQueryForTab($activeTab)
-            ->with([
-                'akun',
-                'diprosesAkun',
-                'detailPeminjamans.barang',
-                'detailPeminjamans.logMutasiBarangs' => fn (HasMany $query) => $query
-                    ->where('tipe', 'dipinjam')
-                    ->with(['ruangan', 'lemariAsal']),
-            ])
+            ->with($loanRelations)
             ->orderByDesc('tanggal_pengajuan')
             ->orderByDesc('peminjaman_id')
             ->paginate(10)
@@ -182,8 +187,12 @@ class ManagePeminjaman extends Controller
     {
         $admin = $request->user();
         abort_unless($admin instanceof User, 403);
+        $validated = $request->validate([
+            'locations' => ['sometimes', 'array'],
+            'locations.*' => ['required', 'uuid'],
+        ]);
 
-        $this->confirmLoan($peminjaman->peminjaman_id, $admin);
+        $this->confirmLoan($peminjaman->peminjaman_id, $admin, $validated['locations'] ?? [], true);
 
         return redirect()
             ->route('admin.peminjaman', ['tab' => 'borrowed'])
@@ -361,9 +370,16 @@ class ManagePeminjaman extends Controller
         return Excel::download(new PeminjamanExport($rows), "laporan-peminjaman-{$year}.xlsx");
     }
 
-    private function confirmLoan(string $loanId, User $admin): void
-    {
-        DB::transaction(function () use ($admin, $loanId): void {
+    /**
+     * @param  array<string, string>  $selectedRooms
+     */
+    private function confirmLoan(
+        string $loanId,
+        User $admin,
+        array $selectedRooms = [],
+        bool $requireLocationSelection = false,
+    ): void {
+        DB::transaction(function () use ($admin, $loanId, $selectedRooms, $requireLocationSelection): void {
             $loan = Peminjaman::query()->whereKey($loanId)->lockForUpdate()->firstOrFail();
             $details = $this->lockLoanDetails($loan);
             $this->ensureLoanHasStatus($loan, $details, 'pending');
@@ -374,7 +390,21 @@ class ManagePeminjaman extends Controller
                 ]);
             }
 
+            $unknownDetails = array_diff(array_keys($selectedRooms), $details->pluck('detail_peminjaman_id')->all());
+            if ($unknownDetails !== []) {
+                throw ValidationException::withMessages([
+                    'locations' => 'Pilihan lokasi tidak sesuai dengan barang pada pengajuan ini.',
+                ]);
+            }
+
             foreach ($details as $detail) {
+                $this->reallocateReservation(
+                    $loan,
+                    $detail,
+                    $admin,
+                    $selectedRooms[$detail->detail_peminjaman_id] ?? null,
+                    $requireLocationSelection,
+                );
                 $detail->status = 'dipinjam';
                 $detail->save();
             }
@@ -390,6 +420,202 @@ class ManagePeminjaman extends Controller
                 );
             });
         }, 3);
+    }
+
+    private function reallocateReservation(
+        Peminjaman $loan,
+        DetailPeminjaman $detail,
+        User $admin,
+        ?string $selectedRoomId,
+        bool $requireLocationSelection,
+    ): void {
+        // ASVS 2.2.1/2.2.2 and 2.3.3/2.3.4: validate the chosen room against locked stock and move reservations atomically.
+        $locations = LokasiBarang::query()
+            ->with('ruangan')
+            ->where('barang_id', $detail->barang_id)
+            ->orderBy('ruangan_id')
+            ->orderBy('lemari_id')
+            ->orderBy('toolbox_id')
+            ->orderBy('lokasi_barang_id')
+            ->lockForUpdate()
+            ->get();
+
+        if ($locations->isEmpty()) {
+            if ($selectedRoomId !== null) {
+                throw ValidationException::withMessages([
+                    "locations.{$detail->detail_peminjaman_id}" => 'Barang ini tidak memiliki lokasi stok yang dapat dipilih.',
+                ]);
+            }
+
+            return;
+        }
+
+        $reservations = LogMutasiBarang::query()
+            ->where('detail_peminjaman_id', $detail->detail_peminjaman_id)
+            ->where('tipe', 'dipinjam')
+            ->where('keterangan', 'like', self::RESERVATION_NOTE.'%')
+            ->orderBy('created_at')
+            ->orderBy('log_mutasi_barang_id')
+            ->lockForUpdate()
+            ->get();
+
+        if ($reservations->isEmpty()) {
+            if ($selectedRoomId !== null) {
+                throw ValidationException::withMessages([
+                    "locations.{$detail->detail_peminjaman_id}" => 'Lokasi reservasi barang ini belum tercatat.',
+                ]);
+            }
+
+            return;
+        }
+
+        if ((int) $reservations->sum('jumlah') !== $detail->jumlah_pinjam) {
+            throw ValidationException::withMessages([
+                "locations.{$detail->detail_peminjaman_id}" => 'Catatan reservasi stok tidak sesuai. Periksa data inventaris sebelum melanjutkan.',
+            ]);
+        }
+
+        if ($selectedRoomId === null && $reservations->contains(static fn (LogMutasiBarang $reservation): bool => $reservation->ruangan_id === null)) {
+            return;
+        }
+
+        $reservedByRoom = $reservations
+            ->groupBy('ruangan_id')
+            ->map(static fn (Collection $roomReservations): int => (int) $roomReservations->sum('jumlah'));
+        $availableByRoom = $locations
+            ->filter(static fn (LokasiBarang $location): bool => $location->ruangan !== null)
+            ->groupBy('ruangan_id')
+            ->map(static fn (Collection $roomLocations): int => (int) $roomLocations->sum('stok_tersedia'));
+        $eligibleRoomIds = $availableByRoom
+            ->filter(fn (int $available, string $roomId): bool => $available + (int) ($reservedByRoom[$roomId] ?? 0) >= $detail->jumlah_pinjam)
+            ->keys()
+            ->values();
+
+        if ($eligibleRoomIds->isEmpty()) {
+            if ($selectedRoomId === null) {
+                return;
+            }
+
+            throw ValidationException::withMessages([
+                "locations.{$detail->detail_peminjaman_id}" => 'Tidak ada satu ruangan yang memiliki stok cukup untuk jumlah barang ini.',
+            ]);
+        }
+
+        if ($selectedRoomId === null) {
+            if (! $requireLocationSelection) {
+                return;
+            }
+
+            if ($eligibleRoomIds->count() !== 1) {
+                throw ValidationException::withMessages([
+                    "locations.{$detail->detail_peminjaman_id}" => 'Pilih ruangan pengambilan untuk barang ini.',
+                ]);
+            }
+
+            $selectedRoomId = (string) $eligibleRoomIds->first();
+        }
+
+        if (! $eligibleRoomIds->contains($selectedRoomId)) {
+            throw ValidationException::withMessages([
+                "locations.{$detail->detail_peminjaman_id}" => 'Ruangan yang dipilih tidak memiliki stok cukup untuk jumlah barang ini.',
+            ]);
+        }
+
+        $currentRoomIds = $reservations->pluck('ruangan_id')->filter()->unique();
+        if ($currentRoomIds->count() === 1 && (string) $currentRoomIds->first() === $selectedRoomId) {
+            return;
+        }
+
+        $sourceAllocations = [];
+        foreach ($reservations as $reservation) {
+            if ($reservation->ruangan_id === null) {
+                throw ValidationException::withMessages([
+                    "locations.{$detail->detail_peminjaman_id}" => 'Lokasi reservasi barang ini tidak dapat dipastikan.',
+                ]);
+            }
+
+            $location = $this->findLockedReservationLocation($locations, $reservation);
+            if (! $location) {
+                throw ValidationException::withMessages([
+                    "locations.{$detail->detail_peminjaman_id}" => 'Lokasi stok reservasi tidak ditemukan. Periksa data inventaris sebelum melanjutkan.',
+                ]);
+            }
+
+            $stockBefore = $location->stok_tersedia;
+            if ($stockBefore + $reservation->jumlah > $location->stok_total) {
+                throw ValidationException::withMessages([
+                    "locations.{$detail->detail_peminjaman_id}" => 'Stok lokasi tidak cukup untuk memindahkan reservasi ini.',
+                ]);
+            }
+
+            $location->stok_tersedia += $reservation->jumlah;
+            $location->save();
+
+            $sourceAllocations[] = [
+                'location' => $location,
+                'reservation' => $reservation,
+                'stock_before' => $stockBefore,
+            ];
+        }
+
+        $targetLocations = $locations->where('ruangan_id', $selectedRoomId);
+        $targetStock = (int) $targetLocations->sum('stok_tersedia');
+        if ($targetStock < $detail->jumlah_pinjam) {
+            throw ValidationException::withMessages([
+                "locations.{$detail->detail_peminjaman_id}" => 'Stok ruangan berubah. Muat ulang halaman sebelum mencoba lagi.',
+            ]);
+        }
+
+        $targetRoomName = $targetLocations->first()?->ruangan?->nama_ruangan ?? 'ruangan pilihan';
+        foreach ($sourceAllocations as $sourceAllocation) {
+            /** @var LogMutasiBarang $reservation */
+            $reservation = $sourceAllocation['reservation'];
+            $reservation->tipe = 'dipindahkan';
+            $reservation->oleh_akun_id = $admin->akun_id;
+            $reservation->stok_sebelum = $sourceAllocation['stock_before'];
+            $reservation->stok_sesudah = $sourceAllocation['location']->stok_tersedia;
+            $reservation->keterangan = "Reservasi peminjaman dialihkan ke {$targetRoomName}.";
+            $reservation->save();
+        }
+
+        $remainingQuantity = $detail->jumlah_pinjam;
+        foreach ($targetLocations as $location) {
+            if ($remainingQuantity === 0) {
+                break;
+            }
+
+            $allocatedQuantity = min($remainingQuantity, $location->stok_tersedia);
+            if ($allocatedQuantity === 0) {
+                continue;
+            }
+
+            $stockBefore = $location->stok_tersedia;
+            $location->stok_tersedia -= $allocatedQuantity;
+            $location->save();
+
+            LogMutasiBarang::query()->create([
+                'barang_id' => $detail->barang_id,
+                'ruangan_id' => $location->ruangan_id,
+                'lemari_asal_id' => $location->lemari_id,
+                'akun_id' => $loan->akun_id,
+                'oleh_akun_id' => $admin->akun_id,
+                'detail_peminjaman_id' => $detail->detail_peminjaman_id,
+                'tipe' => 'dipinjam',
+                'jumlah' => $allocatedQuantity,
+                'stok_sebelum' => $stockBefore,
+                'stok_sesudah' => $location->stok_tersedia,
+                'keterangan' => LogMutasiBarang::keteranganWithToolbox(self::RESERVATION_NOTE, $location->toolbox_id),
+                'created_at' => now(),
+            ]);
+
+            $remainingQuantity -= $allocatedQuantity;
+        }
+
+        if ($remainingQuantity > 0) {
+            throw ValidationException::withMessages([
+                "locations.{$detail->detail_peminjaman_id}" => 'Stok ruangan berubah. Muat ulang halaman sebelum mencoba lagi.',
+            ]);
+        }
     }
 
     private function notifyBorrower(string $borrowerId, string $message): void
@@ -443,9 +669,10 @@ class ManagePeminjaman extends Controller
         $reservations = LogMutasiBarang::query()
             ->where('detail_peminjaman_id', $detail->detail_peminjaman_id)
             ->where('tipe', 'dipinjam')
-            ->where('keterangan', self::RESERVATION_NOTE)
+            ->where('keterangan', 'like', self::RESERVATION_NOTE.'%')
             ->orderBy('created_at')
             ->orderBy('log_mutasi_barang_id')
+            ->lockForUpdate()
             ->get();
 
         if ($reservations->isEmpty()) {
@@ -478,6 +705,7 @@ class ManagePeminjaman extends Controller
             ->groupBy(static fn (LogMutasiBarang $log): string => implode('|', [
                 $log->ruangan_id ?? '',
                 $log->lemari_asal_id ?? '',
+                $log->reservationToolboxId() ?? '',
             ]))
             ->map(static fn (Collection $logs): int => (int) $logs->sum('jumlah'));
 
@@ -485,6 +713,7 @@ class ManagePeminjaman extends Controller
             ->groupBy(static fn (LogMutasiBarang $reservation): string => implode('|', [
                 $reservation->ruangan_id ?? '',
                 $reservation->lemari_asal_id ?? '',
+                $reservation->reservationToolboxId() ?? '',
             ]))
             ->map(function (Collection $locationReservations, string $locationKey) use ($previousReturns): array {
                 return [
@@ -528,15 +757,7 @@ class ManagePeminjaman extends Controller
 
             $location = null;
             if ($reservation->ruangan_id !== null) {
-                $locationQuery = LokasiBarang::query()
-                    ->where('barang_id', $barang->barang_id)
-                    ->where('ruangan_id', $reservation->ruangan_id);
-
-                $locationQuery = $reservation->lemari_asal_id === null
-                    ? $locationQuery->whereNull('lemari_id')
-                    : $locationQuery->where('lemari_id', $reservation->lemari_asal_id);
-
-                $location = $locationQuery->lockForUpdate()->first();
+                $location = $this->findReservationLocation($barang->barang_id, $reservation);
 
                 if (! $location) {
                     throw ValidationException::withMessages([
@@ -594,13 +815,45 @@ class ManagePeminjaman extends Controller
                 'jumlah' => $allocationQuantity,
                 'stok_sebelum' => $stockBefore,
                 'stok_sesudah' => $stockAfter,
-                'keterangan' => $description,
+                'keterangan' => LogMutasiBarang::keteranganWithToolbox($description, $location?->toolbox_id),
                 'created_at' => now(),
             ]);
             $quantityRemaining -= $allocationQuantity;
         }
 
         $barang->save();
+    }
+
+    private function findReservationLocation(string $barangId, LogMutasiBarang $reservation): ?LokasiBarang
+    {
+        $locations = LokasiBarang::query()
+            ->where('barang_id', $barangId)
+            ->where('ruangan_id', $reservation->ruangan_id);
+
+        $locations = $reservation->lemari_asal_id === null
+            ? $locations->whereNull('lemari_id')
+            : $locations->where('lemari_id', $reservation->lemari_asal_id);
+
+        return $this->findLockedReservationLocation($locations->lockForUpdate()->get(), $reservation);
+    }
+
+    /**
+     * @param  Collection<int, LokasiBarang>  $locations
+     */
+    private function findLockedReservationLocation(Collection $locations, LogMutasiBarang $reservation): ?LokasiBarang
+    {
+        $toolboxId = $reservation->reservationToolboxId();
+        $matches = $locations->filter(static fn (LokasiBarang $location): bool => $location->ruangan_id === $reservation->ruangan_id
+            && $location->lemari_id === $reservation->lemari_asal_id
+            && ($toolboxId === null || $location->toolbox_id === $toolboxId));
+
+        if ($matches->count() > 1) {
+            throw ValidationException::withMessages([
+                'peminjaman' => 'Lokasi stok reservasi tidak dapat dipastikan. Periksa data inventaris sebelum melanjutkan.',
+            ]);
+        }
+
+        return $matches->first();
     }
 
     private function loanQueryForTab(string $tab): Builder

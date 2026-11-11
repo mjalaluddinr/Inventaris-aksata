@@ -98,7 +98,13 @@
             default => 'Import selesai.',
         };
 
-        if (preg_match('/^Import selesai\.\s*Berhasil:\s*(\d+),\s*Gagal:\s*(\d+)\.$/', $importMessage, $importCounts) === 1) {
+        if (
+            preg_match(
+                '/^Import selesai\.\s*Berhasil:\s*(\d+),\s*Gagal:\s*(\d+)\.$/',
+                $importMessage,
+                $importCounts,
+            ) === 1
+        ) {
             $feedbackMessage = "Import selesai. Berhasil: {$importCounts[1]}, Gagal: {$importCounts[2]}.";
         }
     }
@@ -273,9 +279,7 @@
           if (shouldSaveAccount) {
               const saved = await this.sendCrudRequest(document.querySelector('#account-form'), {
                   role: this.currentUser.role,
-                  privileges: this.currentUser.role === 'laboran'
-                      ? [...this.currentUser.privileges, ...(this.currentUser.legacyPrivileges || [])]
-                      : [],
+                  privileges: this.currentUser.role === 'laboran' ? [...this.currentUser.privileges, ...(this.currentUser.legacyPrivileges || [])] : [],
               });
               if (saved) {
                   this.closeRoleDialog();
@@ -305,40 +309,36 @@
       },
       normalizePrivileges(privileges, role = '') {
           const allowedPrivileges = ['melihat', 'meminjamkan', 'manajemen'];
-          const normalized = Array.isArray(privileges)
-              ? [...new Set(privileges
-                  .filter(privilege => typeof privilege === 'string' && privilege.trim() !== '')
-                  .map(privilege => privilege.trim().toLocaleLowerCase()))]
-              : [];
+          const normalized = Array.isArray(privileges) ? [...new Set(privileges
+              .filter(privilege => typeof privilege === 'string' && privilege.trim() !== '')
+              .map(privilege => privilege.trim().toLocaleLowerCase()))] : [];
           const selected = normalized.filter(privilege => allowedPrivileges.includes(privilege));
           if (role === 'laboran' && (selected.includes('meminjamkan') || selected.includes('manajemen'))) {
               selected.push('melihat');
           }
-
+  
           return {
               selected: [...new Set(selected)],
               legacy: normalized.filter(privilege => !allowedPrivileges.includes(privilege)),
           };
       },
       notifyFeedback() {
-          const message = this.feedbackAccountName
-              ? [
+          const message = this.feedbackAccountName ? [
                   { text: 'Akun ' },
                   { text: this.feedbackAccountName, bold: true },
                   { text: ` berhasil ${this.feedbackAccountAction}.` },
-              ]
-              : this.feedbackMessage;
-          const type = this.feedbackStatus === 'sebagian'
-              ? 'warning'
-              : ['error', 'gagal'].includes(this.feedbackStatus)
-                  ? 'error'
-                  : 'success';
-          const title = this.feedbackStatus === 'sebagian'
-              ? 'Import selesai sebagian'
-              : this.feedbackStatus === 'gagal'
-                  ? 'Import gagal'
-                  : '';
-
+              ] :
+              this.feedbackMessage;
+          const type = this.feedbackStatus === 'sebagian' ?
+              'warning' : ['error', 'gagal'].includes(this.feedbackStatus) ?
+              'error' :
+              'success';
+          const title = this.feedbackStatus === 'sebagian' ?
+              'Import selesai sebagian' :
+              this.feedbackStatus === 'gagal' ?
+              'Import gagal' :
+              '';
+  
           window.showToast(message, type, 5000, title);
       },
       accountFieldLabel(field) {
@@ -409,19 +409,19 @@
           const request = new AbortController();
           this.searchRequest = request;
           this.searchError = '';
-
+  
           const requestUrl = new URL(url || this.resultsUrl, window.location.href);
           if (!url) {
               requestUrl.search = new URLSearchParams({ search: this.searchQuery.trim() }).toString();
           }
-
+  
           try {
               const response = await fetch(requestUrl, {
                   headers: { 'X-Requested-With': 'XMLHttpRequest', 'Accept': 'text/html' },
                   signal: request.signal,
               });
               if (!response.ok || response.redirected) throw new Error('Daftar akun tidak dapat dimuat.');
-
+  
               this.$refs.accountResults.innerHTML = await response.text();
               this.statuses = {};
               this.$refs.accountResults.querySelectorAll('[data-account-row]').forEach(row => {
@@ -484,21 +484,21 @@
           form.querySelectorAll('[required]').forEach(field => {
               if (!field.value.trim() && !invalidFields.includes(field)) invalidFields.push(field);
           });
-
+  
           if (invalidFields.length) {
               const invalidFieldLabels = [...new Set(
                   invalidFields
-                      .map(field => this.accountFieldLabel(field.name))
-                      .filter(Boolean)
+                  .map(field => this.accountFieldLabel(field.name))
+                  .filter(Boolean)
               )];
-              this.feedbackMessage = invalidFieldLabels.length
-                  ? `Data tidak valid: ${invalidFieldLabels.join(', ')}.`
-                  : 'Data akun belum lengkap atau belum valid.';
+              this.feedbackMessage = invalidFieldLabels.length ?
+                  `Data tidak valid: ${invalidFieldLabels.join(', ')}.` :
+                  'Data akun belum lengkap atau belum valid.';
               this.feedbackStatus = 'error';
               this.notifyFeedback();
               return false;
           }
-
+  
           await this.sendCrudRequest(form);
       },
       async sendCrudRequest(form, roleUpdate = null) {
@@ -513,15 +513,14 @@
                   roleUpdate.privileges.forEach(privilege => formData.append('privileges[]', privilege));
               }
               const isDeleteRequest = formData.get('_method') === 'DELETE';
-              const accountAction = isDeleteRequest
-                  ? 'dihapus'
-                  : formData.get('akun_form') === 'edit' ? 'diperbarui' : 'ditambahkan';
-              const accountName = isDeleteRequest
-                  ? this.pendingDeleteUsername
-                  : [formData.get('first_name'), formData.get('last_name')]
-                      .map(name => String(name || '').trim())
-                      .filter(Boolean)
-                      .join(' ') || String(formData.get('username') || '').trim();
+              const accountAction = isDeleteRequest ?
+                  'dihapus' :
+                  formData.get('akun_form') === 'edit' ? 'diperbarui' : 'ditambahkan';
+              const accountName = isDeleteRequest ?
+                  this.pendingDeleteUsername : [formData.get('first_name'), formData.get('last_name')]
+                  .map(name => String(name || '').trim())
+                  .filter(Boolean)
+                  .join(' ') || String(formData.get('username') || '').trim();
               const response = await fetch(form.action, {
                   method: 'POST',
                   body: formData,
@@ -538,20 +537,20 @@
               const successMessage = responseDocument.querySelector('[data-account-success]')?.dataset.accountSuccess;
               const hasAccountResults = responseDocument.querySelector('[data-account-tbody]');
               const accountIndexPath = new URL(this.resultsUrl, window.location.href).pathname;
-              const redirectedToAccountIndex = response.redirected
-                  && new URL(response.url, window.location.href).pathname === accountIndexPath;
-              const deleteSucceeded = isDeleteRequest && response.ok
-                  && redirectedToAccountIndex && Boolean(hasAccountResults);
+              const redirectedToAccountIndex = response.redirected &&
+                  new URL(response.url, window.location.href).pathname === accountIndexPath;
+              const deleteSucceeded = isDeleteRequest && response.ok &&
+                  redirectedToAccountIndex && Boolean(hasAccountResults);
               if (validationMessage) {
                   const invalidFieldLabels = [...new Set(
                       (validationFields || '')
-                          .split(',')
-                          .map(field => this.accountFieldLabel(field))
-                          .filter(Boolean)
+                      .split(',')
+                      .map(field => this.accountFieldLabel(field))
+                      .filter(Boolean)
                   )];
-                  this.feedbackMessage = invalidFieldLabels.length
-                      ? `Data tidak valid: ${invalidFieldLabels.join(', ')}.`
-                      : validationMessage;
+                  this.feedbackMessage = invalidFieldLabels.length ?
+                      `Data tidak valid: ${invalidFieldLabels.join(', ')}.` :
+                      validationMessage;
                   this.feedbackStatus = 'error';
                   this.notifyFeedback();
                   return false;
@@ -584,9 +583,9 @@
           }
           window.clearTimeout(this.searchTimer);
           this.searchTimer = null;
-          this.$refs.accountResults.innerHTML = refreshedResults
-              ? refreshedResults.innerHTML
-              : responseDocument.body.innerHTML;
+          this.$refs.accountResults.innerHTML = refreshedResults ?
+              refreshedResults.innerHTML :
+              responseDocument.body.innerHTML;
           this.statuses = {};
           this.$refs.accountResults.querySelectorAll('[data-account-row]').forEach(row => {
               this.statuses[row.dataset.accountId] = row.dataset.accountStatus === '1';
@@ -684,10 +683,10 @@
       },
       async submitAccountImport(event) {
           if (this.importBusy) return;
-
+  
           this.importBusy = true;
           this.importStatusRetryNotified = false;
-
+  
           try {
               const response = await fetch(event.currentTarget.action, {
                   method: 'POST',
@@ -698,14 +697,14 @@
                   },
               });
               const data = await response.json().catch(() => ({}));
-
+  
               if (!response.ok || !data.success || !data.log_id) {
-                  const message = response.status === 422
-                      ? 'File tidak valid. Pilih file .xlsx, .xls, atau .csv maksimal 5 MB.'
-                      : data.message || 'File gagal dimasukkan ke antrean. Silakan coba kembali.';
+                  const message = response.status === 422 ?
+                      'File tidak valid. Pilih file .xlsx, .xls, atau .csv maksimal 5 MB.' :
+                      data.message || 'File gagal dimasukkan ke antrean. Silakan coba kembali.';
                   throw new Error(message);
               }
-
+  
               this.importLogId = data.log_id;
               this.openImport = false;
               this.clearImportFile();
@@ -729,11 +728,11 @@
                   headers: { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
               });
               const data = await response.json().catch(() => ({}));
-
+  
               if (!response.ok || !data.success) {
                   throw new Error('Status import akun tidak dapat dimuat.');
               }
-
+  
               if (data.status === 'proses') {
                   this.importStatusPollTimer = window.setTimeout(
                       () => this.checkAccountImportStatus(logId),
@@ -741,19 +740,18 @@
                   );
                   return;
               }
-
+  
               this.importLogId = null;
               this.importStatusRetryNotified = false;
-              const type = data.status === 'gagal'
-                  ? 'error'
-                  : data.status === 'sebagian' ? 'warning' : 'success';
-              const title = data.status === 'gagal'
-                  ? 'Import gagal'
-                  : data.status === 'sebagian' ? 'Import selesai sebagian' : 'Import selesai';
-              const action = ['gagal', 'sebagian'].includes(data.status)
-                  ? { label: 'Lihat detail', onClick: () => this.fetchLogDetail(logId) }
-                  : null;
-
+              const type = data.status === 'gagal' ?
+                  'error' :
+                  data.status === 'sebagian' ? 'warning' : 'success';
+              const title = data.status === 'gagal' ?
+                  'Import gagal' :
+                  data.status === 'sebagian' ? 'Import selesai sebagian' : 'Import selesai';
+              const action = ['gagal', 'sebagian'].includes(data.status) ? { label: 'Lihat detail', onClick: () => this.fetchLogDetail(logId) } :
+                  null;
+  
               window.showToast(data.message, type, 10000, title, action);
               if (data.success_rows > 0) this.searchAccounts();
           } catch (error) {
@@ -818,10 +816,10 @@
             <iconify-icon icon="mdi:account-plus-outline" width="18" aria-hidden="true"></iconify-icon> Tambah Akun
           </button>
           @if (auth()->user()?->canManageAllAccounts())
-          <button type="button" @click="openImport = true"
-            class="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm transition hover:border-emerald-400 hover:bg-emerald-50 focus:outline-none focus:ring-2 focus:ring-sidebar-start focus:ring-offset-2">
-            <iconify-icon icon="mdi:file-excel" class="text-emerald-600" width="18"></iconify-icon> Import Akun
-          </button>
+            <button type="button" @click="openImport = true"
+              class="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm transition hover:border-emerald-400 hover:bg-emerald-50 focus:outline-none focus:ring-2 focus:ring-sidebar-start focus:ring-offset-2">
+              <iconify-icon icon="mdi:file-excel" class="text-emerald-600" width="18"></iconify-icon> Import Akun
+            </button>
           @endif
         </div>
         <label class="akun-search relative block w-full sm:w-72">
@@ -846,153 +844,164 @@
       <div x-ref="accountResults" data-account-results @click="handleAccountPagination($event)"
         :aria-busy="(searchRequest !== null).toString()">
         @fragment('account-results')
-      @if ($errors->any() || session()->has('success'))
-        <div class="hidden" data-account-validation="{{ $errors->first() }}"
-          data-account-invalid-fields="{{ implode(',', $errors->keys()) }}"
-          data-account-success="{{ session()->has('import_log_id') ? '' : $feedbackMessage }}"></div>
-      @endif
-      <div class="overflow-hidden rounded-xl border border-[#D3E3DF] bg-white shadow-sm mb-8">
-        <div class="overflow-x-auto">
-          <table class="min-w-full divide-y divide-[#DCE9E6]">
-            <thead class="bg-[#F1F8F6]">
-              <tr>
-                <th class="px-4 py-3 text-left text-xs font-semibold text-slate-600">No</th>
-                <th class="px-4 py-3 text-left text-xs font-semibold text-slate-600">Nama</th>
-                <th class="px-4 py-3 text-left text-xs font-semibold text-slate-600">Username</th>
-                <th class="px-4 py-3 text-left text-xs font-semibold text-slate-600">Role</th>
-                <th class="px-4 py-3 text-left text-xs font-semibold text-slate-600">Status</th>
-                <th class="px-4 py-3 text-left text-xs font-semibold text-slate-600">Login Terakhir</th>
-                <th class="px-4 py-3 text-right text-xs font-semibold text-slate-600">Aksi</th>
-              </tr>
-            </thead>
-            <tbody data-account-tbody class="divide-y divide-[#E7EFED] bg-white">
-              @forelse ($users as $index => $user)
-                <tr data-account-row data-account-id="{{ $user->akun_id }}"
-                  data-account-status="{{ $user->is_active ? '1' : '0' }}"
-                  data-searchable="{{ strtolower(trim($user->first_name . ' ' . $user->last_name . ' ' . $user->username)) }}"
-                  x-show="matchesAccount($el.dataset.searchable)" class="transition-colors hover:bg-[#F7FBFA]">
-                  <td class="whitespace-nowrap px-4 py-3 text-sm text-slate-500">{{ $users->firstItem() + $index }}</td>
-                  <td class="whitespace-nowrap px-4 py-3 text-sm font-medium text-slate-800">
-                    <div class="text-sm font-medium text-slate-800">{{ $user->first_name }} {{ $user->last_name }}
-                    </div>
-                    @if ($user->must_change_password)
-                      <span class="mt-1 inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-800">
-                        <iconify-icon icon="mdi:lock-reset" width="13" aria-hidden="true"></iconify-icon>
-                        Wajib ganti password saat login
-                      </span>
-                    @endif
-                    @if (isset($pendingPasswordRequests[$user->akun_id]))
-                      <button
-                        type="button"
-                        data-password-recovery-review="{{ json_encode([
-                            'akun_id' => $user->akun_id,
-                            'first_name' => $user->first_name,
-                            'last_name' => $user->last_name,
-                            'username' => $user->username,
-                            'approve_url' => route('admin.akun.password-request.approve', $user->akun_id),
-                            'reject_url' => route('admin.akun.password-request.reject', $user->akun_id),
-                        ], JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP | JSON_HEX_TAG) }}"
-                        class="mt-1 inline-flex items-center gap-1 rounded-full bg-blue-100 px-2 py-0.5 text-[11px] font-semibold text-blue-800 transition hover:bg-blue-200 focus:outline-none focus:ring-2 focus:ring-blue-400"
-                        aria-haspopup="dialog">
-                        <iconify-icon icon="mdi:lock-question" width="13" aria-hidden="true"></iconify-icon>
-                        Mengajukan ganti password
-                      </button>
-                    @endif
-                  </td>
-                  <td class="whitespace-nowrap px-4 py-3 text-sm text-slate-600">
-                    <div class="text-xs font-bold text-slate-500">{{ $user->username }}</div>
-                  </td>
-                  <td class="whitespace-nowrap px-4 py-3 text-sm text-slate-700">
-                    @php $roleColors = ['admin' => 'bg-rose-100 text-rose-800', 'laboran' => 'bg-blue-100 text-blue-800', 'peminjam' => 'bg-emerald-100 text-emerald-800']; @endphp
-                    {{-- ASVS 1.2.1, 1.2.3: Keep account data escaped for the HTML attribute and JSON contexts. --}}
-                    <button type="button"
-                      data-account-role="{{ json_encode([
-                            'akun_id' => $user->akun_id,
-                            'first_name' => $user->first_name,
-                            'last_name' => $user->last_name,
-                            'username' => $user->username,
-                            'role' => $user->role,
-                            'is_active' => $user->is_active,
-                            'must_change_password' => $user->must_change_password,
-                            'privileges' => $user->privileges->pluck('hak_akses')->values(),
-                        ], JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP | JSON_HEX_TAG) }}"
-                      class="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium {{ $roleColors[$user->role] ?? 'bg-gray-100 text-gray-800' }} transition hover:ring-2 hover:ring-sky-300 focus:outline-none focus:ring-2 focus:ring-blue-400"
-                      aria-label="Ubah role {{ $user->first_name }} {{ $user->last_name }}"
-                      aria-haspopup="dialog" aria-controls="account-role-dialog">
-                      {{ ucfirst($user->role) }}
-                      <iconify-icon icon="mdi:pencil-outline" width="14" aria-hidden="true"></iconify-icon>
-                    </button>
-                  </td>
-                  <td class="whitespace-nowrap px-4 py-3">
-                    <button @click="toggleAccountStatus('{{ $user->akun_id }}')"
-                      class="inline-flex items-center gap-2 rounded-md px-2 py-1 text-xs font-medium transition cursor-pointer hover:opacity-80"
-                      :class="statuses['{{ $user->akun_id }}'] ? 'bg-emerald-100 text-emerald-800' :
-                          'bg-rose-100 text-rose-800'">
-                      <span class="relative flex h-2 w-2">
-                        <span class="animate-ping absolute inline-flex h-full w-full rounded-full opacity-75"
-                          :class="statuses['{{ $user->akun_id }}'] ? 'bg-emerald-400' : 'bg-rose-400'"></span>
-                        <span class="relative inline-flex rounded-full h-2 w-2"
-                          :class="statuses['{{ $user->akun_id }}'] ? 'bg-emerald-500' : 'bg-rose-500'"></span>
-                      </span>
-                      <span x-text="statuses['{{ $user->akun_id }}'] ? 'Aktif' : 'Nonaktif'"></span>
-                    </button>
-                  </td>
-                  <td class="whitespace-nowrap px-4 py-3 text-sm text-slate-600">
-                    {{ $user->last_login_at ? \Carbon\Carbon::parse($user->last_login_at)->format('d M Y H:i') : 'Belum Pernah' }}
-                  </td>
-                  <td class="whitespace-nowrap px-4 py-3 text-right">
-                    <div class="flex justify-end gap-2">
-                      <button type="button"
-                        data-account-user="{{ json_encode([
-                            'akun_id' => $user->akun_id,
-                            'first_name' => $user->first_name,
-                            'last_name' => $user->last_name,
-                            'username' => $user->username,
-                            'role' => $user->role,
-                            'is_active' => $user->is_active,
-                            'must_change_password' => $user->must_change_password,
-                            'privileges' => $user->privileges->pluck('hak_akses')->values(),
-                        ], JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP | JSON_HEX_TAG) }}"
-                        class="inline-flex items-center gap-1 rounded-md border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-700 transition hover:border-sky-400 hover:text-sky-700 focus:outline-none focus:ring-2 focus:ring-sky-400">
-                        <iconify-icon icon="mdi:pencil" width="15"></iconify-icon> Edit
-                      </button>
-                      <form action="{{ route('admin.akun.destroy', $user->akun_id) }}" method="POST"
-                        @submit.prevent="requestDelete($el)" data-username="{{ $user->username }}">
-                        @csrf @method('DELETE')
-                        <button type="submit"
-                          class="inline-flex min-h-9 items-center gap-1.5 rounded-md border border-rose-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-rose-600 transition hover:border-rose-300 hover:bg-rose-50 focus:outline-none focus:ring-2 focus:ring-rose-400">
-                          <iconify-icon icon="mdi:delete-outline" width="16" aria-hidden="true"></iconify-icon> Hapus
+          @if ($errors->any() || session()->has('success'))
+            <div class="hidden" data-account-validation="{{ $errors->first() }}"
+              data-account-invalid-fields="{{ implode(',', $errors->keys()) }}"
+              data-account-success="{{ session()->has('import_log_id') ? '' : $feedbackMessage }}"></div>
+          @endif
+          <div class="overflow-hidden rounded-xl border border-[#D3E3DF] bg-white shadow-sm mb-8">
+            <div class="overflow-x-auto">
+              <table class="min-w-full divide-y divide-[#DCE9E6]">
+                <thead class="bg-[#F1F8F6]">
+                  <tr>
+                    <th class="px-4 py-3 text-left text-xs font-semibold text-slate-600">No</th>
+                    <th class="px-4 py-3 text-left text-xs font-semibold text-slate-600">Nama</th>
+                    <th class="px-4 py-3 text-left text-xs font-semibold text-slate-600">Username</th>
+                    <th class="px-4 py-3 text-left text-xs font-semibold text-slate-600">Role</th>
+                    <th class="px-4 py-3 text-left text-xs font-semibold text-slate-600">Status</th>
+                    <th class="px-4 py-3 text-left text-xs font-semibold text-slate-600">Login Terakhir</th>
+                    <th class="px-4 py-3 text-right text-xs font-semibold text-slate-600">Aksi</th>
+                  </tr>
+                </thead>
+                <tbody data-account-tbody class="divide-y divide-[#E7EFED] bg-white">
+                  @forelse ($users as $index => $user)
+                    <tr data-account-row data-account-id="{{ $user->akun_id }}"
+                      data-account-status="{{ $user->is_active ? '1' : '0' }}"
+                      data-searchable="{{ strtolower(trim($user->first_name . ' ' . $user->last_name . ' ' . $user->username)) }}"
+                      x-show="matchesAccount($el.dataset.searchable)" class="transition-colors hover:bg-[#F7FBFA]">
+                      <td class="whitespace-nowrap px-4 py-3 text-sm text-slate-500">{{ $users->firstItem() + $index }}
+                      </td>
+                      <td class="whitespace-nowrap px-4 py-3 text-sm font-medium text-slate-800">
+                        <div class="text-sm font-medium text-slate-800">{{ $user->first_name }} {{ $user->last_name }}
+                        </div>
+                        @if ($user->must_change_password)
+                          <span
+                            class="mt-1 inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-800">
+                            <iconify-icon icon="mdi:lock-reset" width="13" aria-hidden="true"></iconify-icon>
+                            Wajib ganti password saat login
+                          </span>
+                        @endif
+                        @if (isset($pendingPasswordRequests[$user->akun_id]))
+                          <button type="button"
+                            data-password-recovery-review="{{ json_encode(
+                                [
+                                    'akun_id' => $user->akun_id,
+                                    'first_name' => $user->first_name,
+                                    'last_name' => $user->last_name,
+                                    'username' => $user->username,
+                                    'approve_url' => route('admin.akun.password-request.approve', $user->akun_id),
+                                    'reject_url' => route('admin.akun.password-request.reject', $user->akun_id),
+                                ],
+                                JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP | JSON_HEX_TAG,
+                            ) }}"
+                            class="mt-1 inline-flex items-center gap-1 rounded-full bg-blue-100 px-2 py-0.5 text-[11px] font-semibold text-blue-800 transition hover:bg-blue-200 focus:outline-none focus:ring-2 focus:ring-blue-400"
+                            aria-haspopup="dialog">
+                            <iconify-icon icon="mdi:lock-question" width="13" aria-hidden="true"></iconify-icon>
+                            Mengajukan ganti password
+                          </button>
+                        @endif
+                      </td>
+                      <td class="whitespace-nowrap px-4 py-3 text-sm text-slate-600">
+                        <div class="font-bold text-slate-900 text-9xl">{{ $user->username }}</div>
+                      </td>
+                      <td class="whitespace-nowrap px-4 py-3 text-sm text-slate-700">
+                        @php $roleColors = ['admin' => 'bg-rose-100 text-rose-800', 'laboran' => 'bg-blue-100 text-blue-800', 'peminjam' => 'bg-emerald-100 text-emerald-800']; @endphp
+                        {{-- ASVS 1.2.1, 1.2.3: Keep account data escaped for the HTML attribute and JSON contexts. --}}
+                        <button type="button"
+                          data-account-role="{{ json_encode(
+                              [
+                                  'akun_id' => $user->akun_id,
+                                  'first_name' => $user->first_name,
+                                  'last_name' => $user->last_name,
+                                  'username' => $user->username,
+                                  'role' => $user->role,
+                                  'is_active' => $user->is_active,
+                                  'must_change_password' => $user->must_change_password,
+                                  'privileges' => $user->privileges->pluck('hak_akses')->values(),
+                              ],
+                              JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP | JSON_HEX_TAG,
+                          ) }}"
+                          class="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium {{ $roleColors[$user->role] ?? 'bg-gray-100 text-gray-800' }} transition hover:ring-2 hover:ring-sky-300 focus:outline-none focus:ring-2 focus:ring-blue-400"
+                          aria-label="Ubah role {{ $user->first_name }} {{ $user->last_name }}" aria-haspopup="dialog"
+                          aria-controls="account-role-dialog">
+                          {{ ucfirst($user->role) }}
+                          <iconify-icon icon="mdi:pencil-outline" width="14" aria-hidden="true"></iconify-icon>
                         </button>
-                      </form>
-                    </div>
-                  </td>
-                </tr>
-              @empty
-                <tr>
-                  <td colspan="7" class="px-6 py-12 text-center"><iconify-icon icon="mdi:account-off-outline"
-                      class="mb-2 text-slate-300" width="42"></iconify-icon>
-                    @if (filled($filters['search'] ?? null))
-                      <p class="text-sm font-medium text-slate-600">
-                        Tidak ada akun yang terdaftar dengan kata kunci
-                        <strong class="font-bold text-slate-900">"{{ $filters['search'] }}"</strong>.
-                      </p>
-                    @else
-                      <p class="text-sm font-medium text-slate-600">Belum ada akun yang terdaftar.</p>
-                    @endif
-                  </td>
-                </tr>
-              @endforelse
-            </tbody>
-          </table>
-        </div>
-        <div data-account-list-footer
-          class="flex flex-col gap-3 border-t border-[#E2ECE9] bg-[#F7FBFA] px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
-          <p class="text-xs text-slate-500"
-            x-text="searchPreviewCount === null ? 'Menampilkan {{ $users->count() }} dari {{ $users->total() }} akun' : `Menampilkan ${searchPreviewCount} hasil sementara`">
-            Menampilkan {{ $users->count() }} dari {{ $users->total() }} akun
-          </p>
-          <x-pagination :paginator="$users" label="Navigasi halaman akun" />
-        </div>
+                      </td>
+                      <td class="whitespace-nowrap px-4 py-3">
+                        <button @click="toggleAccountStatus('{{ $user->akun_id }}')"
+                          class="inline-flex items-center gap-2 rounded-md px-2 py-1 text-xs font-medium transition cursor-pointer hover:opacity-80"
+                          :class="statuses['{{ $user->akun_id }}'] ? 'bg-emerald-100 text-emerald-800' :
+                              'bg-rose-100 text-rose-800'">
+                          <span class="relative flex h-2 w-2">
+                            <span class="animate-ping absolute inline-flex h-full w-full rounded-full opacity-75"
+                              :class="statuses['{{ $user->akun_id }}'] ? 'bg-emerald-400' : 'bg-rose-400'"></span>
+                            <span class="relative inline-flex rounded-full h-2 w-2"
+                              :class="statuses['{{ $user->akun_id }}'] ? 'bg-emerald-500' : 'bg-rose-500'"></span>
+                          </span>
+                          <span x-text="statuses['{{ $user->akun_id }}'] ? 'Aktif' : 'Nonaktif'"></span>
+                        </button>
+                      </td>
+                      <td class="whitespace-nowrap px-4 py-3 text-sm text-slate-600">
+                        {{ $user->last_login_at ? \Carbon\Carbon::parse($user->last_login_at)->format('d M Y H:i') : 'Belum Pernah' }}
+                      </td>
+                      <td class="whitespace-nowrap px-4 py-3 text-right">
+                        <div class="flex justify-end gap-2">
+                          <button type="button"
+                            data-account-user="{{ json_encode(
+                                [
+                                    'akun_id' => $user->akun_id,
+                                    'first_name' => $user->first_name,
+                                    'last_name' => $user->last_name,
+                                    'username' => $user->username,
+                                    'role' => $user->role,
+                                    'is_active' => $user->is_active,
+                                    'must_change_password' => $user->must_change_password,
+                                    'privileges' => $user->privileges->pluck('hak_akses')->values(),
+                                ],
+                                JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP | JSON_HEX_TAG,
+                            ) }}"
+                            class="inline-flex items-center gap-1 rounded-md border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-700 transition hover:border-sky-400 hover:text-sky-700 focus:outline-none focus:ring-2 focus:ring-sky-400">
+                            <iconify-icon icon="mdi:pencil" width="15"></iconify-icon> Edit
+                          </button>
+                          <form action="{{ route('admin.akun.destroy', $user->akun_id) }}" method="POST"
+                            @submit.prevent="requestDelete($el)" data-username="{{ $user->username }}">
+                            @csrf @method('DELETE')
+                            <button type="submit"
+                              class="inline-flex min-h-9 items-center gap-1.5 rounded-md border border-rose-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-rose-600 transition hover:border-rose-300 hover:bg-rose-50 focus:outline-none focus:ring-2 focus:ring-rose-400">
+                              <iconify-icon icon="mdi:delete-outline" width="16" aria-hidden="true"></iconify-icon>
+                              Hapus
+                            </button>
+                          </form>
+                        </div>
+                      </td>
+                    </tr>
+                  @empty
+                    <tr>
+                      <td colspan="7" class="px-6 py-12 text-center"><iconify-icon icon="mdi:account-off-outline"
+                          class="mb-2 text-slate-300" width="42"></iconify-icon>
+                        @if (filled($filters['search'] ?? null))
+                          <p class="text-sm font-medium text-slate-600">
+                            Tidak ada akun yang terdaftar dengan kata kunci
+                            <strong class="font-bold text-slate-900">"{{ $filters['search'] }}"</strong>.
+                          </p>
+                        @else
+                          <p class="text-sm font-medium text-slate-600">Belum ada akun yang terdaftar.</p>
+                        @endif
+                      </td>
+                    </tr>
+                  @endforelse
+                </tbody>
+              </table>
+            </div>
+            <div data-account-list-footer
+              class="flex flex-col gap-3 border-t border-[#E2ECE9] bg-[#F7FBFA] px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+              <p class="text-xs text-slate-500"
+                x-text="searchPreviewCount === null ? 'Menampilkan {{ $users->count() }} dari {{ $users->total() }} akun' : `Menampilkan ${searchPreviewCount} hasil sementara`">
+                Menampilkan {{ $users->count() }} dari {{ $users->total() }} akun
+              </p>
+              <x-pagination :paginator="$users" label="Navigasi halaman akun" />
+            </div>
           @endfragment
         </div>
       </div>
@@ -1017,10 +1026,12 @@
             <input type="hidden" name="akun_form" :value="modalMode">
             <input type="hidden" name="role" :value="currentUser.role">
             <input type="hidden" name="must_change_password" :value="currentUser.must_change_password ? '1' : '0'">
-            <template x-for="privilege in currentUser.role === 'laboran' ? currentUser.privileges : []" :key="`selected-${privilege}`">
+            <template x-for="privilege in currentUser.role === 'laboran' ? currentUser.privileges : []"
+              :key="`selected-${privilege}`">
               <input type="hidden" name="privileges[]" :value="privilege">
             </template>
-            <template x-for="privilege in currentUser.role === 'laboran' ? currentUser.legacyPrivileges || [] : []" :key="`legacy-${privilege}`">
+            <template x-for="privilege in currentUser.role === 'laboran' ? currentUser.legacyPrivileges || [] : []"
+              :key="`legacy-${privilege}`">
               <input type="hidden" name="privileges[]" :value="privilege">
             </template>
             <template x-if="modalMode === 'edit'">
@@ -1031,7 +1042,8 @@
             <div class="flex items-center justify-between border-b border-slate-200 px-5 py-4">
               <div class="flex items-center gap-3">
                 <span class="flex h-10 w-10 items-center justify-center rounded-lg bg-sky-50 text-sky-700">
-                  <iconify-icon :icon="modalMode === 'create' ? 'mdi:account-plus-outline' : 'mdi:account-edit-outline'"
+                  <iconify-icon
+                    :icon="modalMode === 'create' ? 'mdi:account-plus-outline' : 'mdi:account-edit-outline'"
                     width="22" aria-hidden="true"></iconify-icon>
                 </span>
                 <h2 class="text-base font-semibold text-slate-800"
@@ -1061,7 +1073,7 @@
                 <label class="mb-1 block text-xs font-medium text-slate-700">Username <span
                     class="text-rose-500">*</span></label>
                 <input type="text" name="username" x-model="currentUser.username" required maxlength="50"
-                  placeholder="Contoh: andi.saputra"
+                  placeholder="Masukkan username"
                   class="akun-form-field block w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 shadow-sm focus:border-[#08A9D6] focus:outline-none focus:ring-2 focus:ring-[#08A9D6]/20">
               </div>
               <div>
@@ -1069,9 +1081,9 @@
                 <label for="account-password" class="mb-1 block text-xs font-medium text-slate-700">Password <span
                     class="text-rose-500">*</span></label>
                 <div class="relative">
-                  <input id="account-password" type="password"
-                    :type="passwordVisible ? 'text' : 'password'" name="password" x-model="currentUser.password"
-                    :required="modalMode === 'create'" minlength="6" placeholder="Minimal 6 karakter"
+                  <input id="account-password" type="password" :type="passwordVisible ? 'text' : 'password'"
+                    name="password" x-model="currentUser.password" :required="modalMode === 'create'"
+                    minlength="6" placeholder="Minimal 6 karakter"
                     class="akun-form-field block w-full rounded-md border border-slate-300 bg-white px-3 py-2 pr-11 text-sm text-slate-800 shadow-sm focus:border-[#08A9D6] focus:outline-none focus:ring-2 focus:ring-[#08A9D6]/20">
                   <button type="button" @click="passwordVisible = !passwordVisible"
                     :aria-label="passwordVisible ? 'Sembunyikan password' : 'Tampilkan password'"
@@ -1089,7 +1101,8 @@
                 <fieldset>
                   <legend class="mb-2 block text-xs font-medium text-slate-700">Pilih Role <span
                       class="text-rose-500">*</span></legend>
-                  <div class="grid w-full {{ auth()->user()?->canManageAllAccounts() ? 'grid-cols-3' : 'grid-cols-1' }} gap-2">
+                  <div
+                    class="grid w-full {{ auth()->user()?->canManageAllAccounts() ? 'grid-cols-3' : 'grid-cols-1' }} gap-2">
                     <template x-for="role in @js(auth()->user()?->canManageAllAccounts() ? ['admin', 'laboran', 'peminjam'] : ['laboran'])" :key="`create-role-${role}`">
                       <label
                         class="flex cursor-pointer w-full items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 transition hover:border-sky-300 has-[:checked]:border-sky-500 has-[:checked]:bg-sky-50 has-[:checked]:font-semibold has-[:checked]:text-sky-800">
@@ -1149,13 +1162,16 @@
               <button type="button" @click="closeAccountModal()"
                 class="rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-slate-400">Batal</button>
               <button type="submit" :aria-busy="accountBusy.toString()"
-                :disabled="accountBusy || (currentUser.role === 'laboran' && currentUser.privileges.length + (currentUser.legacyPrivileges || []).length === 0)"
+                :disabled="accountBusy || (currentUser.role === 'laboran' && currentUser.privileges.length + (currentUser
+                    .legacyPrivileges || []).length === 0)"
                 class="admin-submit-button akun-primary-button inline-flex items-center justify-center gap-2 rounded-md border border-[#009F91] bg-sidebar-start px-4 py-2 text-sm font-semibold text-white shadow-sm transition focus:outline-none focus:ring-2 focus:ring-sidebar-start focus:ring-offset-2">
-                <iconify-icon x-show="accountBusy" icon="mdi:loading" class="animate-spin text-lg" aria-hidden="true"></iconify-icon>
+                <iconify-icon x-show="accountBusy" icon="mdi:loading" class="animate-spin text-lg"
+                  aria-hidden="true"></iconify-icon>
                 <iconify-icon x-show="!accountBusy"
                   :icon="modalMode === 'create' ? 'mdi:content-save-plus-outline' : 'mdi:content-save-edit-outline'"
                   width="18" aria-hidden="true"></iconify-icon>
-                <span x-show="!accountBusy" x-text="modalMode === 'create' ? 'Simpan Akun' : 'Simpan Perubahan'"></span>
+                <span x-show="!accountBusy"
+                  x-text="modalMode === 'create' ? 'Simpan Akun' : 'Simpan Perubahan'"></span>
                 <span x-show="accountBusy">Menyimpan...</span>
               </button>
             </div>
@@ -1178,7 +1194,8 @@
                 <iconify-icon icon="mdi:shield-account-outline" width="22" aria-hidden="true"></iconify-icon>
               </span>
               <div>
-                <h2 id="account-role-dialog-title" class="text-base font-semibold text-slate-800">Role & Hak Akses</h2>
+                <h2 id="account-role-dialog-title" class="text-base font-semibold text-slate-800">Role & Hak Akses
+                </h2>
                 <p x-show="roleDialogSavesAccount"
                   x-text="[currentUser.first_name, currentUser.last_name].filter(Boolean).join(' ')"
                   class="mt-0.5 text-xs text-slate-500"></p>
@@ -1194,14 +1211,15 @@
           <div class="space-y-4 px-5 py-4">
             <fieldset>
               <legend class="mb-2 block text-xs font-medium text-slate-700">Pilih Role</legend>
-              <div class="grid w-full {{ auth()->user()?->canManageAllAccounts() ? 'grid-cols-3' : 'grid-cols-1' }} gap-2">
+              <div
+                class="grid w-full {{ auth()->user()?->canManageAllAccounts() ? 'grid-cols-3' : 'grid-cols-1' }} gap-2">
                 @if (auth()->user()?->canManageAllAccounts())
-                <label
-                  class="flex cursor-pointer w-full items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 transition hover:border-sky-300 has-[:checked]:border-sky-500 has-[:checked]:bg-sky-50 has-[:checked]:font-semibold has-[:checked]:text-sky-800">
-                  <input type="radio" name="account-role-choice" value="admin" x-model="roleDialogDraft.role"
-                    class="border-slate-300 text-sky-600 focus:ring-sky-500">
-                  <span>Admin</span>
-                </label>
+                  <label
+                    class="flex cursor-pointer w-full items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 transition hover:border-sky-300 has-[:checked]:border-sky-500 has-[:checked]:bg-sky-50 has-[:checked]:font-semibold has-[:checked]:text-sky-800">
+                    <input type="radio" name="account-role-choice" value="admin" x-model="roleDialogDraft.role"
+                      class="border-slate-300 text-sky-600 focus:ring-sky-500">
+                    <span>Admin</span>
+                  </label>
                 @endif
                 <label
                   class="flex cursor-pointer w-full items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 transition hover:border-sky-300 has-[:checked]:border-sky-500 has-[:checked]:bg-sky-50 has-[:checked]:font-semibold has-[:checked]:text-sky-800">
@@ -1210,12 +1228,12 @@
                   <span>Laboran</span>
                 </label>
                 @if (auth()->user()?->canManageAllAccounts())
-                <label
-                  class="flex cursor-pointer w-full items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 transition hover:border-sky-300 has-[:checked]:border-sky-500 has-[:checked]:bg-sky-50 has-[:checked]:font-semibold has-[:checked]:text-sky-800">
-                  <input type="radio" name="account-role-choice" value="peminjam" x-model="roleDialogDraft.role"
-                    class="border-slate-300 text-sky-600 focus:ring-sky-500">
-                  <span>Peminjam</span>
-                </label>
+                  <label
+                    class="flex cursor-pointer w-full items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 transition hover:border-sky-300 has-[:checked]:border-sky-500 has-[:checked]:bg-sky-50 has-[:checked]:font-semibold has-[:checked]:text-sky-800">
+                    <input type="radio" name="account-role-choice" value="peminjam" x-model="roleDialogDraft.role"
+                      class="border-slate-300 text-sky-600 focus:ring-sky-500">
+                    <span>Peminjam</span>
+                  </label>
                 @endif
               </div>
             </fieldset>
@@ -1257,7 +1275,8 @@
               :disabled="accountBusy || (roleDialogDraft.role === 'laboran' &&
                   roleDialogDraft.privileges.length + (currentUser.legacyPrivileges || []).length === 0)"
               class="admin-submit-button akun-primary-button inline-flex items-center justify-center gap-2 rounded-md border border-[#009F91] bg-sidebar-start px-4 py-2 text-sm font-semibold text-white shadow-sm transition focus:outline-none focus:ring-2 focus:ring-sidebar-start focus:ring-offset-2 disabled:cursor-not-allowed">
-              <iconify-icon x-show="accountBusy" icon="mdi:loading" class="animate-spin text-lg" aria-hidden="true"></iconify-icon>
+              <iconify-icon x-show="accountBusy" icon="mdi:loading" class="animate-spin text-lg"
+                aria-hidden="true"></iconify-icon>
               <span x-show="!accountBusy" x-text="roleDialogSavesAccount ? 'Simpan Role' : 'Terapkan'"></span>
               <span x-show="accountBusy">Menyimpan...</span>
             </button>
@@ -1269,293 +1288,279 @@
     {{-- MODAL: Import Excel --}}
     {{-- ========================================== --}}
     @if (auth()->user()?->canManageAllAccounts())
-    <template x-teleport="body">
-      <div x-show="openImport" x-transition.opacity style="display: none; z-index: 90;"
-        class="fixed inset-0 z-[90] flex items-center justify-center overflow-y-auto overscroll-contain p-4 sm:p-6"
-        role="dialog" aria-modal="true">
-        <div class="akun-modal-backdrop absolute inset-0 backdrop-blur-md"
-          @click="if (!importBusy) openImport = false"></div>
-        <div x-show="openImport" x-transition
-          class="akun-modal-panel relative z-10 my-auto w-full max-w-lg overflow-hidden rounded-xl border-2 border-[#08A9D6] bg-white shadow-[0_24px_80px_rgba(2,25,41,0.4)]">
+      <template x-teleport="body">
+        <div x-show="openImport" x-transition.opacity style="display: none; z-index: 90;"
+          class="fixed inset-0 z-[90] flex items-center justify-center overflow-y-auto overscroll-contain p-4 sm:p-6"
+          role="dialog" aria-modal="true">
+          <div class="akun-modal-backdrop absolute inset-0 backdrop-blur-md"
+            @click="if (!importBusy) openImport = false"></div>
+          <div x-show="openImport" x-transition
+            class="akun-modal-panel relative z-10 my-auto w-full max-w-lg overflow-hidden rounded-xl border-2 border-[#08A9D6] bg-white shadow-[0_24px_80px_rgba(2,25,41,0.4)]">
 
-          <div class="flex items-center justify-between border-b border-slate-200 px-5 py-4">
-            <h2 class="text-base font-semibold text-slate-800">Import Data Akun (Excel)</h2>
-            <button type="button" @click="openImport = false" :disabled="importBusy"
-              class="rounded-md p-1 text-slate-500 transition hover:bg-rose-50 hover:text-rose-600">
-              <iconify-icon icon="mdi:close" width="20"></iconify-icon>
-            </button>
-          </div>
+            <div class="flex items-center justify-between border-b border-slate-200 px-5 py-4">
+              <h2 class="text-base font-semibold text-slate-800">Import Data Akun (Excel)</h2>
+              <button type="button" @click="openImport = false" :disabled="importBusy"
+                class="rounded-md p-1 text-slate-500 transition hover:bg-rose-50 hover:text-rose-600">
+                <iconify-icon icon="mdi:close" width="20"></iconify-icon>
+              </button>
+            </div>
 
-          <form action="{{ route('admin.akun.import') }}" method="POST" enctype="multipart/form-data"
-            @submit.prevent="submitAccountImport($event)"
-            class="px-5 py-4">
-            @csrf
-            <div class="space-y-4">
-              <input id="akun-import-file" type="file" name="file" x-ref="accountImportFile"
-                @change="setImportFile($event.target.files)" accept=".xlsx,.xls,.csv" class="hidden">
-              <div role="button" tabindex="0" @click="openImportFilePicker()"
-                @keydown="handleImportFileKeydown($event)" @dragover.prevent @drop.prevent="handleImportDrop($event)"
-                class="group cursor-pointer rounded-lg border-2 border-dashed p-5 text-left transition focus:outline-none focus-visible:ring-2 focus-visible:ring-[#08A9D6] focus-visible:ring-offset-2"
-                :class="importFileName ? 'border-emerald-300 bg-emerald-50/70 hover:border-emerald-400 hover:bg-emerald-50' :
-                    'border-slate-300 bg-slate-50 text-center hover:border-[#08A9D6] hover:bg-[#F0FDFA]'">
-                <template x-if="!importFileName">
-                  <div class="flex flex-col items-center">
-                    <span
-                      class="mb-3 flex h-14 w-14 items-center justify-center rounded-2xl bg-emerald-100 text-emerald-700 transition group-hover:bg-emerald-200">
-                      <iconify-icon icon="mdi:file-excel-outline" width="32"></iconify-icon>
-                    </span>
-                    <p class="text-sm font-semibold text-slate-800">Seret file Excel ke sini</p>
-                    <p class="mt-1 text-sm text-slate-600">atau klik area ini untuk memilih file</p>
-                    <p
-                      class="mt-3 rounded-full bg-white px-3 py-1 text-xs font-medium text-slate-500 ring-1 ring-slate-200">
-                      .xlsx, .xls, .csv · Maks. 5 MB
-                    </p>
-                  </div>
-                </template>
-                @endif
-                <template x-if="importFileName">
-                  <div class="flex items-center gap-3">
-                    <span
-                      class="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-white text-emerald-700 shadow-sm ring-1 ring-emerald-200">
-                      <iconify-icon icon="mdi:file-excel" width="26"></iconify-icon>
-                    </span>
-                    <span class="min-w-0 flex-1">
-                      <span class="block truncate text-sm font-semibold text-slate-800"
-                        x-text="importFileName"></span>
-                      <span class="mt-1 block text-xs text-emerald-800">
-                        File siap diimpor <span class="text-emerald-700" x-text="importFileSize"></span>
+            <form action="{{ route('admin.akun.import') }}" method="POST" enctype="multipart/form-data"
+              @submit.prevent="submitAccountImport($event)" class="px-5 py-4">
+              @csrf
+              <div class="space-y-4">
+                <input id="akun-import-file" type="file" name="file" x-ref="accountImportFile"
+                  @change="setImportFile($event.target.files)" accept=".xlsx,.xls,.csv" class="hidden">
+                <div role="button" tabindex="0" @click="openImportFilePicker()"
+                  @keydown="handleImportFileKeydown($event)" @dragover.prevent
+                  @drop.prevent="handleImportDrop($event)"
+                  class="group cursor-pointer rounded-lg border-2 border-dashed p-5 text-left transition focus:outline-none focus-visible:ring-2 focus-visible:ring-[#08A9D6] focus-visible:ring-offset-2"
+                  :class="importFileName ? 'border-emerald-300 bg-emerald-50/70 hover:border-emerald-400 hover:bg-emerald-50' :
+                      'border-slate-300 bg-slate-50 text-center hover:border-[#08A9D6] hover:bg-[#F0FDFA]'">
+                  <template x-if="!importFileName">
+                    <div class="flex flex-col items-center">
+                      <span
+                        class="mb-3 flex h-14 w-14 items-center justify-center rounded-2xl bg-emerald-100 text-emerald-700 transition group-hover:bg-emerald-200">
+                        <iconify-icon icon="mdi:file-excel-outline" width="32"></iconify-icon>
                       </span>
-                      <span class="mt-1 block text-xs font-medium text-[#087F70]">Klik untuk mengganti file</span>
-                    </span>
-                    <button type="button" @click.stop="clearImportFile()"
-                      class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-slate-500 transition hover:bg-white hover:text-rose-600 focus:outline-none focus:ring-2 focus:ring-rose-400"
-                      aria-label="Hapus file yang dipilih">
-                      <iconify-icon icon="mdi:close-circle-outline" width="20"></iconify-icon>
-                    </button>
-                  </div>
-                </template>
-              </div>
+                      <p class="text-sm font-semibold text-slate-800">Seret file Excel ke sini</p>
+                      <p class="mt-1 text-sm text-slate-600">atau klik area ini untuk memilih file</p>
+                      <p
+                        class="mt-3 rounded-full bg-white px-3 py-1 text-xs font-medium text-slate-500 ring-1 ring-slate-200">
+                        .xlsx, .xls, .csv · Maks. 5 MB
+                      </p>
+                    </div>
+                  </template>
+    @endif
+    <template x-if="importFileName">
+      <div class="flex items-center gap-3">
+        <span
+          class="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-white text-emerald-700 shadow-sm ring-1 ring-emerald-200">
+          <iconify-icon icon="mdi:file-excel" width="26"></iconify-icon>
+        </span>
+        <span class="min-w-0 flex-1">
+          <span class="block truncate text-sm font-semibold text-slate-800" x-text="importFileName"></span>
+          <span class="mt-1 block text-xs text-emerald-800">
+            File siap diimpor <span class="text-emerald-700" x-text="importFileSize"></span>
+          </span>
+          <span class="mt-1 block text-xs font-medium text-[#087F70]">Klik untuk mengganti file</span>
+        </span>
+        <button type="button" @click.stop="clearImportFile()"
+          class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-slate-500 transition hover:bg-white hover:text-rose-600 focus:outline-none focus:ring-2 focus:ring-rose-400"
+          aria-label="Hapus file yang dipilih">
+          <iconify-icon icon="mdi:close-circle-outline" width="20"></iconify-icon>
+        </button>
+      </div>
+    </template>
+  </div>
 
-              <div class="rounded-md bg-blue-50 p-3 text-xs text-blue-800 border border-blue-200">
-                <div class="flex gap-2">
-                  <iconify-icon icon="mdi:information" class="mt-0.5 shrink-0" width="16"></iconify-icon>
-                  <div class="space-y-2">
-                    <p class="font-semibold">Contoh Format Untuk Import Akun</p>
-                    <a href="{{ asset('import-templates/format-import-akun.xlsx') }}" download
-                      class="inline-flex items-center gap-1 font-semibold text-[#087E78] hover:text-[#065f59] focus:outline-none focus:ring-2 focus:ring-[#08A9D6]">
-                      <iconify-icon icon="mdi:download" width="16" aria-hidden="true"></iconify-icon>
-                      Unduh format-import-akun.xlsx
-                    </a>
-                  </div>
-                </div>
-              </div>
-            </div>
+  <div class="rounded-md bg-blue-50 p-3 text-xs text-blue-800 border border-blue-200">
+    <div class="flex gap-2">
+      <iconify-icon icon="mdi:information" class="mt-0.5 shrink-0" width="16"></iconify-icon>
+      <div class="space-y-2">
+        <p class="font-semibold">Contoh Format Untuk Import Akun</p>
+        <a href="{{ asset('import-templates/format-import-akun.xlsx') }}" download
+          class="inline-flex items-center gap-1 font-semibold text-[#087E78] hover:text-[#065f59] focus:outline-none focus:ring-2 focus:ring-[#08A9D6]">
+          <iconify-icon icon="mdi:download" width="16" aria-hidden="true"></iconify-icon>
+          Unduh format-import-akun.xlsx
+        </a>
+      </div>
+    </div>
+  </div>
+  </div>
 
-            <div class="mt-6 flex justify-end gap-2 border-t border-slate-200 pt-4">
-              <button type="button" @click="openImport = false"
-                class="rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-slate-400">Batal</button>
-              <button type="submit" :aria-busy="importBusy.toString()"
-                class="akun-primary-button rounded-md border border-[#009F91] bg-sidebar-start px-4 py-2 text-sm font-semibold text-white shadow-sm transition focus:outline-none focus:ring-2 focus:ring-sidebar-start focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-                :disabled="!importFileName || importBusy">
-                <iconify-icon x-show="importBusy" icon="mdi:loading" class="animate-spin text-lg"
+  <div class="mt-6 flex justify-end gap-2 border-t border-slate-200 pt-4">
+    <button type="button" @click="openImport = false"
+      class="rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-slate-400">Batal</button>
+    <button type="submit" :aria-busy="importBusy.toString()"
+      class="akun-primary-button rounded-md border border-[#009F91] bg-sidebar-start px-4 py-2 text-sm font-semibold text-white shadow-sm transition focus:outline-none focus:ring-2 focus:ring-sidebar-start focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+      :disabled="!importFileName || importBusy">
+      <iconify-icon x-show="importBusy" icon="mdi:loading" class="animate-spin text-lg"
+        aria-hidden="true"></iconify-icon>
+      <iconify-icon x-show="!importBusy" icon="mdi:upload" width="16" aria-hidden="true"></iconify-icon>
+      <span x-show="!importBusy">Simpan Import</span>
+      <span x-show="importBusy">Mengimpor...</span>
+    </button>
+  </div>
+  </form>
+  </div>
+  </div>
+  </template>
+
+  {{-- ========================================== --}}
+  {{-- MODAL: Konfirmasi Hapus --}}
+  {{-- ========================================== --}}
+  <template x-teleport="body">
+    <div x-show="deleteModalOpen" x-transition.opacity style="display: none; z-index: 100;"
+      class="fixed inset-0 z-[100] flex items-center justify-center overflow-y-auto overscroll-contain p-4 sm:p-6"
+      role="dialog" aria-modal="true">
+      <div class="akun-modal-backdrop absolute inset-0 backdrop-blur-md" @click="if (!accountBusy) cancelDelete()">
+      </div>
+      <div x-show="deleteModalOpen" x-transition :class="deleteShaking ? 'animate-[shake_0.4s_ease-in-out]' : ''"
+        class="akun-modal-panel relative z-10 my-auto w-full max-w-md overflow-hidden rounded-xl border-2 border-rose-300 bg-white shadow-[0_24px_80px_rgba(2,25,41,0.4)]">
+
+        <div class="p-6 text-center">
+          <div class="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-rose-100">
+            <iconify-icon icon="mdi:alert-circle" class="text-rose-600" width="28"></iconify-icon>
+          </div>
+          <h3 class="text-lg font-semibold text-slate-900">Hapus Akun?</h3>
+          <p class="mt-2 text-sm text-slate-600">
+            Apakah Anda yakin ingin menghapus akun
+            <span class="font-bold text-slate-800" x-text="pendingDeleteUsername"></span> dari daftar akun?
+            Hak akses terkait akun ini juga akan ikut terhapus.
+          </p>
+        </div>
+        <div class="flex justify-end gap-3 border-t border-slate-200 bg-slate-50 px-6 py-4">
+          <button type="button" @click="cancelDelete()" :disabled="accountBusy"
+            class="rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-slate-400">Batal</button>
+          <button type="button" @click="submitDelete()" :disabled="accountBusy" :aria-busy="accountBusy.toString()"
+            class="inline-flex min-w-28 items-center justify-center gap-2 rounded-md border border-rose-300 bg-rose-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-rose-700 focus:outline-none focus:ring-2 focus:ring-rose-500 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-70">
+            <iconify-icon x-show="accountBusy" icon="mdi:loading" class="animate-spin text-lg"
+              aria-hidden="true"></iconify-icon>
+            <iconify-icon x-show="!accountBusy" icon="mdi:delete-outline" class="text-lg"
+              aria-hidden="true"></iconify-icon>
+            <span x-show="!accountBusy">Ya, Hapus</span>
+            <span x-show="accountBusy">Menghapus...</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  </template>
+
+  <template x-teleport="body">
+    <div x-show="passwordRecoveryDialogOpen" x-transition.opacity style="display: none; z-index: 115;"
+      class="fixed inset-0 z-[115] flex items-center justify-center overflow-y-auto overscroll-contain p-4 sm:p-6"
+      role="dialog" aria-modal="true" aria-labelledby="password-recovery-review-title"
+      @click.self="passwordRecoveryDialogOpen = false; passwordRecoveryRequest = null; passwordRecoveryBusy = false">
+      <div class="akun-modal-backdrop absolute inset-0"
+        @click="passwordRecoveryDialogOpen = false; passwordRecoveryRequest = null; passwordRecoveryBusy = false">
+      </div>
+      <section x-show="passwordRecoveryDialogOpen" x-transition
+        class="akun-modal-panel relative z-10 my-auto w-full max-w-lg overflow-hidden rounded-xl border border-white/15 bg-[#092f46]/95 text-white">
+        <header class="flex items-start gap-3 bg-gradient-to-r from-[#00385a] to-[#007f78] px-5 py-4 text-white">
+          <span
+            class="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-white/10 text-white ring-1 ring-white/15">
+            <iconify-icon icon="mdi:lock-question" class="text-2xl" aria-hidden="true"></iconify-icon>
+          </span>
+          <div class="min-w-0 flex-1">
+            <h2 id="password-recovery-review-title" class="font-semibold">Permintaan ganti password</h2>
+            <p class="mt-1 text-sm text-teal-50">Periksa permintaan sebelum menerima atau menolaknya.</p>
+          </div>
+          <button type="button"
+            @click="passwordRecoveryDialogOpen = false; passwordRecoveryRequest = null; passwordRecoveryBusy = false"
+            class="rounded-md p-1 text-white/80 transition hover:bg-white/15 hover:text-white"
+            aria-label="Tutup pop-up">
+            <iconify-icon icon="mdi:close" class="text-xl" aria-hidden="true"></iconify-icon>
+          </button>
+        </header>
+
+        <div class="space-y-4 px-5 py-5">
+          <div class="rounded-lg border border-white/10 bg-white/5 p-4">
+            <p class="text-sm font-semibold text-white"
+              x-text="[passwordRecoveryRequest?.first_name, passwordRecoveryRequest?.last_name].filter(Boolean).join(' ')">
+            </p>
+            <p class="mt-1 text-xs text-slate-300">
+              Username: <span class="font-semibold text-white" x-text="passwordRecoveryRequest?.username"></span>
+            </p>
+          </div>
+          <p class="text-sm leading-6 text-slate-200">
+            Jika diterima, pengguna akan membuat password baru setelah masuk menggunakan password sementara.
+          </p>
+
+          <div class="flex flex-col-reverse gap-2 border-t border-white/10 pt-4 sm:flex-row sm:justify-end">
+            <form method="POST" x-bind:action="passwordRecoveryRequest?.reject_url"
+              @submit="passwordRecoveryBusy = true">
+              @csrf
+              <button type="submit" :disabled="passwordRecoveryBusy" :aria-busy="passwordRecoveryBusy.toString()"
+                class="inline-flex w-full items-center justify-center gap-2 rounded-lg border border-rose-300/50 bg-rose-500/10 px-4 py-2.5 text-sm font-semibold text-rose-100 transition hover:bg-rose-500/20 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-rose-200 disabled:cursor-wait disabled:opacity-70 sm:w-auto">
+                <iconify-icon x-show="passwordRecoveryBusy" icon="mdi:loading" class="animate-spin text-lg"
                   aria-hidden="true"></iconify-icon>
-                <iconify-icon x-show="!importBusy" icon="mdi:upload" width="16" aria-hidden="true"></iconify-icon>
-                <span x-show="!importBusy">Simpan Import</span>
-                <span x-show="importBusy">Mengimpor...</span>
+                <iconify-icon x-show="!passwordRecoveryBusy" icon="mdi:close-circle-outline" class="text-lg"
+                  aria-hidden="true"></iconify-icon>
+                <span x-show="!passwordRecoveryBusy">Tolak Permintaan</span>
+                <span x-show="passwordRecoveryBusy">Memproses...</span>
               </button>
-            </div>
-          </form>
-        </div>
-      </div>
-    </template>
-
-    {{-- ========================================== --}}
-    {{-- MODAL: Konfirmasi Hapus --}}
-    {{-- ========================================== --}}
-    <template x-teleport="body">
-      <div x-show="deleteModalOpen" x-transition.opacity style="display: none; z-index: 100;"
-        class="fixed inset-0 z-[100] flex items-center justify-center overflow-y-auto overscroll-contain p-4 sm:p-6"
-        role="dialog" aria-modal="true">
-        <div class="akun-modal-backdrop absolute inset-0 backdrop-blur-md" @click="if (!accountBusy) cancelDelete()"></div>
-        <div x-show="deleteModalOpen" x-transition :class="deleteShaking ? 'animate-[shake_0.4s_ease-in-out]' : ''"
-          class="akun-modal-panel relative z-10 my-auto w-full max-w-md overflow-hidden rounded-xl border-2 border-rose-300 bg-white shadow-[0_24px_80px_rgba(2,25,41,0.4)]">
-
-          <div class="p-6 text-center">
-            <div class="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-rose-100">
-              <iconify-icon icon="mdi:alert-circle" class="text-rose-600" width="28"></iconify-icon>
-            </div>
-            <h3 class="text-lg font-semibold text-slate-900">Hapus Akun?</h3>
-            <p class="mt-2 text-sm text-slate-600">
-              Apakah Anda yakin ingin menghapus akun
-              <span class="font-bold text-slate-800" x-text="pendingDeleteUsername"></span> dari daftar akun?
-              Hak akses terkait akun ini juga akan ikut terhapus.
-            </p>
-          </div>
-          <div class="flex justify-end gap-3 border-t border-slate-200 bg-slate-50 px-6 py-4">
-            <button type="button" @click="cancelDelete()" :disabled="accountBusy"
-              class="rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-slate-400">Batal</button>
-            <button type="button" @click="submitDelete()" :disabled="accountBusy" :aria-busy="accountBusy.toString()"
-              class="inline-flex min-w-28 items-center justify-center gap-2 rounded-md border border-rose-300 bg-rose-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-rose-700 focus:outline-none focus:ring-2 focus:ring-rose-500 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-70">
-              <iconify-icon x-show="accountBusy" icon="mdi:loading" class="animate-spin text-lg"
-                aria-hidden="true"></iconify-icon>
-              <iconify-icon x-show="!accountBusy" icon="mdi:delete-outline" class="text-lg"
-                aria-hidden="true"></iconify-icon>
-              <span x-show="!accountBusy">Ya, Hapus</span>
-              <span x-show="accountBusy">Menghapus...</span>
-            </button>
+            </form>
+            <form method="POST" x-bind:action="passwordRecoveryRequest?.approve_url"
+              @submit="passwordRecoveryBusy = true">
+              @csrf
+              <button type="submit" :disabled="passwordRecoveryBusy" :aria-busy="passwordRecoveryBusy.toString()"
+                class="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-[#007f78] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[#006b70] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white disabled:cursor-wait disabled:opacity-70 sm:w-auto">
+                <iconify-icon x-show="passwordRecoveryBusy" icon="mdi:loading" class="animate-spin text-lg"
+                  aria-hidden="true"></iconify-icon>
+                <iconify-icon x-show="!passwordRecoveryBusy" icon="mdi:check-circle-outline" class="text-lg"
+                  aria-hidden="true"></iconify-icon>
+                <span x-show="!passwordRecoveryBusy">Terima Permintaan</span>
+                <span x-show="passwordRecoveryBusy">Memproses...</span>
+              </button>
+            </form>
           </div>
         </div>
-      </div>
-    </template>
+      </section>
+    </div>
+  </template>
 
-    <template x-teleport="body">
-      <div
-        x-show="passwordRecoveryDialogOpen"
-        x-transition.opacity
-        style="display: none; z-index: 115;"
-        class="fixed inset-0 z-[115] flex items-center justify-center overflow-y-auto overscroll-contain p-4 sm:p-6"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="password-recovery-review-title"
-        @click.self="passwordRecoveryDialogOpen = false; passwordRecoveryRequest = null; passwordRecoveryBusy = false">
-        <div
-          class="akun-modal-backdrop absolute inset-0"
-          @click="passwordRecoveryDialogOpen = false; passwordRecoveryRequest = null; passwordRecoveryBusy = false"></div>
-        <section
-          x-show="passwordRecoveryDialogOpen"
-          x-transition
-          class="akun-modal-panel relative z-10 my-auto w-full max-w-lg overflow-hidden rounded-xl border border-white/15 bg-[#092f46]/95 text-white">
-          <header class="flex items-start gap-3 bg-gradient-to-r from-[#00385a] to-[#007f78] px-5 py-4 text-white">
-            <span class="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-white/10 text-white ring-1 ring-white/15">
-              <iconify-icon icon="mdi:lock-question" class="text-2xl" aria-hidden="true"></iconify-icon>
-            </span>
-            <div class="min-w-0 flex-1">
-              <h2 id="password-recovery-review-title" class="font-semibold">Permintaan ganti password</h2>
-              <p class="mt-1 text-sm text-teal-50">Periksa permintaan sebelum menerima atau menolaknya.</p>
-            </div>
-            <button type="button"
-              @click="passwordRecoveryDialogOpen = false; passwordRecoveryRequest = null; passwordRecoveryBusy = false"
-              class="rounded-md p-1 text-white/80 transition hover:bg-white/15 hover:text-white"
-              aria-label="Tutup pop-up">
-              <iconify-icon icon="mdi:close" class="text-xl" aria-hidden="true"></iconify-icon>
-            </button>
-          </header>
-
-          <div class="space-y-4 px-5 py-5">
-            <div class="rounded-lg border border-white/10 bg-white/5 p-4">
-              <p class="text-sm font-semibold text-white"
-                x-text="[passwordRecoveryRequest?.first_name, passwordRecoveryRequest?.last_name].filter(Boolean).join(' ')"></p>
-              <p class="mt-1 text-xs text-slate-300">
-                Username: <span class="font-semibold text-white" x-text="passwordRecoveryRequest?.username"></span>
-              </p>
-            </div>
-            <p class="text-sm leading-6 text-slate-200">
-              Jika diterima, pengguna akan membuat password baru setelah masuk menggunakan password sementara.
-            </p>
-
-            <div class="flex flex-col-reverse gap-2 border-t border-white/10 pt-4 sm:flex-row sm:justify-end">
-              <form method="POST" x-bind:action="passwordRecoveryRequest?.reject_url"
-                @submit="passwordRecoveryBusy = true">
-                @csrf
-                <button type="submit" :disabled="passwordRecoveryBusy" :aria-busy="passwordRecoveryBusy.toString()"
-                  class="inline-flex w-full items-center justify-center gap-2 rounded-lg border border-rose-300/50 bg-rose-500/10 px-4 py-2.5 text-sm font-semibold text-rose-100 transition hover:bg-rose-500/20 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-rose-200 disabled:cursor-wait disabled:opacity-70 sm:w-auto">
-                  <iconify-icon x-show="passwordRecoveryBusy" icon="mdi:loading" class="animate-spin text-lg"
-                    aria-hidden="true"></iconify-icon>
-                  <iconify-icon x-show="!passwordRecoveryBusy" icon="mdi:close-circle-outline" class="text-lg"
-                    aria-hidden="true"></iconify-icon>
-                  <span x-show="!passwordRecoveryBusy">Tolak Permintaan</span>
-                  <span x-show="passwordRecoveryBusy">Memproses...</span>
-                </button>
-              </form>
-              <form method="POST" x-bind:action="passwordRecoveryRequest?.approve_url"
-                @submit="passwordRecoveryBusy = true">
-                @csrf
-                <button type="submit" :disabled="passwordRecoveryBusy" :aria-busy="passwordRecoveryBusy.toString()"
-                  class="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-[#007f78] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[#006b70] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white disabled:cursor-wait disabled:opacity-70 sm:w-auto">
-                  <iconify-icon x-show="passwordRecoveryBusy" icon="mdi:loading" class="animate-spin text-lg"
-                    aria-hidden="true"></iconify-icon>
-                  <iconify-icon x-show="!passwordRecoveryBusy" icon="mdi:check-circle-outline" class="text-lg"
-                    aria-hidden="true"></iconify-icon>
-                  <span x-show="!passwordRecoveryBusy">Terima Permintaan</span>
-                  <span x-show="passwordRecoveryBusy">Memproses...</span>
-                </button>
-              </form>
-            </div>
+  <template x-teleport="body">
+    <div x-show="recoveryTemporaryPasswordOpen" x-transition.opacity style="display: none; z-index: 125;"
+      class="fixed inset-0 z-[125] flex items-center justify-center overflow-y-auto overscroll-contain bg-[#00385a]/70 p-4 backdrop-blur-sm sm:p-6"
+      role="dialog" aria-modal="true" aria-labelledby="recovery-temporary-password-title">
+      <section x-show="recoveryTemporaryPasswordOpen" x-transition
+        class="my-auto w-full max-w-lg overflow-hidden rounded-2xl border border-white/15 bg-[#092f46] text-white shadow-[0_24px_80px_rgba(2,25,41,0.4)]">
+        <header
+          class="flex items-start gap-4 bg-gradient-to-r from-[#00385a] to-[#007f78] px-5 py-5 text-white sm:px-7">
+          <span
+            class="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-white/15 ring-1 ring-white/20">
+            <iconify-icon icon="mdi:lock-reset" class="text-2xl" aria-hidden="true"></iconify-icon>
+          </span>
+          <div class="min-w-0 flex-1">
+            <h2 id="recovery-temporary-password-title" class="text-lg font-bold">Permintaan diterima</h2>
+            <p class="mt-1 text-sm leading-5 text-teal-50">Sampaikan password sementara ini kepada pemilik akun.</p>
           </div>
-        </section>
-      </div>
-    </template>
+          <button type="button" @click="closeRecoveryTemporaryPassword()"
+            class="rounded-lg p-1.5 text-white/80 transition hover:bg-white/15 hover:text-white"
+            aria-label="Tutup password sementara">
+            <iconify-icon icon="mdi:close" class="text-xl" aria-hidden="true"></iconify-icon>
+          </button>
+        </header>
 
-    <template x-teleport="body">
-      <div
-        x-show="recoveryTemporaryPasswordOpen"
-        x-transition.opacity
-        style="display: none; z-index: 125;"
-        class="fixed inset-0 z-[125] flex items-center justify-center overflow-y-auto overscroll-contain bg-[#00385a]/70 p-4 backdrop-blur-sm sm:p-6"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="recovery-temporary-password-title">
-        <section
-          x-show="recoveryTemporaryPasswordOpen"
-          x-transition
-          class="my-auto w-full max-w-lg overflow-hidden rounded-2xl border border-white/15 bg-[#092f46] text-white shadow-[0_24px_80px_rgba(2,25,41,0.4)]">
-          <header class="flex items-start gap-4 bg-gradient-to-r from-[#00385a] to-[#007f78] px-5 py-5 text-white sm:px-7">
-            <span class="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-white/15 ring-1 ring-white/20">
-              <iconify-icon icon="mdi:lock-reset" class="text-2xl" aria-hidden="true"></iconify-icon>
-            </span>
-            <div class="min-w-0 flex-1">
-              <h2 id="recovery-temporary-password-title" class="text-lg font-bold">Permintaan diterima</h2>
-              <p class="mt-1 text-sm leading-5 text-teal-50">Sampaikan password sementara ini kepada pemilik akun.</p>
-            </div>
+        <div class="space-y-5 px-5 py-5 sm:px-7 sm:py-6">
+          <p class="text-sm leading-6 text-slate-200">
+            Password ini hanya ditampilkan sekali. Berikan kepada pengguna yang berkaitan. Setelah login, pengguna wajib
+            membuat password baru.
+          </p>
+          <div class="flex flex-col gap-3 sm:flex-row">
+            <code
+              class="min-w-0 flex-1 break-all rounded-lg border border-white/15 bg-white/10 px-4 py-3 text-center font-mono text-lg font-bold tracking-wider text-white select-all"
+              x-text="recoveryTemporaryPassword"></code>
+            <button type="button" @click="copyRecoveryTemporaryPassword()"
+              class="inline-flex shrink-0 items-center justify-center gap-2 rounded-lg bg-[#007f78] px-4 py-3 text-sm font-semibold text-white transition hover:bg-[#006b70] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#00385a]">
+              <iconify-icon :icon="recoveryPasswordCopied ? 'mdi:check' : 'mdi:content-copy'" class="text-lg"
+                aria-hidden="true"></iconify-icon>
+              <span x-text="recoveryPasswordCopied ? 'Tersalin' : 'Salin password'"></span>
+            </button>
+          </div>
+          <div class="flex justify-end border-t border-white/10 pt-4">
             <button type="button" @click="closeRecoveryTemporaryPassword()"
-              class="rounded-lg p-1.5 text-white/80 transition hover:bg-white/15 hover:text-white"
-              aria-label="Tutup password sementara">
-              <iconify-icon icon="mdi:close" class="text-xl" aria-hidden="true"></iconify-icon>
+              class="rounded-lg border border-white/20 bg-white/5 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-white/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white">
+              Selesai
             </button>
-          </header>
-
-          <div class="space-y-5 px-5 py-5 sm:px-7 sm:py-6">
-            <p class="text-sm leading-6 text-slate-200">
-              Password ini hanya ditampilkan sekali. Berikan kepada pengguna yang berkaitan. Setelah login, pengguna wajib membuat password baru.
-            </p>
-            <div class="flex flex-col gap-3 sm:flex-row">
-              <code
-                class="min-w-0 flex-1 break-all rounded-lg border border-white/15 bg-white/10 px-4 py-3 text-center font-mono text-lg font-bold tracking-wider text-white select-all"
-                x-text="recoveryTemporaryPassword"></code>
-              <button type="button" @click="copyRecoveryTemporaryPassword()"
-                class="inline-flex shrink-0 items-center justify-center gap-2 rounded-lg bg-[#007f78] px-4 py-3 text-sm font-semibold text-white transition hover:bg-[#006b70] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#00385a]">
-                <iconify-icon :icon="recoveryPasswordCopied ? 'mdi:check' : 'mdi:content-copy'" class="text-lg" aria-hidden="true"></iconify-icon>
-                <span x-text="recoveryPasswordCopied ? 'Tersalin' : 'Salin password'"></span>
-              </button>
-            </div>
-            <div class="flex justify-end border-t border-white/10 pt-4">
-              <button type="button" @click="closeRecoveryTemporaryPassword()"
-                class="rounded-lg border border-white/20 bg-white/5 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-white/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white">
-                Selesai
-              </button>
-            </div>
           </div>
-        </section>
-      </div>
-    </template>
+        </div>
+      </section>
+    </div>
+  </template>
 
-    @if ($passwordResetUser)
+  @if ($passwordResetUser)
     <template x-teleport="body">
-      <div
-        x-show="passwordResetOpen"
-        x-transition.opacity
-        style="display: none; z-index: 120;"
+      <div x-show="passwordResetOpen" x-transition.opacity style="display: none; z-index: 120;"
         class="fixed inset-0 z-[120] flex items-center justify-center overflow-y-auto overscroll-contain bg-[#00385a]/65 p-4 backdrop-blur-sm sm:p-6"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="password-reset-title"
-        @click.self="closePasswordReset()">
-        <section
-          x-show="passwordResetOpen"
-          x-transition
+        role="dialog" aria-modal="true" aria-labelledby="password-reset-title" @click.self="closePasswordReset()">
+        <section x-show="passwordResetOpen" x-transition
           class="my-auto w-full max-w-lg overflow-hidden rounded-2xl border border-white/70 bg-white shadow-[0_24px_80px_rgba(2,25,41,0.4)]">
-          <header class="flex items-start gap-4 bg-gradient-to-r from-[#00385a] to-[#007f78] px-5 py-5 text-white sm:px-7">
-            <span class="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-white/15 ring-1 ring-white/20">
+          <header
+            class="flex items-start gap-4 bg-gradient-to-r from-[#00385a] to-[#007f78] px-5 py-5 text-white sm:px-7">
+            <span
+              class="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-white/15 ring-1 ring-white/20">
               <iconify-icon icon="mdi:lock-reset" class="text-2xl" aria-hidden="true"></iconify-icon>
             </span>
             <div class="min-w-0 flex-1">
@@ -1571,71 +1576,64 @@
 
           <div class="space-y-5 px-5 py-5 sm:px-7 sm:py-6">
             <div class="flex items-center gap-3 rounded-xl border border-[#dce9e6] bg-[#f7fbfa] p-4">
-              <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-white text-[#007f78] shadow-sm ring-1 ring-[#dce9e6]">
+              <span
+                class="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-white text-[#007f78] shadow-sm ring-1 ring-[#dce9e6]">
                 <iconify-icon icon="mdi:account-outline" class="text-xl" aria-hidden="true"></iconify-icon>
               </span>
               <div class="min-w-0">
-                <p class="truncate text-sm font-bold text-[#00385a]">{{ $passwordResetUser?->first_name }} {{ $passwordResetUser?->last_name }}</p>
+                <p class="truncate text-sm font-bold text-[#00385a]">{{ $passwordResetUser?->first_name }}
+                  {{ $passwordResetUser?->last_name }}</p>
                 <p class="truncate text-xs text-slate-600">Username: {{ $passwordResetUser?->username }}</p>
               </div>
-              <span class="ml-auto inline-flex shrink-0 items-center gap-1.5 rounded-full bg-amber-100 px-2.5 py-1 text-[11px] font-semibold text-amber-800">
+              <span
+                class="ml-auto inline-flex shrink-0 items-center gap-1.5 rounded-full bg-amber-100 px-2.5 py-1 text-[11px] font-semibold text-amber-800">
                 <span class="h-1.5 w-1.5 rounded-full bg-amber-500"></span>
                 Menunggu
               </span>
             </div>
 
             @if ($errors->has('new_password'))
-              <div class="flex items-start gap-2 rounded-lg border border-rose-200 bg-rose-50 px-3.5 py-3 text-sm text-rose-800"
+              <div
+                class="flex items-start gap-2 rounded-lg border border-rose-200 bg-rose-50 px-3.5 py-3 text-sm text-rose-800"
                 role="alert">
-                <iconify-icon icon="mdi:alert-circle-outline" class="mt-0.5 shrink-0 text-lg" aria-hidden="true"></iconify-icon>
+                <iconify-icon icon="mdi:alert-circle-outline" class="mt-0.5 shrink-0 text-lg"
+                  aria-hidden="true"></iconify-icon>
                 <p>{{ $errors->first('new_password') }}</p>
               </div>
             @endif
 
-            <form
-              action="{{ route('admin.akun.password.update', $passwordResetUser?->akun_id) }}"
-              method="POST"
-              x-ref="passwordResetForm"
-              class="space-y-4">
+            <form action="{{ route('admin.akun.password.update', $passwordResetUser?->akun_id) }}" method="POST"
+              x-ref="passwordResetForm" class="space-y-4">
               @csrf
               @method('PUT')
 
               <div>
-                <label for="reset-new-password" class="mb-1.5 block text-sm font-semibold text-slate-700">Password baru</label>
-                <input
-                  type="password"
-                  id="reset-new-password"
-                  name="new_password"
-                  required
-                  minlength="8"
-                  autofocus
-                  autocomplete="new-password"
-                  aria-describedby="reset-password-help"
-                  @class([
+                <label for="reset-new-password" class="mb-1.5 block text-sm font-semibold text-slate-700">Password
+                  baru</label>
+                <input type="password" id="reset-new-password" name="new_password" required minlength="8" autofocus
+                  autocomplete="new-password" aria-describedby="reset-password-help" @class([
                       'w-full rounded-lg border bg-white px-3.5 py-2.5 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:ring-4 focus:ring-[#00b19c]/10',
                       'border-rose-400 focus:border-rose-500' => $errors->has('new_password'),
-                      'border-slate-300 focus:border-[#007f78]' => ! $errors->has('new_password'),
+                      'border-slate-300 focus:border-[#007f78]' => !$errors->has('new_password'),
                   ])
                   placeholder="Minimal 8 karakter">
-                <p id="reset-password-help" class="mt-1.5 text-xs leading-5 text-slate-500">Password ini akan langsung berlaku untuk akun tersebut.</p>
+                <p id="reset-password-help" class="mt-1.5 text-xs leading-5 text-slate-500">Password ini akan langsung
+                  berlaku untuk akun tersebut.</p>
               </div>
 
               <div>
-                <label for="reset-new-password-confirmation" class="mb-1.5 block text-sm font-semibold text-slate-700">
+                <label for="reset-new-password-confirmation"
+                  class="mb-1.5 block text-sm font-semibold text-slate-700">
                   Konfirmasi password baru
                 </label>
-                <input
-                  type="password"
-                  id="reset-new-password-confirmation"
-                  name="new_password_confirmation"
-                  required
-                  minlength="8"
-                  autocomplete="new-password"
+                <input type="password" id="reset-new-password-confirmation" name="new_password_confirmation" required
+                  minlength="8" autocomplete="new-password"
                   class="w-full rounded-lg border border-slate-300 bg-white px-3.5 py-2.5 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-[#007f78] focus:ring-4 focus:ring-[#00b19c]/10"
                   placeholder="Ketik ulang password baru">
               </div>
 
-              <p class="rounded-lg border-l-4 border-amber-400 bg-amber-50 px-3.5 py-2.5 text-xs leading-5 text-amber-900">
+              <p
+                class="rounded-lg border-l-4 border-amber-400 bg-amber-50 px-3.5 py-2.5 text-xs leading-5 text-amber-900">
                 Berikan password baru kepada pengguna melalui jalur yang aman.
               </p>
 
@@ -1646,7 +1644,8 @@
                 </button>
                 <button type="submit"
                   class="inline-flex items-center justify-center gap-2 rounded-lg bg-[#007f78] px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-[#006b70] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#00385a]">
-                  <iconify-icon icon="mdi:content-save-edit-outline" class="text-lg" aria-hidden="true"></iconify-icon>
+                  <iconify-icon icon="mdi:content-save-edit-outline" class="text-lg"
+                    aria-hidden="true"></iconify-icon>
                   Simpan password baru
                 </button>
               </div>
@@ -1655,110 +1654,113 @@
         </section>
       </div>
     </template>
-    @endif
+  @endif
 
-    {{-- ========================================== --}}
-    {{-- MODAL: Detail Log Import --}}
-    {{-- ========================================== --}}
-    <template x-teleport="body">
-      <div x-show="openLogDetail" x-transition.opacity style="display: none; z-index: 110;"
-        class="fixed inset-0 z-[110] flex items-center justify-center overflow-y-auto overscroll-contain p-4 sm:p-6"
-        role="dialog" aria-modal="true">
-        <div class="akun-modal-backdrop absolute inset-0 backdrop-blur-md" @click="openLogDetail = false"></div>
-        <div x-show="openLogDetail" x-transition
-          class="akun-modal-panel relative z-10 my-auto w-full max-w-2xl overflow-hidden rounded-xl border-2 border-[#08A9D6] bg-white shadow-[0_24px_80px_rgba(2,25,41,0.4)]">
+  {{-- ========================================== --}}
+  {{-- MODAL: Detail Log Import --}}
+  {{-- ========================================== --}}
+  <template x-teleport="body">
+    <div x-show="openLogDetail" x-transition.opacity style="display: none; z-index: 110;"
+      class="fixed inset-0 z-[110] flex items-center justify-center overflow-y-auto overscroll-contain p-4 sm:p-6"
+      role="dialog" aria-modal="true">
+      <div class="akun-modal-backdrop absolute inset-0 backdrop-blur-md" @click="openLogDetail = false"></div>
+      <div x-show="openLogDetail" x-transition
+        class="akun-modal-panel relative z-10 my-auto w-full max-w-2xl overflow-hidden rounded-xl border-2 border-[#08A9D6] bg-white shadow-[0_24px_80px_rgba(2,25,41,0.4)]">
 
-          <div class="flex items-center justify-between border-b border-slate-200 px-5 py-4">
-            <h2 class="text-base font-semibold text-slate-800">Detail Log Import</h2>
-            <button type="button" @click="openLogDetail = false"
-              class="rounded-md p-1 text-slate-500 transition hover:bg-rose-50 hover:text-rose-600">
-              <iconify-icon icon="mdi:close" width="20"></iconify-icon>
-            </button>
-          </div>
+        <div class="flex items-center justify-between border-b border-slate-200 px-5 py-4">
+          <h2 class="text-base font-semibold text-slate-800">Detail Log Import</h2>
+          <button type="button" @click="openLogDetail = false"
+            class="rounded-md p-1 text-slate-500 transition hover:bg-rose-50 hover:text-rose-600">
+            <iconify-icon icon="mdi:close" width="20"></iconify-icon>
+          </button>
+        </div>
 
-          <div class="px-5 py-4 max-h-[60vh] overflow-y-auto">
-            <template x-if="logDetailLoading">
-              <div class="flex flex-col items-center justify-center py-8 text-slate-500">
-                <iconify-icon icon="mdi:loading" class="animate-spin mb-2" width="32"></iconify-icon>
-                <p>Memuat detail log...</p>
-              </div>
-            </template>
+        <div class="px-5 py-4 max-h-[60vh] overflow-y-auto">
+          <template x-if="logDetailLoading">
+            <div class="flex flex-col items-center justify-center py-8 text-slate-500">
+              <iconify-icon icon="mdi:loading" class="animate-spin mb-2" width="32"></iconify-icon>
+              <p>Memuat detail log...</p>
+            </div>
+          </template>
 
-            <template x-if="!logDetailLoading && logDetailData">
-              <div class="space-y-4">
-                <div class="grid grid-cols-2 gap-4 text-sm">
-                  <div>
-                    <p class="text-xs text-slate-500">Nama File</p>
-                    <p class="font-medium text-slate-800" x-text="logDetailData.nama_file"></p>
-                  </div>
-                  <div>
-                    <p class="text-xs text-slate-500">Status</p>
-                    <span class="inline-flex rounded-md px-2 py-1 text-xs font-medium"
-                      :class="{
-                          'bg-emerald-100 text-emerald-800': logDetailData.status === 'selesai',
-                          'bg-rose-100 text-rose-800': logDetailData.status === 'gagal',
-                          'bg-amber-100 text-amber-800': logDetailData.status === 'sebagian'
-                      }"
-                      x-text="logDetailData.status.charAt(0).toUpperCase() + logDetailData.status.slice(1)">
-                    </span>
-                  </div>
-                  <div>
-                    <p class="text-xs text-slate-500">Total Baris</p>
-                    <p class="font-medium text-slate-800" x-text="logDetailData.total_baris"></p>
-                  </div>
-                  <div>
-                    <p class="text-xs text-slate-500">Berhasil / Gagal</p>
-                    <p class="font-medium text-slate-800">
-                      <span class="text-emerald-600" x-text="logDetailData.baris_berhasil"></span> /
-                      <span class="text-rose-600" x-text="logDetailData.baris_gagal"></span>
-                    </p>
-                  </div>
+          <template x-if="!logDetailLoading && logDetailData">
+            <div class="space-y-4">
+              <div class="grid grid-cols-2 gap-4 text-sm">
+                <div>
+                  <p class="text-xs text-slate-500">Nama File</p>
+                  <p class="font-medium text-slate-800" x-text="logDetailData.nama_file"></p>
                 </div>
-
-                <template x-if="logDetailData.detail_error && logDetailData.detail_error[1]">
-                  <div class="rounded-md border border-rose-200 bg-rose-50 p-3">
-                    <p class="mb-1 text-xs font-semibold text-rose-800">Penyebab Import Gagal</p>
-                    <p class="text-xs text-rose-700" x-text="logDetailData.detail_error[1]"></p>
-                  </div>
-                </template>
-
-                <template x-if="logDetailData.detail_error && logDetailData.detail_error[3]">
-                  <div class="rounded-md border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
-                    <p class="font-semibold">Periksa judul kolom pada file:</p>
-                    <p class="mt-1"
-                      x-text="`Baris judul terdeteksi: ${logDetailData.detail_error[3].row ?? 'tidak diketahui'}`"></p>
-                    <p class="mt-1"
-                      x-text="`Kolom yang terbaca: ${logDetailData.detail_error[3].columns.join(', ') || 'tidak ada'}`"></p>
-                    <p class="mt-1 font-semibold"
-                      x-text="`Kolom wajib yang belum ada: ${logDetailData.detail_error[3].missing_columns.join(', ') || 'tidak ada'}`"></p>
-                    <p class="mt-2">Gunakan template import akun agar susunan kolom sesuai.</p>
-                  </div>
-                </template>
-
-                <template x-if="logDetailData.detail_error && logDetailData.detail_error[2] && logDetailData.detail_error[2].length > 0">
-                  <div class="rounded-md bg-rose-50 border border-rose-200 p-3">
-                    <p class="text-xs font-semibold text-rose-800 mb-2">Daftar Error:</p>
-                    <ul class="space-y-1 max-h-40 overflow-y-auto text-xs text-rose-700">
-                      <template x-for="(err, index) in logDetailData.detail_error[2]" :key="index">
-                        <li class="flex gap-2">
-                          <span class="font-mono font-bold shrink-0" x-text="`${err[0]}:`"></span>
-                          <span x-text="err[1]"></span>
-                        </li>
-                      </template>
-                    </ul>
-                  </div>
-                </template>
+                <div>
+                  <p class="text-xs text-slate-500">Status</p>
+                  <span class="inline-flex rounded-md px-2 py-1 text-xs font-medium"
+                    :class="{
+                        'bg-emerald-100 text-emerald-800': logDetailData.status === 'selesai',
+                        'bg-rose-100 text-rose-800': logDetailData.status === 'gagal',
+                        'bg-amber-100 text-amber-800': logDetailData.status === 'sebagian'
+                    }"
+                    x-text="logDetailData.status.charAt(0).toUpperCase() + logDetailData.status.slice(1)">
+                  </span>
+                </div>
+                <div>
+                  <p class="text-xs text-slate-500">Total Baris</p>
+                  <p class="font-medium text-slate-800" x-text="logDetailData.total_baris"></p>
+                </div>
+                <div>
+                  <p class="text-xs text-slate-500">Berhasil / Gagal</p>
+                  <p class="font-medium text-slate-800">
+                    <span class="text-emerald-600" x-text="logDetailData.baris_berhasil"></span> /
+                    <span class="text-rose-600" x-text="logDetailData.baris_gagal"></span>
+                  </p>
+                </div>
               </div>
-            </template>
-          </div>
 
-          <div class="flex justify-end border-t border-slate-200 bg-slate-50 px-5 py-3">
-            <button type="button" @click="openLogDetail = false"
-              class="rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-slate-400">Tutup</button>
-          </div>
+              <template x-if="logDetailData.detail_error && logDetailData.detail_error[1]">
+                <div class="rounded-md border border-rose-200 bg-rose-50 p-3">
+                  <p class="mb-1 text-xs font-semibold text-rose-800">Penyebab Import Gagal</p>
+                  <p class="text-xs text-rose-700" x-text="logDetailData.detail_error[1]"></p>
+                </div>
+              </template>
+
+              <template x-if="logDetailData.detail_error && logDetailData.detail_error[3]">
+                <div class="rounded-md border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
+                  <p class="font-semibold">Periksa judul kolom pada file:</p>
+                  <p class="mt-1"
+                    x-text="`Baris judul terdeteksi: ${logDetailData.detail_error[3].row ?? 'tidak diketahui'}`"></p>
+                  <p class="mt-1"
+                    x-text="`Kolom yang terbaca: ${logDetailData.detail_error[3].columns.join(', ') || 'tidak ada'}`">
+                  </p>
+                  <p class="mt-1 font-semibold"
+                    x-text="`Kolom wajib yang belum ada: ${logDetailData.detail_error[3].missing_columns.join(', ') || 'tidak ada'}`">
+                  </p>
+                  <p class="mt-2">Gunakan template import akun agar susunan kolom sesuai.</p>
+                </div>
+              </template>
+
+              <template
+                x-if="logDetailData.detail_error && logDetailData.detail_error[2] && logDetailData.detail_error[2].length > 0">
+                <div class="rounded-md bg-rose-50 border border-rose-200 p-3">
+                  <p class="text-xs font-semibold text-rose-800 mb-2">Daftar Error:</p>
+                  <ul class="space-y-1 max-h-40 overflow-y-auto text-xs text-rose-700">
+                    <template x-for="(err, index) in logDetailData.detail_error[2]" :key="index">
+                      <li class="flex gap-2">
+                        <span class="font-mono font-bold shrink-0" x-text="`${err[0]}:`"></span>
+                        <span x-text="err[1]"></span>
+                      </li>
+                    </template>
+                  </ul>
+                </div>
+              </template>
+            </div>
+          </template>
+        </div>
+
+        <div class="flex justify-end border-t border-slate-200 bg-slate-50 px-5 py-3">
+          <button type="button" @click="openLogDetail = false"
+            class="rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-slate-400">Tutup</button>
         </div>
       </div>
-    </template>
+    </div>
+  </template>
 
   </div>
 </x-layout.admin>

@@ -69,6 +69,43 @@ class LogMutasiBarang extends Model
         return $this->belongsTo(Lemari::class, 'lemari_tujuan_id', 'lemari_id');
     }
 
+    public function reservationToolboxId(): ?string
+    {
+        $columnValue = $this->getAttribute('toolbox_id');
+
+        if (is_string($columnValue) && $columnValue !== '') {
+            return $columnValue;
+        }
+
+        if (preg_match('/\[toolbox:([0-9a-f-]{36})\]$/i', (string) $this->keterangan, $matches) !== 1) {
+            return null;
+        }
+
+        return $matches[1];
+    }
+
+    public function displayKeterangan(): ?string
+    {
+        $description = $this->keterangan;
+
+        if (! is_string($description)) {
+            return null;
+        }
+
+        return preg_replace('/ \[toolbox:[0-9a-f-]{36}\]$/i', '', $description) ?: $description;
+    }
+
+    public static function keteranganWithToolbox(string $description, ?string $toolboxId): string
+    {
+        if ($toolboxId === null) {
+            return mb_substr($description, 0, 255);
+        }
+
+        $marker = ' [toolbox:'.$toolboxId.']';
+
+        return mb_substr($description, 0, 255 - mb_strlen($marker)).$marker;
+    }
+
     public function akun(): BelongsTo
     {
         return $this->belongsTo(User::class, 'akun_id', 'akun_id');

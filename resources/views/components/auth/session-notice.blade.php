@@ -11,29 +11,15 @@
       }
     }
 
-    @keyframes session-notice-enter {
-      from {
-        opacity: 0;
-        transform: translate3d(0, 14px, 0) scale(0.98);
-      }
-
-      to {
-        opacity: 1;
-        transform: translate3d(0, 0, 0) scale(1);
-      }
-    }
-
     .session-notice-card {
       background:
         radial-gradient(ellipse at 100% 0%, rgb(0 169 149 / 12%), transparent 46%),
         radial-gradient(ellipse at 0% 100%, rgb(0 214 159 / 7%), transparent 38%),
         linear-gradient(145deg, #ffffff 0%, #ffffff 58%, #effcf8 100%);
-      animation: session-notice-enter 380ms cubic-bezier(.22, 1, .36, 1) both;
     }
 
     @media (prefers-reduced-motion: reduce) {
-      .session-notice-countdown,
-      .session-notice-card {
+      .session-notice-countdown {
         animation: none !important;
       }
 
@@ -44,10 +30,22 @@
   </style>
   <div x-data="{ visible: true }" x-init="window.setTimeout(() => visible = false, 4000)">
     <template x-teleport="body">
-      <div x-show="visible" x-transition.opacity
+      <div x-show="visible"
+        x-transition:enter="transition ease-out duration-500"
+        x-transition:enter-start="opacity-0"
+        x-transition:enter-end="opacity-100"
+        x-transition:leave="transition ease-in duration-300"
+        x-transition:leave-start="opacity-100"
+        x-transition:leave-end="opacity-0"
         class="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/45 p-4 backdrop-blur-sm"
         role="presentation">
-        <section x-show="visible" x-transition
+        <section x-show="visible"
+          x-transition:enter="transition ease-out duration-500"
+          x-transition:enter-start="translate-y-6 scale-95 opacity-0"
+          x-transition:enter-end="translate-y-0 scale-100 opacity-100"
+          x-transition:leave="transition ease-in duration-300"
+          x-transition:leave-start="translate-y-0 scale-100 opacity-100"
+          x-transition:leave-end="translate-y-4 scale-95 opacity-0"
           class="session-notice-card relative w-full max-w-lg overflow-hidden rounded-3xl border border-emerald-100 shadow-[0_24px_70px_rgba(0,56,50,0.25)]"
           role="dialog" aria-modal="true" aria-labelledby="session-notice-title"
           aria-describedby="session-notice-description">
