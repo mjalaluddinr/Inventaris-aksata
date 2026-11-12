@@ -34,7 +34,7 @@
           </div>
         </div>
       </template>
-      <a href="{{ route('user.beranda', ['page' => 'catalog']) }}"
+      <a href="{{ route('user.catalog') }}"
         class="mt-3 inline-flex rounded-full border border-[#00a88f] px-3 py-1.5 text-[10px] font-semibold text-[#007f70] transition hover:bg-emerald-50">+
         Tambah barang lain</a>
     </div>

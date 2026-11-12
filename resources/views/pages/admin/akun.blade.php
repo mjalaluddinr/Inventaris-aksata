@@ -112,7 +112,7 @@
   <div x-data="{
       openModal: @js($errors->any() && in_array(old('akun_form'), ['create', 'edit'], true)),
       modalMode: @js(old('akun_form') === 'edit' ? 'edit' : 'create'),
-      createDraft: { first_name: '', last_name: '', username: '', password: '', role: @js(auth()->user()?->role === 'admin' ? 'peminjam' : 'laboran'), is_active: true, must_change_password: false, privileges: [], legacyPrivileges: [] },
+      createDraft: { first_name: '', last_name: '', username: '', password: '', role: @js(auth()->user()?->role === 'admin' ? 'peminjam' : 'laboran'), is_active: true, privileges: [], legacyPrivileges: [] },
       currentUser: {},
       privilegeOptions: ['melihat', 'meminjamkan', 'manajemen'],
       roleDialogOpen: false,
@@ -170,7 +170,6 @@
                   password: '',
                   role: @js(old('role', 'peminjam')),
                   is_active: @js(old('is_active', '1') === '1'),
-                  must_change_password: @js(in_array((string) old('must_change_password', '0'), ['1', 'true', 'on'], true)),
                   privileges: normalizedPrivileges.selected,
                   legacyPrivileges: normalizedPrivileges.legacy
               };
@@ -198,9 +197,6 @@
       },
       setCreateRole(role) {
           this.currentUser.role = role;
-          if (role !== 'peminjam') {
-              this.currentUser.must_change_password = false;
-          }
           if (role !== 'laboran') {
               this.currentUser.privileges = [];
               this.currentUser.legacyPrivileges = [];
@@ -231,7 +227,6 @@
                   username: account.username,
                   role: account.role,
                   is_active: account.is_active == 1,
-                  must_change_password: Boolean(account.must_change_password),
                   password: '',
                   privileges: normalizedPrivileges.selected,
                   legacyPrivileges: normalizedPrivileges.legacy
@@ -263,9 +258,6 @@
       async applyRoleDialog() {
           const shouldSaveAccount = this.roleDialogSavesAccount;
           this.currentUser.role = this.roleDialogDraft.role;
-          if (this.currentUser.role !== 'peminjam') {
-              this.currentUser.must_change_password = false;
-          }
           if (this.currentUser.role === 'laboran') {
               const selected = new Set(this.roleDialogDraft.privileges);
               if (selected.has('meminjamkan') || selected.has('manajemen')) {
@@ -300,7 +292,6 @@
               username: user.username,
               role: user.role,
               is_active: user.is_active == 1,
-              must_change_password: Boolean(user.must_change_password),
               password: '',
               privileges: normalizedPrivileges.selected,
               legacyPrivileges: normalizedPrivileges.legacy
@@ -874,13 +865,6 @@
                       <td class="whitespace-nowrap px-4 py-3 text-sm font-medium text-slate-800">
                         <div class="text-sm font-medium text-slate-800">{{ $user->first_name }} {{ $user->last_name }}
                         </div>
-                        @if ($user->must_change_password)
-                          <span
-                            class="mt-1 inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-800">
-                            <iconify-icon icon="mdi:lock-reset" width="13" aria-hidden="true"></iconify-icon>
-                            Wajib ganti password saat login
-                          </span>
-                        @endif
                         @if (isset($pendingPasswordRequests[$user->akun_id]))
                           <button type="button"
                             data-password-recovery-review="{{ json_encode(
@@ -902,7 +886,7 @@
                         @endif
                       </td>
                       <td class="whitespace-nowrap px-4 py-3 text-sm text-slate-600">
-                        <div class="font-bold text-slate-900 text-9xl">{{ $user->username }}</div>
+                        <div class="font-bold text-slate-900 text-sm">{{ $user->username }}</div>
                       </td>
                       <td class="whitespace-nowrap px-4 py-3 text-sm text-slate-700">
                         @php $roleColors = ['admin' => 'bg-rose-100 text-rose-800', 'laboran' => 'bg-blue-100 text-blue-800', 'peminjam' => 'bg-emerald-100 text-emerald-800']; @endphp
@@ -916,7 +900,6 @@
                                   'username' => $user->username,
                                   'role' => $user->role,
                                   'is_active' => $user->is_active,
-                                  'must_change_password' => $user->must_change_password,
                                   'privileges' => $user->privileges->pluck('hak_akses')->values(),
                               ],
                               JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP | JSON_HEX_TAG,
@@ -956,7 +939,6 @@
                                     'username' => $user->username,
                                     'role' => $user->role,
                                     'is_active' => $user->is_active,
-                                    'must_change_password' => $user->must_change_password,
                                     'privileges' => $user->privileges->pluck('hak_akses')->values(),
                                 ],
                                 JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP | JSON_HEX_TAG,
@@ -1025,7 +1007,6 @@
             @csrf
             <input type="hidden" name="akun_form" :value="modalMode">
             <input type="hidden" name="role" :value="currentUser.role">
-            <input type="hidden" name="must_change_password" :value="currentUser.must_change_password ? '1' : '0'">
             <template x-for="privilege in currentUser.role === 'laboran' ? currentUser.privileges : []"
               :key="`selected-${privilege}`">
               <input type="hidden" name="privileges[]" :value="privilege">
@@ -1146,14 +1127,6 @@
                   </p>
                 </div>
               </div>
-              <div x-show="currentUser.role === 'peminjam'" x-transition class="col-span-full">
-                <label class="inline-flex cursor-pointer items-center gap-2 text-sm text-slate-700">
-                  <input type="checkbox" x-model="currentUser.must_change_password"
-                    class="rounded border-slate-300 text-[#00A991] focus:ring-[#00A991]">
-                  <span>Wajib ganti password saat login</span>
-                </label>
-              </div>
-
               <input type="hidden" name="is_active"
                 :value="modalMode === 'create' ? '1' : (currentUser.is_active ? '1' : '0')">
             </div>

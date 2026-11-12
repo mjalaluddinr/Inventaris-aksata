@@ -156,10 +156,10 @@
             <p class="mt-4 max-w-xl text-sm leading-relaxed text-white/90 sm:text-base">Pilih barang dari katalog,
               masukkan ke keranjang, lalu ajukan. Semua status peminjamanmu bisa dipantau di satu tempat.</p>
             <div class="mt-6 flex flex-wrap gap-3">
-              <a href="{{ route('user.beranda', ['page' => 'catalog']) }}"
+              <a href="{{ route('user.catalog') }}"
                 class="home-pressable rounded-lg bg-[#00e39a] px-4 py-2.5 text-sm font-semibold text-[#004f46] shadow-sm transition hover:bg-[#43efb4]">Jelajahi
                 Katalog</a>
-              <a href="{{ route('user.beranda', ['page' => 'history']) }}"
+              <a href="{{ route('user.history') }}"
                 class="home-pressable rounded-lg bg-white/15 px-4 py-2.5 text-sm font-semibold text-white ring-1 ring-white/10 transition hover:bg-white/25">Riwayat
                 Saya</a>
             </div>
@@ -214,7 +214,7 @@
               @foreach ([0, 1] as $copy)
                 <div class="flex shrink-0 gap-4 pr-4" @if ($copy === 1) aria-hidden="true" @endif>
                   @foreach ($categories as $category)
-                    <a href="{{ route('user.beranda', ['page' => 'catalog', 'category' => $category->kategori_id]) }}"
+                    <a href="{{ route('user.catalog', ['category' => $category->kategori_id]) }}"
                       tabindex="{{ $copy === 1 ? '-1' : '0' }}"
                       class="user-card-enter home-scroll-reveal home-card-interaction group w-[min(78vw,18rem)] shrink-0 snap-start rounded-2xl bg-white px-6 py-5 shadow-[0_2px_4px_rgba(20,55,48,0.2)]"
                       style="--home-card-delay: {{ min($loop->index * 100, 400) }}ms">
@@ -240,7 +240,7 @@
                   @foreach ([0, 1] as $copy)
                     <div class="flex gap-4 pr-4" @if ($copy === 1) aria-hidden="true" @endif>
                       @foreach ($categories as $category)
-                        <a href="{{ route('user.beranda', ['page' => 'catalog', 'category' => $category->kategori_id]) }}"
+                        <a href="{{ route('user.catalog', ['category' => $category->kategori_id]) }}"
                           tabindex="{{ $copy === 1 ? '-1' : '0' }}"
                           class="user-card-enter home-scroll-reveal home-card-interaction group w-64 shrink-0 rounded-2xl bg-white px-8 py-5 shadow-[0_2px_4px_rgba(20,55,48,0.2)] sm:w-72"
                           style="--home-card-delay: {{ min($loop->index * 100, 400) }}ms">
@@ -261,7 +261,7 @@
             @else
               <div class="grid grid-cols-[repeat(auto-fill,minmax(min(100%,18rem),18rem))] gap-4 lg:gap-6">
                 @foreach ($categories as $category)
-                  <a href="{{ route('user.beranda', ['page' => 'catalog', 'category' => $category->kategori_id]) }}"
+                  <a href="{{ route('user.catalog', ['category' => $category->kategori_id]) }}"
                     class="user-card-enter home-scroll-reveal home-card-interaction group w-[min(78vw,18rem)] rounded-2xl bg-white px-6 py-5 shadow-[0_2px_4px_rgba(20,55,48,0.2)]"
                     style="--home-card-delay: {{ min($loop->index * 100, 400) }}ms">
                     <strong

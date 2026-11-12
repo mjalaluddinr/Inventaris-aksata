@@ -137,6 +137,9 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'permission:admin-pa
 // ASVS V8.2.2/V8.3.1: protect borrower pages and actions at the server-side boundary.
 Route::prefix('user')->name('user.')->middleware(['auth', 'can:access-user-portal'])->group(function () {
     Route::get('/beranda', BerandaController::class)->name('beranda');
+    Route::get('/katalog', [BerandaController::class, 'catalog'])->name('catalog');
+    Route::get('/ajukan-peminjaman', [BerandaController::class, 'apply'])->name('apply');
+    Route::get('/riwayat', [BerandaController::class, 'history'])->name('history');
 
     Route::post('/peminjaman', [PeminjamanController::class, 'store'])
         ->middleware('throttle:10,1')

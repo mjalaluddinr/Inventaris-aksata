@@ -35,6 +35,8 @@ class StorePeminjamanRequest extends FormRequest
             'items.min' => 'Pilih setidaknya satu barang untuk diajukan.',
             'items.max' => 'Pengajuan dibatasi maksimal 50 jenis barang.',
             'items.*.barang_id.distinct' => 'Barang yang sama tidak boleh dimasukkan lebih dari sekali.',
+            'items.*.barang_id.uuid' => 'ID barang tidak valid. Muat ulang katalog dan pilih kembali barang tersebut.',
+            'items.*.barang_id.exists' => 'Barang yang dipilih sudah tidak tersedia di katalog. Hapus lalu pilih kembali dari katalog.',
             'items.*.quantity.integer' => 'Jumlah barang harus berupa angka bulat.',
             'items.*.quantity.min' => 'Jumlah barang minimal satu.',
             'jenis_peminjaman.in' => 'Pilih jenis peminjaman yang tersedia.',

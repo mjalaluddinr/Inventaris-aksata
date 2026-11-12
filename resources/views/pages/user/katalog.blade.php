@@ -1,21 +1,3 @@
-@php
-  $search = mb_substr(trim((string) request()->query('q', '')), 0, 100);
-  $selectedCategory = (string) request()->query('category', '');
-  $categories = \App\Models\Kategori::query()->withCount('barangs')->orderBy('nama_kategori')->get();
-  $catalogItems = \App\Models\Barang::query()
-      ->with('kategori')
-      ->withCount('detailPeminjamans')
-      ->where('stok_tersedia', '>', 0)
-      ->when($search !== '', fn ($query) => $query->where(function ($query) use ($search) {
-          $query->where('nama_barang', 'like', '%'.$search.'%')
-              ->orWhere('kode_barang', 'like', '%'.$search.'%');
-      }))
-      ->when($selectedCategory !== '', fn ($query) => $query->where('kategori_id', $selectedCategory))
-      ->orderBy('nama_barang')
-      ->paginate(12, ['*'], 'catalog_page')
-      ->withQueryString();
-@endphp
-
 <style>
   @keyframes catalog-card-enter {
     from {
@@ -175,16 +157,15 @@
         description="Pilih barang yang kamu butuhkan, lalu masukkan ke keranjang."
       />
       <section class="w-full px-5 pt-6 pb-8 sm:px-10 lg:px-16" aria-label="Filter katalog">
-        <form method="GET" action="{{ route('user.beranda') }}" data-catalog-filter class="flex min-w-0 flex-col gap-5 sm:flex-row sm:items-center sm:gap-8">
-          <input type="hidden" name="page" value="catalog">
+        <form method="GET" action="{{ route('user.catalog') }}" data-catalog-filter class="flex min-w-0 flex-col gap-5 sm:flex-row sm:items-center sm:gap-8">
           <div x-data="{ categoryOverflow: false, categoryCanScrollBackward: false, categoryCanScrollForward: false, checkCategoryOverflow() { this.$nextTick(() => { this.categoryOverflow = this.$refs.catalogCategoryStrip.scrollWidth > this.$refs.catalogCategoryStrip.clientWidth + 1; this.updateCategoryControls() }) }, updateCategoryControls() { const strip = this.$refs.catalogCategoryStrip; this.categoryCanScrollBackward = strip.scrollLeft > 1; this.categoryCanScrollForward = strip.scrollLeft + strip.clientWidth < strip.scrollWidth - 1 } }" x-init="checkCategoryOverflow()" @resize.window="checkCategoryOverflow()" class="flex min-w-0 flex-1 items-center gap-1.5">
             <button type="button" x-cloak x-show="categoryCanScrollBackward" x-transition:enter="transition ease-out duration-200" x-transition:enter-start="opacity-0 scale-75" x-transition:enter-end="opacity-100 scale-100" x-transition:leave="transition ease-in duration-150" x-transition:leave-start="opacity-100 scale-100" x-transition:leave-end="opacity-0 scale-75" @click="$refs.catalogCategoryStrip.scrollBy({ left: -180, behavior: 'smooth' })" class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-[#00a88f] bg-white text-[#007f70] transition hover:bg-emerald-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#008b7a] focus-visible:ring-offset-2" aria-label="Tampilkan kategori sebelumnya">
               <iconify-icon icon="mdi:chevron-left" aria-hidden="true"></iconify-icon>
             </button>
             <nav x-ref="catalogCategoryStrip" @scroll.passive="updateCategoryControls()" class="flex min-w-0 flex-1 items-center gap-1.5 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden" aria-label="Kategori barang">
-              <a data-catalog-ajax href="{{ route('user.beranda', ['page' => 'catalog', 'q' => $search]) }}" @if ($selectedCategory === '') aria-current="page" @endif class="shrink-0 rounded-full border px-3 py-1.5 text-xs font-semibold transition focus:outline-none focus-visible:ring-2 focus-visible:ring-[#008b7a] focus-visible:ring-offset-2 {{ $selectedCategory === '' ? 'border-[#00a88f] bg-[#00a88f] text-white shadow-sm' : 'border-[#00a88f] bg-white text-[#007f70] hover:bg-emerald-50' }}">Semua</a>
+              <a data-catalog-ajax href="{{ route('user.catalog', ['q' => $search]) }}" @if ($selectedCategory === '') aria-current="page" @endif class="shrink-0 rounded-full border px-3 py-1.5 text-xs font-semibold transition focus:outline-none focus-visible:ring-2 focus-visible:ring-[#008b7a] focus-visible:ring-offset-2 {{ $selectedCategory === '' ? 'border-[#00a88f] bg-[#00a88f] text-white shadow-sm' : 'border-[#00a88f] bg-white text-[#007f70] hover:bg-emerald-50' }}">Semua</a>
               @foreach ($categories as $category)
-                <a data-catalog-ajax href="{{ route('user.beranda', ['page' => 'catalog', 'category' => $category->kategori_id, 'q' => $search]) }}" @if ($selectedCategory === $category->kategori_id) aria-current="page" @endif class="shrink-0 rounded-full border px-3 py-1.5 text-xs font-semibold transition focus:outline-none focus-visible:ring-2 focus-visible:ring-[#008b7a] focus-visible:ring-offset-2 {{ $selectedCategory === $category->kategori_id ? 'border-[#00a88f] bg-[#00a88f] text-white shadow-sm' : 'border-[#00a88f] bg-white text-[#007f70] hover:bg-emerald-50' }}">{{ $category->nama_kategori }}</a>
+                <a data-catalog-ajax href="{{ route('user.catalog', ['category' => $category->kategori_id, 'q' => $search]) }}" @if ($selectedCategory === $category->kategori_id) aria-current="page" @endif class="shrink-0 rounded-full border px-3 py-1.5 text-xs font-semibold transition focus:outline-none focus-visible:ring-2 focus-visible:ring-[#008b7a] focus-visible:ring-offset-2 {{ $selectedCategory === $category->kategori_id ? 'border-[#00a88f] bg-[#00a88f] text-white shadow-sm' : 'border-[#00a88f] bg-white text-[#007f70] hover:bg-emerald-50' }}">{{ $category->nama_kategori }}</a>
               @endforeach
             </nav>
             <button type="button" x-cloak x-show="categoryCanScrollForward" x-transition:enter="transition ease-out duration-200" x-transition:enter-start="opacity-0 scale-75" x-transition:enter-end="opacity-100 scale-100" x-transition:leave="transition ease-in duration-150" x-transition:leave-start="opacity-100 scale-100" x-transition:leave-end="opacity-0 scale-75" @click="$refs.catalogCategoryStrip.scrollBy({ left: 180, behavior: 'smooth' })" class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-[#00a88f] bg-white text-[#007f70] transition hover:bg-emerald-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#008b7a] focus-visible:ring-offset-2" aria-label="Tampilkan kategori berikutnya">

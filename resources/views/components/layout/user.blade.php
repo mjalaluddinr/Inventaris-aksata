@@ -290,7 +290,9 @@
         catalogRequestController: null,
         historyPollTimer: null,
         historyRequestController: null,
-        applyUrl: @js(route('user.beranda', ['page' => 'apply'])),
+        applyUrl: @js(route('user.apply')),
+        catalogPath: @js(parse_url(route('user.catalog'), PHP_URL_PATH)),
+        historyPath: @js(parse_url(route('user.history'), PHP_URL_PATH)),
         async cancelLoan(event) {
           const form = event.currentTarget;
           const submitButton = form.querySelector('[type="submit"]');
@@ -349,6 +351,7 @@
 
           this.loanSubmitting = true;
           let redirecting = false;
+          const submittedItems = this.selectedCartItems;
           try {
             // ASVS V2.2.2: AJAX improves feedback; server-side validation remains authoritative.
             const response = await fetch(formUrl, {
@@ -374,6 +377,28 @@
             }
 
             if (!response.ok) {
+              const invalidItemIndexes = Object.keys(payload.errors || {})
+                .flatMap(field => {
+                  const match = field.match(/^items\.(\d+)\.barang_id$/);
+                  const messages = payload.errors[field];
+                  const isInvalidId = Array.isArray(messages) && messages.some(message => [
+                    'ID barang tidak valid. Muat ulang katalog dan pilih kembali barang tersebut.',
+                    'Barang yang dipilih sudah tidak tersedia di katalog. Hapus lalu pilih kembali dari katalog.',
+                  ].includes(message));
+                  return match && isInvalidId ? [Number(match[1])] : [];
+                });
+              const invalidItems = [...new Map(invalidItemIndexes
+                .map(index => submittedItems[index])
+                .filter(item => item && typeof item.id === 'string')
+                .map(item => [item.id, item])).values()];
+
+              if (invalidItems.length > 0) {
+                invalidItems.forEach(item => this.removeFromCart(item.id));
+                const itemNames = invalidItems.map(item => item.name).join(', ');
+                this.showNotice(`${itemNames} sudah tidak tercatat di katalog dan dihapus dari pengajuan. Jika stok masih ada, pilih kembali barangnya dari katalog.`);
+                return;
+              }
+
               const validationMessage = Object.values(payload.errors || {})
                 .flatMap(messages => Array.isArray(messages) ? messages : [])
                 .find(message => typeof message === 'string');
@@ -457,8 +482,7 @@
             const destination = new URL(link.href, window.location.href);
             if (
               destination.origin !== window.location.origin
-              || destination.pathname !== window.location.pathname
-              || destination.searchParams.get('page') !== 'history'
+              || destination.pathname !== this.historyPath
             ) {
               return;
             }
@@ -471,8 +495,7 @@
             if (
               document.getElementById('history-content')
               && url.origin === window.location.origin
-              && url.pathname === window.location.pathname
-              && url.searchParams.get('page') === 'history'
+              && url.pathname === this.historyPath
             ) {
               this.loadHistory(url, { animate: true, abortPrevious: true });
             }
@@ -482,7 +505,7 @@
             if (document.visibilityState === 'visible') {
               this.refreshHistory();
             }
-          }, 5000);
+          }, 30000);
         },
         async refreshHistory() {
           const url = new URL(window.location.href);
@@ -490,8 +513,7 @@
             !document.getElementById('history-content')
             || this.historyRequestController
             || url.origin !== window.location.origin
-            || url.pathname !== window.location.pathname
-            || url.searchParams.get('page') !== 'history'
+            || url.pathname !== this.historyPath
           ) {
             return;
           }
@@ -504,8 +526,7 @@
           if (
             !currentHistory
             || url.origin !== window.location.origin
-            || url.pathname !== window.location.pathname
-            || url.searchParams.get('page') !== 'history'
+            || url.pathname !== this.historyPath
           ) {
             return;
           }
@@ -532,7 +553,7 @@
             if (
               !response.ok
               || responseUrl.origin !== window.location.origin
-              || responseUrl.pathname !== window.location.pathname
+              || responseUrl.pathname !== this.historyPath
               || !response.headers.get('content-type')?.includes('text/html')
             ) {
               throw new Error(`History refresh failed with status ${response.status}.`);
@@ -614,7 +635,7 @@
           });
           window.addEventListener('popstate', () => {
             if (document.getElementById('catalog-content')) {
-              if (new URL(window.location.href).searchParams.get('page') === 'catalog') {
+              if (new URL(window.location.href).pathname === this.catalogPath) {
                 this.loadCatalog(window.location.href, false);
               } else {
                 window.location.reload();
@@ -631,7 +652,7 @@
               url.searchParams.delete(key);
             }
           }
-          url.searchParams.set('page', 'catalog');
+          url.searchParams.delete('page');
           url.searchParams.delete('catalog_page');
           return url;
         },
@@ -643,7 +664,7 @@
           }
 
           // ASVS 1.2.2: only request same-origin catalog URLs.
-          if (url.origin !== window.location.origin || url.pathname !== window.location.pathname || url.searchParams.get('page') !== 'catalog') {
+          if (url.origin !== window.location.origin || url.pathname !== this.catalogPath) {
             this.showNotice('Alamat katalog tidak valid. Muat ulang halaman dan coba lagi.');
             return;
           }
@@ -658,7 +679,8 @@
               credentials: 'same-origin',
               signal: controller.signal,
             });
-            if (!response.ok || new URL(response.url).origin !== window.location.origin) {
+            const responseUrl = new URL(response.url);
+            if (!response.ok || responseUrl.origin !== window.location.origin || responseUrl.pathname !== this.catalogPath) {
               throw new Error(`Catalog request failed with status ${response.status}.`);
             }
 

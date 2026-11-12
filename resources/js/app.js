@@ -1,9 +1,10 @@
 import Alpine from 'alpinejs';
-import QRCode from 'qrcode';
-import jsQR from 'jsqr';
 import 'iconify-icon';
 import { addCollection, setCustomIconLoader } from 'iconify-icon';
 import mdiIcons from './icons/mdi.json';
+
+let qrDecoderPromise = null;
+let qrCodeModulePromise = null;
 
 addCollection(mdiIcons);
 addCollection({
@@ -198,6 +199,7 @@ Alpine.data('notificationDropdown', () => ({
     csrfToken: '',
     pollTimer: null,
     visibilityListener: null,
+    countRequestInProgress: false,
     init() {
         this.countUrl = this.$el.dataset.countUrl || '';
         this.readUrl = this.$el.dataset.readUrl || '';
@@ -206,7 +208,7 @@ Alpine.data('notificationDropdown', () => ({
         this.refreshCount();
         this.pollTimer = window.setInterval(() => {
             this.refreshCount();
-        }, 5000);
+        }, 30000);
         this.visibilityListener = () => {
             if (!document.hidden) {
                 this.refreshCount();
@@ -219,10 +221,11 @@ Alpine.data('notificationDropdown', () => ({
         document.removeEventListener('visibilitychange', this.visibilityListener);
     },
     async refreshCount() {
-        if (document.hidden || !this.countUrl) {
+        if (document.hidden || !this.countUrl || this.countRequestInProgress) {
             return;
         }
 
+        this.countRequestInProgress = true;
         try {
             const response = await fetch(this.countUrl, {
                 headers: { Accept: 'application/json' },
@@ -251,6 +254,8 @@ Alpine.data('notificationDropdown', () => ({
             console.error('Failed to refresh notification count.', error);
             this.notificationAvailable = false;
             this.error = 'Notifikasi tidak dapat dimuat. Coba lagi nanti.';
+        } finally {
+            this.countRequestInProgress = false;
         }
     },
     async toggle() {
@@ -326,6 +331,7 @@ Alpine.data('loanQrScanner', () => ({
     stream: null,
     frameRequest: null,
     lastScanAt: 0,
+    qrFrame: null,
     init() {
         const feedbackMessage = this.$el.dataset.feedbackMessage || '';
         if (feedbackMessage) {
@@ -335,7 +341,7 @@ Alpine.data('loanQrScanner', () => ({
         this.csrfToken = this.$el.dataset.csrfToken || '';
         this.loanListRefreshTimer = window.setInterval(() => {
             this.refreshLoanList();
-        }, 10000);
+        }, 30000);
         this.loanListVisibilityListener = () => {
             if (!document.hidden) {
                 this.refreshLoanList();
@@ -347,6 +353,7 @@ Alpine.data('loanQrScanner', () => ({
         window.clearInterval(this.loanListRefreshTimer);
         document.removeEventListener('visibilitychange', this.loanListVisibilityListener);
         this.loanListRequest?.abort();
+        this.stopCamera();
     },
     refreshLoanList() {
         if (document.hidden || this.loanListRequest) {
@@ -442,6 +449,7 @@ Alpine.data('loanQrScanner', () => ({
         this.scannerOpen = true;
         this.scannerMessage = '';
         this.manualCode = '';
+        this.qrFrame = null;
         await this.$nextTick();
 
         if (!window.isSecureContext || !navigator.mediaDevices?.getUserMedia) {
@@ -450,6 +458,16 @@ Alpine.data('loanQrScanner', () => ({
         }
 
         this.cameraSupported = true;
+        try {
+            qrDecoderPromise ??= import('jsqr').then(({ default: decodeQr }) => decodeQr);
+            await qrDecoderPromise;
+        } catch (error) {
+            qrDecoderPromise = null;
+            console.error('Failed to load the QR scanner.', error);
+            this.scannerMessage = 'Pemindai QR tidak dapat dimuat. Masukkan kode QR secara manual.';
+            return;
+        }
+
         await this.startCamera();
     },
     async startCamera() {
@@ -514,9 +532,18 @@ Alpine.data('loanQrScanner', () => ({
 
             context.drawImage(video, 0, 0, width, height);
             const image = context.getImageData(0, 0, width, height);
-            const result = jsQR(image.data, width, height, { inversionAttempts: 'attemptBoth' });
+            const decodeQr = await qrDecoderPromise;
+            const result = decodeQr(image.data, width, height, { inversionAttempts: 'attemptBoth' });
             if (result) {
-                this.stopCamera();
+                const { topLeftCorner, topRightCorner, bottomRightCorner, bottomLeftCorner } = result.location;
+                this.qrFrame = {
+                    width,
+                    height,
+                    points: [topLeftCorner, topRightCorner, bottomRightCorner, bottomLeftCorner]
+                        .map(({ x, y }) => `${x},${y}`)
+                        .join(' '),
+                };
+                this.stopCamera({ preservePreview: true });
                 await this.submitCode(result.data);
                 return;
             }
@@ -529,7 +556,7 @@ Alpine.data('loanQrScanner', () => ({
 
         this.frameRequest = window.requestAnimationFrame(() => this.detectFrame());
     },
-    stopCamera() {
+    stopCamera({ preservePreview = false } = {}) {
         this.isScanning = false;
         if (this.frameRequest !== null) {
             window.cancelAnimationFrame(this.frameRequest);
@@ -537,10 +564,13 @@ Alpine.data('loanQrScanner', () => ({
         }
         this.stream?.getTracks().forEach((track) => track.stop());
         this.stream = null;
-        if (this.$refs.cameraVideo) {
+        if (!preservePreview && this.$refs.cameraVideo) {
             this.$refs.cameraVideo.srcObject = null;
         }
-        this.cameraReady = false;
+        if (!preservePreview) {
+            this.cameraReady = false;
+            this.qrFrame = null;
+        }
     },
     closeScanner() {
         this.stopCamera();
@@ -789,7 +819,7 @@ if (document.body.hasAttribute('data-admin-field-indicators')) {
 Alpine.start();
 updateAdminFieldIndicators();
 
-const renderLoanQr = (element) => {
+const renderLoanQr = async (element) => {
     if (element.dataset.loanQrRendered === 'true') {
         return;
     }
@@ -797,16 +827,19 @@ const renderLoanQr = (element) => {
     element.dataset.loanQrRendered = 'true';
     const canvas = document.createElement('canvas');
 
-    QRCode.toCanvas(canvas, element.dataset.loanQr, {
-        errorCorrectionLevel: 'M',
-        margin: 4,
-        width: 240,
-    }).then(() => {
+    try {
+        qrCodeModulePromise ??= import('qrcode').then(({ default: QRCode }) => QRCode);
+        const QRCode = await qrCodeModulePromise;
+        await QRCode.toCanvas(canvas, element.dataset.loanQr, {
+            errorCorrectionLevel: 'M',
+            margin: 4,
+            width: 240,
+        });
         element.replaceChildren(canvas);
-    }).catch((error) => {
+    } catch (error) {
         console.error('Failed to render the loan QR code.', error);
         element.textContent = 'QR tidak dapat ditampilkan.';
-    });
+    }
 };
 
 const renderLoanQrs = (node) => {

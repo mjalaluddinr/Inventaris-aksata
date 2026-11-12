@@ -104,6 +104,7 @@ class ManageBarang extends Controller
             ],
             'panel' => ['nullable', Rule::in(['history', 'usage'])],
             'mutation_page' => ['nullable', 'integer', 'min:1'],
+            'usage_page' => ['nullable', 'integer', 'min:1'],
         ]);
 
         $applyBarangFilters = static fn (Builder $query): Builder => $query
@@ -177,11 +178,18 @@ class ManageBarang extends Controller
                         'barang_id' => $selectedBarang->barang_id,
                         'panel' => 'history',
                     ]);
-                $activeUsages = $selectedBarang->barangDipakais()
-                    ->with(['ruangan', 'akun'])
+                $activeUsages = BarangDipakai::query()
                     ->where('status', 'aktif')
+                    ->whereHas('barang')
+                    ->with(['barang', 'ruangan', 'akun'])
                     ->orderByDesc('tanggal_pasang')
-                    ->get();
+                    ->orderByDesc('barang_dipakai_id')
+                    ->paginate(10, ['*'], 'usage_page')
+                    ->appends($request->except(['fragment', 'mutation_page', 'usage_page']))
+                    ->appends([
+                        'barang_id' => $selectedBarang->barang_id,
+                        'panel' => 'usage',
+                    ]);
                 $usageLocations = $ruangans;
             }
 

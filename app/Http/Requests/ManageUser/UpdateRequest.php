@@ -21,7 +21,6 @@ class UpdateRequest extends FormRequest
     public function rules(): array
     {
         return [
-            // ASVS 2.2.1, 2.2.2: Validate this security-sensitive choice at the trusted request boundary.
             'first_name' => 'nullable|string|max:100',
             'last_name' => 'nullable|string|max:100',
             'username' => [
@@ -38,7 +37,6 @@ class UpdateRequest extends FormRequest
                 ? ['admin', 'laboran', 'peminjam']
                 : ['laboran'])],
             'is_active' => 'nullable|boolean',
-            'must_change_password' => 'nullable|boolean',
             'privileges' => [
                 'nullable',
                 'array',

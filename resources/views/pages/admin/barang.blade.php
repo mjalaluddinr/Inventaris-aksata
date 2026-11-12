@@ -197,21 +197,31 @@
           const scrollContainer = this.$el.closest('main');
           this.filterBarang(link.href, scrollContainer?.scrollTop ?? null);
       },
-      setUsagePanel(panel) {
+      handleUsagePanelClick(event) {
+          const target = event.target instanceof Element ? event.target : null;
+          const link = target?.closest('a[data-usage-pagination]');
+          const container = document.getElementById('barang-usage-container');
+          if (!link || !container?.contains(link)) return;
+          event.preventDefault();
+          this.reloadUsagePanel(link.href, true);
+      },
+      async setUsagePanel(panel) {
           this.usageActivePanel = panel;
           const url = new URL(window.location.href);
           url.searchParams.set('panel', panel);
+          url.searchParams.delete('mutation_page');
+          url.searchParams.delete('usage_page');
           if (this.selectedBarangId) {
               url.searchParams.set('barang_id', this.selectedBarangId);
           }
-          window.history.replaceState({}, '', url);
+          await this.reloadUsagePanel(url);
       },
       async changeUsageBarang(barangId) {
           if (!barangId) return;
           this.selectedBarangId = barangId;
           await this.reloadUsagePanel();
       },
-      async reloadUsagePanel() {
+      async reloadUsagePanel(targetUrl = window.location.href, preservePanelPage = false) {
           const container = document.getElementById('barang-usage-container');
           if (!container) return;
           if (this.usagePanelRequest) this.usagePanelRequest.abort();
@@ -220,9 +230,15 @@
           this.usagePanelRequest = request;
           this.usagePanelLoading = true;
           try {
-              const url = new URL(window.location.href);
+              const url = new URL(targetUrl, window.location.href);
               url.searchParams.delete('fragment');
-              url.searchParams.delete('mutation_page');
+              if (this.usageActivePanel === 'history') {
+                  url.searchParams.delete('usage_page');
+                  if (!preservePanelPage) url.searchParams.delete('mutation_page');
+              } else {
+                  url.searchParams.delete('mutation_page');
+                  if (!preservePanelPage) url.searchParams.delete('usage_page');
+              }
               if (this.selectedBarangId) {
                   url.searchParams.set('barang_id', this.selectedBarangId);
               }
@@ -236,7 +252,7 @@
                   },
                   signal: request.signal,
               });
-              if (!response.ok) throw new Error('Data barang tidak dapat dimuat.');
+              if (!response.ok || response.redirected) throw new Error('Data barang tidak dapat dimuat.');
               const html = await response.text();
               if (request.signal.aborted || this.usagePanelRequest !== request) return;
 
@@ -1043,7 +1059,8 @@
                       x-show="matchesBarang($el.dataset.searchable)" class="transition-colors hover:bg-[#F7FBFA]">
                       <td class="w-24 px-4 py-3">
                         @if ($barang->image_url)
-                          <img src="{{ $barang->image_url }}" alt="Gambar {{ $barang->nama_barang }}" decoding="async"
+                          <img src="{{ $barang->image_url }}" alt="Gambar {{ $barang->nama_barang }}" loading="lazy"
+                            decoding="async"
                             class="h-16 w-16 rounded-lg border border-slate-200 bg-white object-cover shadow-sm">
                         @else
                           <span
@@ -1314,7 +1331,7 @@
       </div>
 
       @if (auth()->user()?->canManageAllAccounts())
-        <div id="barang-usage-container" class="relative">
+        <div id="barang-usage-container" class="relative" @click="handleUsagePanelClick($event)">
           @fragment('barang-usage-panel')
             @php
               $mutationLabels = [
@@ -1339,16 +1356,19 @@
                     </p>
                   </div>
                   <div class="flex flex-col gap-2 sm:items-end">
-                    <label for="usage-item" class="sr-only">Pilih barang untuk riwayat atau pemakaian</label>
-                    <select id="usage-item" x-model="selectedBarangId" @change="changeUsageBarang($event.target.value)"
-                      class="max-w-full rounded-lg border border-[#B9DED4] bg-white px-3 py-2 text-xs font-semibold text-slate-700 focus:border-[#008b7a] focus:outline-none focus:ring-2 focus:ring-[#008b7a]/20">
-                      @foreach ($usageBarangs as $barangOption)
-                        <option value="{{ $barangOption->barang_id }}"
-                          @selected($selectedBarang->barang_id === $barangOption->barang_id)>
-                          {{ $barangOption->nama_barang }} · {{ $barangOption->kode_barang }}
-                        </option>
-                      @endforeach
-                    </select>
+                    <label for="usage-item" class="sr-only">Pilih barang untuk riwayat atau pemakaian baru</label>
+                    <div class="relative w-fit max-w-full">
+                      <select id="usage-item" x-model="selectedBarangId" @change="changeUsageBarang($event.target.value)"
+                        class="block w-max max-w-full appearance-none rounded-lg border border-[#B9DED4] bg-white py-2 pl-3 pr-10 text-xs font-semibold text-slate-700 focus:border-[#008b7a] focus:outline-none focus:ring-2 focus:ring-[#008b7a]/20">
+                        @foreach ($usageBarangs as $barangOption)
+                          <option value="{{ $barangOption->barang_id }}"
+                            @selected($selectedBarang->barang_id === $barangOption->barang_id)>
+                            {{ $barangOption->nama_barang }} · {{ $barangOption->kode_barang }}
+                          </option>
+                        @endforeach
+                      </select>
+                      <iconify-icon icon="mdi:chevron-down" class="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-slate-500" aria-hidden="true"></iconify-icon>
+                    </div>
                     <nav class="flex flex-wrap gap-2" aria-label="Riwayat dan pemakaian barang">
                       <button type="button" @click="setUsagePanel('history')"
                         :aria-current="usageActivePanel === 'history' ? 'page' : null"
@@ -1445,13 +1465,15 @@
                   <section aria-labelledby="active-usage-title">
                     <div class="mb-2 flex items-center justify-between gap-3">
                       <h3 id="active-usage-title" class="text-sm font-bold text-slate-800">Pemakaian aktif</h3>
-                      <span class="text-xs text-slate-500">{{ $activeUsages->count() }} catatan</span>
+                      <span class="text-xs text-slate-500">{{ $activeUsages->total() }} catatan</span>
                     </div>
                     <div class="overflow-x-auto rounded-lg border border-[#DCE9E6]">
                       <table class="min-w-full divide-y divide-[#E7EFED]">
                         <thead class="bg-[#F5FBF9]">
                           <tr>
                             <th scope="col" class="px-3 py-2 text-left text-xs font-semibold text-slate-600">Tanggal
+                            </th>
+                            <th scope="col" class="px-3 py-2 text-left text-xs font-semibold text-slate-600">Barang
                             </th>
                             <th scope="col" class="px-3 py-2 text-left text-xs font-semibold text-slate-600">Lokasi /
                               Admin</th>
@@ -1479,18 +1501,21 @@
                               <td class="whitespace-nowrap px-3 py-2 text-xs text-slate-600">
                                 {{ $activeUsage->tanggal_pasang?->translatedFormat('d M Y') ?? '—' }}
                               </td>
+                              <td class="px-3 py-2 text-xs font-semibold text-slate-700">
+                                {{ $activeUsage->barang->nama_barang }}
+                              </td>
                               <td class="px-3 py-2 text-xs text-slate-700">
                                 {{ $activeUsage->ruangan?->nama_ruangan ?? 'Ruangan tidak tersedia' }} ·
                                 {{ $usageAccountName }}
                               </td>
                               <td class="whitespace-nowrap px-3 py-2 text-right text-xs font-semibold text-slate-700">
-                                {{ number_format($activeUsage->jumlah, 0, ',', '.') }} {{ $selectedBarang->satuan }}
+                                {{ number_format($activeUsage->jumlah, 0, ',', '.') }} {{ $activeUsage->barang->satuan }}
                               </td>
                               <td class="max-w-64 px-3 py-2 text-xs text-slate-600">
                                 {{ $activeUsage->keterangan ?: '—' }}</td>
                               <td class="whitespace-nowrap px-3 py-2 text-right">
                                 <form
-                                  action="{{ route('admin.barang.pemakaian.tarik', [$selectedBarang, $activeUsage]) }}"
+                                  action="{{ route('admin.barang.pemakaian.tarik', [$activeUsage->barang, $activeUsage]) }}"
                                   method="POST" @submit.prevent="withdrawUsageItem($event)">
                                   @csrf
                                   <button type="submit"
@@ -1502,13 +1527,20 @@
                             </tr>
                           @empty
                             <tr>
-                              <td colspan="5" class="px-4 py-6 text-center text-xs text-slate-500">Belum ada
+                              <td colspan="6" class="px-4 py-6 text-center text-xs text-slate-500">Belum ada
                                 pemakaian aktif.</td>
                             </tr>
                           @endforelse
                         </tbody>
                       </table>
                     </div>
+                    @if ($activeUsages->hasPages())
+                      <div class="border-t border-[#E3EEEA] px-3 py-3">
+                        <x-pagination :paginator="$activeUsages" label="Navigasi pemakaian aktif"
+                          link-attribute="data-usage-pagination"
+                          nav-class="flex w-full min-w-0 items-center justify-start gap-2 overflow-x-auto overscroll-x-contain touch-pan-x" />
+                      </div>
+                    @endif
                   </section>
                 </div>
 

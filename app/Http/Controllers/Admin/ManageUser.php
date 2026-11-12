@@ -109,8 +109,8 @@ class ManageUser extends Controller
             'password_hash' => bcrypt($validated['password']),
             'role' => $validated['role'],
             'is_active' => $validated['is_active'] ?? true,
-            'must_change_password' => $validated['role'] === 'peminjam'
-                && (bool) ($validated['must_change_password'] ?? false),
+            // ASVS 2.2.2: Account forms cannot enable forced password changes for new users.
+            'must_change_password' => false,
         ]);
 
         $this->syncPrivilege($user, $user->role, $validated['privileges'] ?? []);
@@ -124,14 +124,13 @@ class ManageUser extends Controller
         $this->authorizeAccountManagement($user);
         $validated = $request->validated();
 
+        // Existing forced-change state is intentionally preserved when account details are edited.
         $updateData = [
             'first_name' => $validated['first_name'] ?? null,
             'last_name' => $validated['last_name'] ?? null,
             'username' => $validated['username'],
             'role' => $validated['role'],
             'is_active' => $validated['is_active'] ?? true,
-            'must_change_password' => $validated['role'] === 'peminjam'
-                && (bool) ($validated['must_change_password'] ?? false),
         ];
 
         if (! empty($validated['password'])) {

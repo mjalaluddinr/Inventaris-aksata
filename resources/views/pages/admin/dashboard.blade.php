@@ -30,59 +30,65 @@
           'xl:grid-cols-12' => $canProcessLoans,
       ])>
         @if ($canProcessLoans)
-          <section class="flex min-w-0 flex-col xl:col-span-7" aria-labelledby="pending-loans-title">
+          <section class="flex min-w-0 flex-col xl:col-span-7" aria-label="Peminjaman menunggu konfirmasi">
             <h2 id="pending-loans-title" class="mb-3 text-base font-semibold leading-6 text-[#064E3B]">
               Peminjaman menunggu konfirmasi
             </h2>
-
-            @if ($pendingLoans->isNotEmpty())
-              <div class="flex-1 overflow-x-auto rounded-xl border border-[#c9e2da] bg-white">
-                <table class="h-full w-full min-w-[480px] table-fixed text-left text-xs leading-4">
-                  <thead class="bg-[#f4f5f5] text-xs font-semibold text-[#164b67]">
-                    <tr class="border-b border-[#e1e6e5]">
-                      <th scope="col" class="w-[22%] px-4 py-3">Peminjam</th>
-                      <th scope="col" class="w-[22%] px-3 py-3">Barang</th>
-                      <th scope="col" class="w-[22%] px-3 py-3">Keperluan</th>
-                      <th scope="col" class="w-[22%] px-3 py-3">Status</th>
-                    </tr>
-                  </thead>
-                  <tbody class="divide-y divide-[#e5e9e8] text-slate-700">
-                    @foreach ($pendingLoans as $loan)
-                      @php
-                        $borrowerName = trim(($loan->akun?->first_name ?? '') . ' ' . ($loan->akun?->last_name ?? ''));
-                        $borrowerName = $borrowerName !== '' ? $borrowerName : ($loan->akun?->username ?? 'Akun tidak tersedia');
-                        $loanItems = $loan->detailPeminjamans;
-                      @endphp
-                      <tr class="align-middle">
-                        <td class="px-4 py-3 font-medium">{{ $borrowerName }}</td>
-                        <td class="px-3 py-3">
-                          @foreach ($loanItems->take(2) as $loanItem)
-                            <p class="truncate">{{ $loanItem->barang?->nama_barang ?? 'Barang tidak tersedia' }} ×{{ $loanItem->jumlah_pinjam }}</p>
-                          @endforeach
-                          @if ($loanItems->count() > 2)
-                            <p class="text-[10px] text-slate-400">+{{ $loanItems->count() - 2 }} barang lainnya</p>
-                          @endif
-                        </td>
-                        <td class="px-3 py-3">
-                          <p class="line-clamp-2">{{ $loan->keperluan ?: '—' }}</p>
-                        </td>
-                        <td class="px-3 py-3">
-                          <span class="inline-flex items-center gap-1 whitespace-nowrap rounded-md bg-[#fff4a8] px-2 py-1 text-[10px] font-semibold leading-none text-[#927700]">
-                            <iconify-icon icon="mdi:clock-outline" aria-hidden="true"></iconify-icon>
-                            Menunggu
-                          </span>
-                        </td>
+            <a href="{{ route('admin.peminjaman') }}"
+              class="flex min-w-0 flex-1 flex-col overflow-hidden rounded-xl border border-[#c9e2da] bg-white shadow-[0_2px_5px_rgba(15,69,59,0.08)] transition hover:border-[#8dcfc0] hover:shadow-[0_4px_12px_rgba(15,69,59,0.12)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#008f7e]">
+              @if ($pendingLoans->isNotEmpty())
+                <div class="overflow-x-auto">
+                  <table class="w-full min-w-[560px] border-collapse text-left text-xs">
+                    <thead class="bg-[#f3f5f4] text-[#164b67]">
+                      <tr>
+                        <th scope="col" class="rounded-tl-xl px-4 py-3 font-semibold sm:px-5">Peminjam</th>
+                        <th scope="col" class="px-4 py-3 font-semibold">Barang</th>
+                        <th scope="col" class="px-4 py-3 font-semibold">Keperluan</th>
+                        <th scope="col" class="rounded-tr-xl px-4 py-3 font-semibold sm:px-5">Status</th>
                       </tr>
-                    @endforeach
-                  </tbody>
-                </table>
-              </div>
-            @else
-              <div class="flex flex-1 flex-col justify-center rounded-xl border border-[#c9e2da] bg-white px-4 py-10 text-center">
-                <p class="text-sm font-medium text-slate-600">Tidak ada peminjaman yang menunggu konfirmasi.</p>
-                <p class="mt-1 text-xs text-slate-500">Pengajuan baru akan muncul di sini.</p>
-              </div>
-            @endif
+                    </thead>
+                    <tbody class="divide-y divide-[#e5e9e8] text-slate-700">
+                      @foreach ($pendingLoans as $loan)
+                        @php
+                          $borrowerName = trim(($loan->akun?->first_name ?? '') . ' ' . ($loan->akun?->last_name ?? ''));
+                          $borrowerName = $borrowerName !== '' ? $borrowerName : ($loan->akun?->username ?? 'Akun tidak tersedia');
+                        @endphp
+                        <tr class="align-top transition-colors last:[&>td:first-child]:rounded-bl-xl last:[&>td:last-child]:rounded-br-xl hover:bg-[#f8fcfb]">
+                          <td class="px-4 py-3.5 font-medium sm:px-5">{{ $borrowerName }}</td>
+                          <td class="px-4 py-3">
+                            <div class="flex flex-col items-start gap-2">
+                              @foreach ($loan->detailPeminjamans as $loanItem)
+                                <span class="inline-flex max-w-full items-center gap-2 rounded-lg border border-[#d6ebe5] bg-[#f5fbf9] px-2.5 py-1.5 text-xs text-slate-700">
+                                  <span class="min-w-0 break-words font-medium">{{ $loanItem->barang?->nama_barang ?? 'Barang tidak tersedia' }}</span>
+                                  <span class="shrink-0 rounded-full bg-white px-2 py-0.5 font-bold text-[#007f70]">× {{ $loanItem->jumlah_pinjam }}</span>
+                                </span>
+                              @endforeach
+                            </div>
+                          </td>
+                          <td class="px-4 py-3.5">{{ filled($loan->keperluan) ? $loan->keperluan : '—' }}</td>
+                          <td class="px-4 py-3.5 sm:px-5">
+                            <div class="flex flex-col items-start gap-1.5">
+                              <span class="inline-flex items-center gap-1 whitespace-nowrap rounded-full bg-[#fff4a8] px-2.5 py-1 text-[11px] font-semibold leading-none text-[#725d00]">
+                                <iconify-icon icon="mdi:clock-outline" aria-hidden="true"></iconify-icon>
+                                Menunggu
+                              </span>
+                              <span class="whitespace-nowrap text-[11px] text-slate-500">
+                                Pengajuan {{ $loan->tanggal_pengajuan?->locale('id')->diffForHumans() ?? '—' }}
+                              </span>
+                            </div>
+                          </td>
+                        </tr>
+                      @endforeach
+                    </tbody>
+                  </table>
+                </div>
+              @else
+                <div class="flex flex-1 flex-col justify-center py-8 text-center">
+                  <p class="text-sm font-medium text-slate-600">Tidak ada peminjaman yang menunggu konfirmasi.</p>
+                  <p class="mt-1 text-xs text-slate-500">Pengajuan baru akan muncul di sini.</p>
+                </div>
+              @endif
+            </a>
           </section>
         @endif
 

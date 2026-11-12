@@ -39,8 +39,8 @@
 
     <div class="hidden items-center gap-1 text-sm font-semibold md:flex lg:gap-6 lg:text-base">
       <a href="{{ route('user.beranda') }}" class="rounded-md px-2 py-2 transition hover:bg-white/10">Beranda</a>
-      <a href="{{ route('user.beranda', ['page' => 'catalog']) }}" class="rounded-md px-2 py-2 transition hover:bg-white/10">Katalog</a>
-      <a href="{{ route('user.beranda', ['page' => 'history', 'status' => 'active']) }}" class="rounded-md px-2 py-2 transition hover:bg-white/10">Riwayat Saya</a>
+      <a href="{{ route('user.catalog') }}" class="rounded-md px-2 py-2 transition hover:bg-white/10">Katalog</a>
+      <a href="{{ route('user.history', ['status' => 'active']) }}" class="rounded-md px-2 py-2 transition hover:bg-white/10">Riwayat Saya</a>
     </div>
 
     <div class="flex shrink-0 items-center gap-1 min-[380px]:gap-1.5 sm:gap-3">
@@ -76,8 +76,8 @@
   <div id="user-mobile-menu" x-cloak x-show="mobileMenuOpen" x-transition.origin.top class="absolute inset-x-0 top-full border-b border-slate-200 bg-white/95 px-4 pb-4 pt-2 text-[#153c36] shadow-lg backdrop-blur-md md:hidden">
     <nav class="flex w-full flex-col gap-1" aria-label="Navigasi utama">
       <a href="{{ route('user.beranda') }}" @click="mobileMenuOpen = false" class="rounded-lg px-4 py-3 text-sm font-semibold transition hover:bg-[#e6f8f3]">Beranda</a>
-      <a href="{{ route('user.beranda', ['page' => 'catalog']) }}" @click="mobileMenuOpen = false" class="rounded-lg px-4 py-3 text-sm font-semibold transition hover:bg-[#e6f8f3]">Katalog</a>
-      <a href="{{ route('user.beranda', ['page' => 'history', 'status' => 'active']) }}" @click="mobileMenuOpen = false" class="rounded-lg px-4 py-3 text-sm font-semibold transition hover:bg-[#e6f8f3]">Riwayat Saya</a>
+      <a href="{{ route('user.catalog') }}" @click="mobileMenuOpen = false" class="rounded-lg px-4 py-3 text-sm font-semibold transition hover:bg-[#e6f8f3]">Katalog</a>
+      <a href="{{ route('user.history', ['status' => 'active']) }}" @click="mobileMenuOpen = false" class="rounded-lg px-4 py-3 text-sm font-semibold transition hover:bg-[#e6f8f3]">Riwayat Saya</a>
     </nav>
   </div>
 </header>

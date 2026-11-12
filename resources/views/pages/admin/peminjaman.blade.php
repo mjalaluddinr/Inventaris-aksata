@@ -272,7 +272,7 @@
                           </button>
                           <template x-teleport="body">
                             <div x-cloak x-show="confirmOpen" x-transition.opacity class="fixed inset-0 z-[90] flex items-center justify-center overflow-y-auto bg-slate-950/55 p-4" role="presentation" @click.self="confirmOpen = false" @keydown.escape.window="confirmOpen = false">
-                              <section x-show="confirmOpen" x-transition:enter="transition ease-out duration-200" x-transition:enter-start="scale-95 opacity-0" x-transition:enter-end="scale-100 opacity-100" x-transition:leave="transition ease-in duration-150" x-transition:leave-start="scale-100 opacity-100" x-transition:leave-end="scale-95 opacity-0" class="my-auto w-full max-w-lg overflow-hidden rounded-2xl bg-white shadow-2xl" role="dialog" aria-modal="true" aria-labelledby="confirm-title-{{ $loan->peminjaman_id }}">
+                              <section x-show="confirmOpen" x-transition.opacity class="my-auto w-full max-w-lg overflow-hidden rounded-2xl bg-white shadow-2xl" role="dialog" aria-modal="true" aria-labelledby="confirm-title-{{ $loan->peminjaman_id }}">
                                 <header class="flex items-start justify-between border-b border-slate-100 px-5 py-4">
                                   <div>
                                     <h2 id="confirm-title-{{ $loan->peminjaman_id }}" class="font-bold text-slate-900">Konfirmasi Pengambilan Barang</h2>
@@ -299,11 +299,8 @@
                                             'room' => $roomLocations->first()->ruangan,
                                             'available' => (int) $roomLocations->sum('stok_tersedia') + (int) ($reservedByRoom[$roomId] ?? 0),
                                           ])
-                                          ->filter(static fn (array $room): bool => $room['available'] >= $detail->jumlah_pinjam);
-                                        $currentRoomIds = $detail->logMutasiBarangs->pluck('ruangan_id')->filter()->unique();
-                                        $selectedRoomId = $currentRoomIds->count() === 1 && $roomOptions->has($currentRoomIds->first())
-                                          ? (string) $currentRoomIds->first()
-                                          : ($roomOptions->count() === 1 ? (string) $roomOptions->keys()->first() : '');
+                                          ->filter(static fn (array $room): bool => $room['available'] > 0)
+                                          ->sortBy(static fn (array $room): string => $room['room']->nama_ruangan, SORT_NATURAL | SORT_FLAG_CASE);
                                         $canChooseRoom = $locations->isNotEmpty()
                                           && $detail->logMutasiBarangs->isNotEmpty()
                                           && $detail->logMutasiBarangs->every(static fn ($reservation): bool => $reservation->ruangan_id !== null);
@@ -314,21 +311,44 @@
                                           <span class="shrink-0 rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-bold text-emerald-800">×{{ number_format($detail->jumlah_pinjam, 0, ',', '.') }}</span>
                                         </div>
                                         @if ($canChooseRoom && $roomOptions->isNotEmpty())
-                                          <label for="pickup-room-{{ $detail->detail_peminjaman_id }}" class="mt-3 block text-xs font-semibold text-slate-700">Ruangan pengambilan</label>
-                                          <select id="pickup-room-{{ $detail->detail_peminjaman_id }}" name="locations[{{ $detail->detail_peminjaman_id }}]" required class="mt-1.5 block w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-xs text-slate-800 focus:border-[#008b7a] focus:outline-none focus:ring-2 focus:ring-[#008b7a]/25">
-                                            <option value="" disabled @selected($selectedRoomId === '')>Pilih ruangan pengambilan</option>
+                                          <p class="mt-3 text-xs text-slate-600">Bagi jumlah pinjaman ke satu atau beberapa ruangan.</p>
+                                          <div class="mt-2 space-y-2">
                                             @foreach ($roomOptions as $roomId => $roomOption)
-                                              <option value="{{ $roomId }}" @selected($selectedRoomId === (string) $roomId)>
-                                                {{ $roomOption['room']->nama_ruangan }} · stok untuk pesanan: {{ number_format($roomOption['available'], 0, ',', '.') }}
-                                              </option>
+                                              @php
+                                                $allocationInputId = 'pickup-quantity-'.$detail->detail_peminjaman_id.'-'.$roomId;
+                                                $allocationErrorKey = 'allocations.'.$detail->detail_peminjaman_id.'.'.$roomId;
+                                                $selectedQuantity = old(
+                                                  'allocations.'.$detail->detail_peminjaman_id.'.'.$roomId,
+                                                  $reservedByRoom[$roomId] ?? 0,
+                                                );
+                                              @endphp
+                                              <div class="rounded-lg border border-slate-200 bg-white px-3 py-2.5">
+                                                <div class="flex items-center justify-between gap-3">
+                                                  <label for="{{ $allocationInputId }}" class="min-w-0 text-xs font-semibold text-slate-800">{{ $roomOption['room']->nama_ruangan }}</label>
+                                                  <span class="shrink-0 text-[11px] text-slate-500">Maks. untuk pinjaman {{ number_format($roomOption['available'], 0, ',', '.') }}</span>
+                                                </div>
+                                                <input
+                                                  id="{{ $allocationInputId }}"
+                                                  name="allocations[{{ $detail->detail_peminjaman_id }}][{{ $roomId }}]"
+                                                  type="number"
+                                                  inputmode="numeric"
+                                                  min="0"
+                                                  max="{{ $roomOption['available'] }}"
+                                                  value="{{ $selectedQuantity }}"
+                                                  required
+                                                  class="mt-2 block h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-800 focus:border-[#008b7a] focus:outline-none focus:ring-2 focus:ring-[#008b7a]/25"
+                                                >
+                                                @if ($errors->has($allocationErrorKey))
+                                                  <p class="mt-1 text-xs font-medium text-rose-600">{{ $errors->first($allocationErrorKey) }}</p>
+                                                @endif
+                                              </div>
                                             @endforeach
-                                          </select>
-                                          <p class="mt-2 text-xs text-slate-500">Jumlah yang dipinjam: {{ number_format($detail->jumlah_pinjam, 0, ',', '.') }}. Pilihan hanya menampilkan ruangan yang stoknya mencukupi.</p>
-                                          @if ($errors->has('locations.'.$detail->detail_peminjaman_id))
-                                              <p class="mt-2 text-xs font-medium text-rose-600">{{ $errors->first('locations.'.$detail->detail_peminjaman_id) }}</p>
+                                          </div>
+                                          @if ($errors->has('allocations.'.$detail->detail_peminjaman_id))
+                                            <p class="mt-2 text-xs font-medium text-rose-600">{{ $errors->first('allocations.'.$detail->detail_peminjaman_id) }}</p>
                                           @endif
                                         @elseif ($canChooseRoom)
-                                          <p class="mt-2 text-xs text-amber-700">Tidak ada satu ruangan dengan stok yang cukup; lokasi reservasi saat ini akan dipertahankan.</p>
+                                          <p class="mt-2 text-xs text-amber-700">Stok ruangan tidak dapat dipilih; lokasi reservasi saat ini akan dipertahankan.</p>
                                           @foreach ($detail->logMutasiBarangs as $reservation)
                                               <div class="mt-2 flex items-center justify-between gap-3 rounded-lg border border-slate-100 bg-white px-3 py-2.5 text-xs">
                                                 <p class="min-w-0 font-semibold text-slate-800">{{ $reservation->ruangan?->nama_ruangan ?? 'Lokasi tidak tersedia' }}</p>
@@ -368,7 +388,7 @@
                           </template>
                           <template x-teleport="body">
                           <div x-cloak x-show="rejectOpen" x-transition.opacity class="fixed inset-0 z-[90] flex items-center justify-center overflow-y-auto bg-slate-950/55 p-4" role="presentation" @click.self="rejectOpen = false" @keydown.escape.window="rejectOpen = false">
-                            <section x-show="rejectOpen" x-transition class="my-auto w-full max-w-md overflow-hidden rounded-2xl bg-white shadow-2xl" role="dialog" aria-modal="true" aria-labelledby="reject-title-{{ $loan->peminjaman_id }}">
+                            <section x-show="rejectOpen" x-transition.opacity class="my-auto w-full max-w-md overflow-hidden rounded-2xl bg-white shadow-2xl" role="dialog" aria-modal="true" aria-labelledby="reject-title-{{ $loan->peminjaman_id }}">
                               <header class="flex items-start justify-between border-b border-slate-100 px-5 py-4">
                                 <div>
                                   <h2 id="reject-title-{{ $loan->peminjaman_id }}" class="font-bold text-slate-900">Tolak Peminjaman</h2>
@@ -397,7 +417,7 @@
                           <button type="button" @click="returnOpen = true" class="whitespace-nowrap rounded-md border border-[#00a88f] px-2.5 py-1.5 text-left text-[10px] font-semibold text-[#007f70] transition hover:bg-[#e6f8f3]">Proses Pengembalian</button>
                           <template x-teleport="body">
                           <div x-cloak x-show="returnOpen" x-transition.opacity class="fixed inset-0 z-[90] flex items-center justify-center overflow-y-auto bg-slate-950/55 p-4" role="presentation" @click.self="returnOpen = false" @keydown.escape.window="returnOpen = false">
-                            <section x-show="returnOpen" x-transition class="my-auto max-h-[calc(100dvh-2rem)] w-full max-w-2xl overflow-y-auto rounded-2xl bg-white shadow-2xl" role="dialog" aria-modal="true" aria-labelledby="return-title-{{ $loan->peminjaman_id }}">
+                            <section x-show="returnOpen" x-transition.opacity class="my-auto max-h-[calc(100dvh-2rem)] w-full max-w-2xl overflow-y-auto rounded-2xl bg-white shadow-2xl" role="dialog" aria-modal="true" aria-labelledby="return-title-{{ $loan->peminjaman_id }}">
                               <header class="flex items-center justify-between border-b border-slate-200 px-5 py-4">
                                 <div>
                                   <h2 id="return-title-{{ $loan->peminjaman_id }}" class="font-bold text-slate-900">Proses Pengembalian</h2>
@@ -469,7 +489,14 @@
         @else
           <div class="px-6 py-12 text-center">
             <iconify-icon icon="mdi:clipboard-text-clock-outline" class="text-4xl text-[#76a99e]" aria-hidden="true"></iconify-icon>
-            <p class="mt-2 text-sm font-semibold text-slate-800">Belum ada data pada tab ini.</p>
+            @php
+              $emptyTabLabel = match ($activeTab) {
+                  'pending' => 'Menunggu Konfirmasi',
+                  'borrowed' => 'Dipinjam',
+                  default => 'Riwayat Selesai',
+              };
+            @endphp
+            <p class="mt-2 text-sm font-bold text-slate-800">Belum ada data pada tab {{ $emptyTabLabel }} ini.</p>
             <p class="mt-1 text-xs text-slate-500">Peminjaman akan muncul di sini saat statusnya berubah.</p>
           </div>
         @endif
@@ -519,7 +546,7 @@
 
     <template x-teleport="body">
     <div x-cloak x-show="scannerOpen" x-transition.opacity class="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/70 p-4" role="presentation" @click.self="closeScanner()" @keydown.escape.window="closeScanner()">
-      <section x-show="scannerOpen" x-transition class="w-full max-w-lg overflow-hidden rounded-2xl bg-white shadow-2xl" role="dialog" aria-modal="true" aria-labelledby="loan-scanner-title">
+      <section x-show="scannerOpen" x-transition.opacity class="w-full max-w-lg overflow-hidden rounded-2xl bg-white shadow-2xl" role="dialog" aria-modal="true" aria-labelledby="loan-scanner-title">
         <header class="flex items-center justify-between border-b border-slate-200 px-5 py-4">
           <div>
             <h2 id="loan-scanner-title" class="text-lg font-bold text-slate-900">Scan QR Peminjaman</h2>
@@ -536,12 +563,16 @@
               <iconify-icon icon="mdi:qrcode-scan" class="text-4xl text-emerald-300" aria-hidden="true"></iconify-icon>
               <p class="text-xs text-white/80" x-text="scannerMessage || 'Kamera akan aktif setelah izin diberikan.'"></p>
             </div>
-            <div x-show="isScanning" class="pointer-events-none absolute inset-6 rounded-xl border-2 border-emerald-300/90">
-              <span class="absolute inset-x-0 top-1/2 h-0.5 animate-pulse bg-emerald-300"></span>
-            </div>
+            <svg x-cloak x-show="qrFrame" class="pointer-events-none absolute inset-0 h-full w-full" :viewBox="`0 0 ${qrFrame?.width ?? 1} ${qrFrame?.height ?? 1}`" aria-hidden="true">
+              <polygon :points="qrFrame?.points" fill="rgba(16, 185, 129, 0.12)" stroke="#6ee7b7" stroke-width="8" stroke-linejoin="round" stroke-dasharray="24 12">
+                <animate attributeName="stroke-dashoffset" from="0" to="-36" dur="0.8s" repeatCount="indefinite"></animate>
+              </polygon>
+            </svg>
           </div>
           <p x-show="isScanning" class="rounded-lg bg-white px-4 py-2 text-center text-sm font-bold text-rose-600 shadow-sm">Arahkan Kamera Ke Kode QR</p>
-          <p x-show="scannerMessage" x-text="scannerMessage" class="text-sm text-slate-700" role="status"></p>
+          <p x-show="scannerMessage" x-text="scannerMessage"
+            :class="scannerMessage === 'Masukkan kode dari QR peminjaman.' ? 'rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 font-bold text-rose-700' : 'text-slate-700'"
+            class="text-sm" role="status"></p>
           <button x-show="cameraSupported && !isScanning && !isSubmitting" type="button" @click="startCamera()" class="w-full rounded-lg border border-[#00a88f] px-4 py-2.5 text-sm font-semibold text-[#007f70] hover:bg-[#e6f8f3]">Aktifkan kamera</button>
           <form @submit.prevent="submitCode()" class="border-t border-slate-100 pt-4">
             <label for="manual-loan-code" class="block text-xs font-semibold text-slate-700">Masukkan kode QR secara manual</label>

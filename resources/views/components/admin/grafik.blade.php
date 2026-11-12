@@ -6,11 +6,12 @@
 ])
 
 @php
-  $maxMonthlyLoans = max(1, $monthlyLoans->max('total'));
-  $chartPoints = $monthlyLoans->values()->map(static function (array $month, int $index) use ($maxMonthlyLoans): array {
+  $maxMonthlyLoans = (int) $monthlyLoans->max('total');
+  $chartScale = max(1, $maxMonthlyLoans);
+  $chartPoints = $monthlyLoans->values()->map(static function (array $month, int $index) use ($chartScale): array {
       return [
           'x' => 72 + ($index * 856 / 11),
-          'y' => 296 - ($month['total'] / $maxMonthlyLoans * 224),
+          'y' => 296 - ($month['total'] / $chartScale * 224),
           'label' => $month['label'],
           'total' => $month['total'],
       ];

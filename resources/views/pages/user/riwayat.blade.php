@@ -1,26 +1,3 @@
-@php
-  $currentUser = auth()->user();
-  $userId = $currentUser?->akun_id;
-  $historyStatus = request()->query('status') === 'finished' ? 'finished' : 'active';
-  $historyLoans = $userId
-      ? \App\Models\Peminjaman::query()
-      ->with(['detailPeminjamans.barang', 'diprosesAkun'])
-      ->where('akun_id', $userId)
-      ->when($historyStatus === 'active', fn ($query) => $query->whereHas(
-          'detailPeminjamans',
-          fn ($details) => $details->whereIn('status', ['pending', 'dipinjam']),
-      ))
-      ->when($historyStatus === 'finished', fn ($query) => $query
-          ->whereHas('detailPeminjamans')
-          ->whereDoesntHave(
-              'detailPeminjamans',
-              fn ($details) => $details->whereIn('status', ['pending', 'dipinjam']),
-          ))
-          ->latest('tanggal_pengajuan')
-          ->paginate(8, ['*'], 'history_page')
-          ->withQueryString()
-      : collect();
-@endphp
     <main id="history-content" class="mx-auto min-h-[calc(100vh-5rem)] w-full pb-12">
       <x-user.hero-section
         title="Riwayat Peminjaman Saya"
@@ -28,12 +5,12 @@
       />
       <section class="mx-auto w-full px-4 py-5 sm:px-8 sm:py-6 lg:px-10">
         <div class="mb-5 flex flex-wrap items-center gap-2" aria-label="Filter riwayat peminjaman">
-          <a data-history-ajax href="{{ route('user.beranda', ['page' => 'history', 'status' => 'active']) }}"
-            @if (request('status', 'active') === 'active') aria-current="page" @endif
-            class="rounded-full border px-4 py-1.5 text-xs font-semibold transition focus:outline-none focus-visible:ring-2 focus-visible:ring-[#008b7a] focus-visible:ring-offset-2 {{ request('status', 'active') === 'active' ? 'border-[#00ae91] bg-[#00ae91] text-white' : 'border-[#00ae91] bg-white text-[#007f70] hover:bg-emerald-50' }}">Aktif</a>
-          <a data-history-ajax href="{{ route('user.beranda', ['page' => 'history', 'status' => 'finished']) }}"
-            @if (request('status') === 'finished') aria-current="page" @endif
-            class="rounded-full border px-4 py-1.5 text-xs font-semibold transition focus:outline-none focus-visible:ring-2 focus-visible:ring-[#008b7a] focus-visible:ring-offset-2 {{ request('status') === 'finished' ? 'border-[#00ae91] bg-[#00ae91] text-white' : 'border-[#00ae91] bg-white text-[#007f70] hover:bg-emerald-50' }}">Selesai</a>
+          <a data-history-ajax href="{{ route('user.history', ['status' => 'active']) }}"
+            @if ($historyStatus === 'active') aria-current="page" @endif
+            class="rounded-full border px-4 py-1.5 text-xs font-semibold transition focus:outline-none focus-visible:ring-2 focus-visible:ring-[#008b7a] focus-visible:ring-offset-2 {{ $historyStatus === 'active' ? 'border-[#00ae91] bg-[#00ae91] text-white' : 'border-[#00ae91] bg-white text-[#007f70] hover:bg-emerald-50' }}">Aktif</a>
+          <a data-history-ajax href="{{ route('user.history', ['status' => 'finished']) }}"
+            @if ($historyStatus === 'finished') aria-current="page" @endif
+            class="rounded-full border px-4 py-1.5 text-xs font-semibold transition focus:outline-none focus-visible:ring-2 focus-visible:ring-[#008b7a] focus-visible:ring-offset-2 {{ $historyStatus === 'finished' ? 'border-[#00ae91] bg-[#00ae91] text-white' : 'border-[#00ae91] bg-white text-[#007f70] hover:bg-emerald-50' }}">Selesai</a>
         </div>
         @if ($historyLoans->count() > 0)
           <div class="space-y-4">
@@ -83,9 +60,17 @@
                 </div>
                 <div class="divide-y divide-slate-100 px-4 sm:px-5">
                   @foreach ($loan->detailPeminjamans as $detail)
-                    <div class="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 py-3">
-                      <div class="min-w-0">
-                        <p class="text-xs font-semibold text-slate-800">{{ $detail->barang?->nama_barang ?? 'Barang tidak tersedia' }} <span class="font-normal text-slate-500">× {{ $detail->jumlah_pinjam }}</span></p>
+                    <div class="flex items-center gap-3 py-3">
+                      <div class="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-slate-200 bg-slate-50 text-slate-400">
+                        @if ($detail->barang?->image_url)
+                          <img src="{{ $detail->barang->image_url }}" alt="Foto {{ $detail->barang->nama_barang }}" loading="lazy" decoding="async" class="h-full w-full object-cover">
+                        @else
+                          <iconify-icon icon="mdi:image-outline" class="text-2xl" aria-hidden="true"></iconify-icon>
+                        @endif
+                      </div>
+                      <div class="flex min-w-0 flex-1 items-center justify-between gap-3">
+                        <p class="min-w-0 truncate text-xs font-semibold text-slate-800">{{ $detail->barang?->nama_barang ?? 'Barang tidak tersedia' }}</p>
+                        <span class="shrink-0 rounded-full bg-[#e6f8f3] px-2.5 py-1 text-[11px] font-bold text-[#007f70]">× {{ $detail->jumlah_pinjam }}</span>
                       </div>
                     </div>
                   @endforeach
@@ -216,9 +201,9 @@
               <iconify-icon icon="mdi:clipboard-text-clock-outline" width="25"></iconify-icon>
             </span>
             <h2 class="mt-3 text-sm font-semibold text-slate-800">Belum ada transaksi di sini</h2>
-            <p class="mt-1 text-xs text-slate-500">{{ $userId ? 'Pengajuan pada kategori ini akan muncul di halaman ini.' : 'Masuk untuk melihat riwayat peminjaman akun Anda.' }}</p>
-            @if ($userId && request('status', 'active') === 'active')
-              <a href="{{ route('user.beranda', ['page' => 'catalog']) }}" class="mt-4 inline-flex rounded-md bg-[#00c99c] px-4 py-2 text-xs font-semibold text-[#004c43] transition hover:bg-[#00b68d] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#008b7a] focus-visible:ring-offset-2">Lihat katalog barang</a>
+            <p class="mt-1 text-xs text-slate-500">Pengajuan pada kategori ini akan muncul di halaman ini.</p>
+            @if ($historyStatus === 'active')
+              <a href="{{ route('user.catalog') }}" class="mt-4 inline-flex rounded-md bg-[#00c99c] px-4 py-2 text-xs font-semibold text-[#004c43] transition hover:bg-[#00b68d] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#008b7a] focus-visible:ring-offset-2">Lihat katalog barang</a>
             @endif
           </div>
         @endif

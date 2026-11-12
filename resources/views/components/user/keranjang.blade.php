@@ -15,7 +15,7 @@
             <p class="text-base font-bold text-slate-800">Tidak ada barang di keranjang</p>
             <p class="text-sm text-slate-500">Jelajahi katalog untuk memilih barang yang ingin dipinjam.</p>
           </div>
-          <a href="{{ route('user.beranda', ['page' => 'catalog']) }}" @click="cartOpen = false"
+          <a href="{{ route('user.catalog') }}" @click="cartOpen = false"
             class="mt-1 inline-flex rounded-lg bg-[#00d69f] px-4 py-2.5 text-sm font-bold text-[#004d43] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#008b7a]">
             Jelajahi Katalog
           </a>
