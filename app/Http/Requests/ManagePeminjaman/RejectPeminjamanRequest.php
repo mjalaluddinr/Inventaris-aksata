@@ -23,6 +23,7 @@ class RejectPeminjamanRequest extends FormRequest
         return [
             // ASVS 2.2.1/2.2.2: bound and require the reason used to decide and audit a rejection.
             'reason' => ['required', 'string', 'max:255'],
+            'tab' => ['nullable', 'in:pending,borrowed,history'],
         ];
     }
 }

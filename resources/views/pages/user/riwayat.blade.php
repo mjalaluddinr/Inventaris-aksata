@@ -4,13 +4,35 @@
         description="Pantau status pengajuan aktif dan transaksi yang sudah selesai."
       />
       <section class="mx-auto w-full px-4 py-5 sm:px-8 sm:py-6 lg:px-10">
-        <div class="mb-5 flex flex-wrap items-center gap-2" aria-label="Filter riwayat peminjaman">
-          <a data-history-ajax href="{{ route('user.history', ['status' => 'active']) }}"
-            @if ($historyStatus === 'active') aria-current="page" @endif
-            class="rounded-full border px-4 py-1.5 text-xs font-semibold transition focus:outline-none focus-visible:ring-2 focus-visible:ring-[#008b7a] focus-visible:ring-offset-2 {{ $historyStatus === 'active' ? 'border-[#00ae91] bg-[#00ae91] text-white' : 'border-[#00ae91] bg-white text-[#007f70] hover:bg-emerald-50' }}">Aktif</a>
-          <a data-history-ajax href="{{ route('user.history', ['status' => 'finished']) }}"
-            @if ($historyStatus === 'finished') aria-current="page" @endif
-            class="rounded-full border px-4 py-1.5 text-xs font-semibold transition focus:outline-none focus-visible:ring-2 focus-visible:ring-[#008b7a] focus-visible:ring-offset-2 {{ $historyStatus === 'finished' ? 'border-[#00ae91] bg-[#00ae91] text-white' : 'border-[#00ae91] bg-white text-[#007f70] hover:bg-emerald-50' }}">Selesai</a>
+        <div class="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div class="flex flex-wrap items-center gap-2" aria-label="Filter riwayat peminjaman">
+            <a data-history-ajax href="{{ route('user.history', ['status' => 'active', 'q' => $historySearch]) }}"
+              @if ($historyStatus === 'active') aria-current="page" @endif
+              class="rounded-full border px-3 py-1.5 text-xs font-semibold transition focus:outline-none focus-visible:ring-2 focus-visible:ring-[#008b7a] focus-visible:ring-offset-2 {{ $historyStatus === 'active' ? 'border-[#00ae91] bg-[#00ae91] text-white' : 'border-[#00ae91] bg-white text-[#007f70] hover:bg-emerald-50' }}">Aktif</a>
+            <a data-history-ajax href="{{ route('user.history', ['status' => 'finished', 'q' => $historySearch]) }}"
+              @if ($historyStatus === 'finished') aria-current="page" @endif
+              class="rounded-full border px-3 py-1.5 text-xs font-semibold transition focus:outline-none focus-visible:ring-2 focus-visible:ring-[#008b7a] focus-visible:ring-offset-2 {{ $historyStatus === 'finished' ? 'border-[#00ae91] bg-[#00ae91] text-white' : 'border-[#00ae91] bg-white text-[#007f70] hover:bg-emerald-50' }}">Selesai</a>
+          </div>
+          <form method="GET" action="{{ route('user.history') }}" data-history-search
+            class="w-full sm:ml-auto sm:w-72 sm:shrink-0">
+            <input type="hidden" name="status" value="{{ $historyStatus }}">
+            <label class="relative block w-full min-w-0">
+              <span class="sr-only">Cari riwayat peminjaman</span>
+              <input
+                type="search"
+                name="q"
+                value="{{ $historySearch }}"
+                maxlength="100"
+                placeholder="Cari riwayat..."
+                class="h-9 w-full rounded-full border border-[#92d9cd] bg-white py-2 pl-4 pr-10 text-xs text-slate-800 outline-none transition placeholder:text-slate-400 focus:border-[#00a88f] focus:ring-2 focus:ring-[#00a88f]/20 sm:text-sm"
+              >
+              <button type="submit"
+                class="absolute inset-y-0 right-0 flex w-9 items-center justify-center rounded-r-full text-[#007f70] transition hover:bg-[#e6f8f3] focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#008b7a]"
+                aria-label="Cari riwayat">
+                <iconify-icon icon="mdi:magnify" class="text-xl" aria-hidden="true"></iconify-icon>
+              </button>
+            </label>
+          </form>
         </div>
         @if ($historyLoans->count() > 0)
           <div class="space-y-4">
@@ -23,14 +45,30 @@
                 $loanStatus = $detailStatuses->count() === 1 ? $detailStatuses->first() : 'diproses';
                 $statusLabels = ['pending' => 'Menunggu konfirmasi', 'dipinjam' => 'Sedang dipinjam', 'dikembalikan' => 'Dikembalikan', 'ditolak' => 'Ditolak', 'dibatalkan' => 'Peminjaman Dibatalkan', 'diproses' => 'Beberapa status'];
                 $progressIndex = match ($loanStatus) {
-                    'dipinjam' => 2,
-                    'dikembalikan' => 3,
+                    'dipinjam' => 1,
+                    'dikembalikan' => 2,
                     'ditolak', 'dibatalkan' => 1,
                     default => 0,
                 };
                 $progressIsRejected = in_array($loanStatus, ['ditolak', 'dibatalkan'], true);
                 $isOverdue = $loanStatus === 'dipinjam'
                     && $loan->tanggal_rencana_kembali?->isBefore(today()) === true;
+                $historyDateLabel = match ($loanStatus) {
+                    'dikembalikan' => 'Tanggal dikembalikan',
+                    'dibatalkan' => 'Tanggal dibatalkan',
+                    'ditolak' => 'Tanggal ditolak',
+                    default => 'Tanggal rencana kembali',
+                };
+                $historyDate = match ($loanStatus) {
+                    'dikembalikan' => $loan->detailPeminjamans
+                        ->where('status', 'dikembalikan')
+                        ->max('tanggal_kembali')
+                        ?? $loan->detailPeminjamans->where('status', 'dikembalikan')->max('updated_at'),
+                    'dibatalkan', 'ditolak' => $loan->detailPeminjamans
+                        ->where('status', $loanStatus)
+                        ->max('updated_at'),
+                    default => $loan->tanggal_rencana_kembali,
+                };
                 $statusStyle = match (true) {
                     $isOverdue => 'bg-amber-100 text-amber-800',
                     $loanStatus === 'pending' => 'bg-sky-100 text-sky-800',
@@ -39,7 +77,7 @@
                     $loanStatus === 'ditolak', $loanStatus === 'dibatalkan' => 'bg-rose-100 text-rose-800',
                     default => 'bg-slate-100 text-slate-700',
                 };
-                $progressSteps = ['Diajukan', 'Dikonfirmasi', 'Dipinjam', 'Dikembalikan'];
+                $progressSteps = ['Diajukan', 'Dipinjam', 'Dikembalikan'];
               @endphp
               <article data-loan-state="{{ $loan->peminjaman_id }}:{{ $loanStatus }}:{{ $loan->detailPeminjamans->pluck('status')->implode(',') }}:{{ $isOverdue ? '1' : '0' }}" x-data="{ qrOpen: false, cancellationOpen: false }" @keydown.escape.window="qrOpen = false; cancellationOpen = false" class="user-card-enter overflow-hidden rounded-xl border border-[#d1e6e1] bg-white shadow-[0_2px_5px_rgba(20,55,48,0.12)]">
                 <div class="flex flex-wrap items-start justify-between gap-3 border-b border-slate-100 px-4 py-3.5 sm:px-5">
@@ -51,9 +89,9 @@
                     <span class="rounded-full px-3 py-1 text-[10px] font-semibold {{ $statusStyle }}">
                       {{ $isOverdue ? 'Jatuh tempo' : ($statusLabels[$loanStatus] ?? ucfirst($loanStatus)) }}
                     </span>
-                    @if ($loan->tanggal_rencana_kembali)
+                    @if ($historyDate)
                       <span class="text-right text-[10px] font-bold text-slate-700">
-                        Tanggal rencana kembali: {{ $loan->tanggal_rencana_kembali?->format('d M Y') ?? '—' }}
+                        {{ $historyDateLabel }}: {{ $historyDate->format('d M Y') }}
                       </span>
                     @endif
                   </div>
@@ -76,15 +114,23 @@
                   @endforeach
                 </div>
                 <div class="px-4 pb-3 sm:px-5">
-                  <ol class="grid grid-cols-4" aria-label="Tahapan peminjaman">
+                  <ol class="mx-auto grid max-w-lg grid-cols-3" aria-label="Tahapan peminjaman">
                     @foreach ($progressSteps as $stepIndex => $stepLabel)
                       @php
                         $stepIsRejected = $progressIsRejected && $stepIndex === 1;
-                        $stepIsCompleted = $stepIndex <= $progressIndex && ! $stepIsRejected;
-                        $stepIsCurrent = $stepIndex === $progressIndex;
+                        $stepIsCompleted = ($stepIndex < $progressIndex && ! $stepIsRejected)
+                            || ($loanStatus === 'dikembalikan' && $stepIndex === $progressIndex);
+                        $stepIsCurrent = $stepIndex === $progressIndex
+                            && ! $progressIsRejected
+                            && $loanStatus !== 'dikembalikan';
                         $stepLabelText = $stepIsRejected
                             ? ($loanStatus === 'ditolak' ? 'Ditolak' : 'Dibatalkan')
                             : $stepLabel;
+                        $stepStatusText = $stepIsRejected
+                            ? $stepLabelText
+                            : ($stepIsCurrent
+                                  ? 'Tahap saat ini: ' . $stepLabelText
+                                  : ($stepIsCompleted ? 'Selesai: ' . $stepLabelText : 'Belum: ' . $stepLabelText));
                       @endphp
                       <li class="relative flex min-w-0 flex-col items-center text-center">
                         @if ($stepIndex > 0)
@@ -93,22 +139,18 @@
                         @if ($stepIndex < count($progressSteps) - 1)
                           <span class="absolute left-1/2 right-0 top-[11px] h-0.5 {{ $stepIsRejected ? 'bg-rose-300' : ($stepIndex < $progressIndex ? 'bg-[#00c99c]' : 'bg-slate-200') }}" aria-hidden="true"></span>
                         @endif
-                        <span class="relative z-10 flex h-6 w-6 items-center justify-center rounded-full {{ $stepIsRejected ? 'bg-rose-600 text-white' : ($stepIsCompleted || $stepIsCurrent ? 'bg-[#00c99c] text-white' : 'bg-slate-200 text-slate-400') }}">
+                        <span aria-hidden="true" class="relative z-10 flex h-6 w-6 items-center justify-center rounded-full {{ $stepIsRejected ? 'bg-rose-600 text-white' : ($stepIsCompleted || $stepIsCurrent ? 'bg-[#00c99c] text-white' : 'bg-slate-200 text-slate-400') }}">
                           @if ($stepIsRejected)
                             <iconify-icon icon="mdi:close" class="text-sm" aria-hidden="true"></iconify-icon>
-                            <span class="sr-only">{{ $stepLabelText }}: </span>
-                          @elseif ($stepIndex < $progressIndex)
+                          @elseif ($stepIsCompleted)
                             <span aria-hidden="true">✓</span>
-                            <span class="sr-only">Selesai: </span>
                           @elseif ($stepIsCurrent)
                             <span class="h-2 w-2 rounded-full bg-white" aria-hidden="true"></span>
-                            <span class="sr-only">Tahap saat ini: </span>
                           @else
                             <span class="h-1.5 w-1.5 rounded-full bg-white" aria-hidden="true"></span>
-                            <span class="sr-only">Belum: </span>
                           @endif
                         </span>
-                        <span class="mt-1.5 max-w-full px-0.5 text-[8px] leading-tight {{ $stepIsRejected ? 'font-bold text-rose-700' : ($stepIsCompleted || $stepIsCurrent ? 'font-semibold text-[#007f70]' : 'text-slate-400') }} sm:text-[10px]">{{ $stepLabelText }}</span>
+                        <span class="mt-1.5 max-w-full px-0.5 text-[8px] leading-tight {{ $stepIsRejected ? 'font-bold text-rose-700' : ($stepIsCompleted || $stepIsCurrent ? 'font-semibold text-[#007f70]' : 'text-slate-400') }} sm:text-[10px]">{{ $stepStatusText }}</span>
                       </li>
                     @endforeach
                   </ol>
@@ -200,8 +242,12 @@
             <span class="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-[#e6f8f3] text-[#008b7a]" aria-hidden="true">
               <iconify-icon icon="mdi:clipboard-text-clock-outline" width="25"></iconify-icon>
             </span>
-            <h2 class="mt-3 text-sm font-semibold text-slate-800">Belum ada transaksi di sini</h2>
-            <p class="mt-1 text-xs text-slate-500">Pengajuan pada kategori ini akan muncul di halaman ini.</p>
+            <h2 class="mt-3 text-sm font-semibold text-slate-800">
+              {{ $historySearch !== '' ? 'Tidak ada hasil pencarian' : 'Belum ada transaksi di sini' }}
+            </h2>
+            <p class="mt-1 text-xs text-slate-500">
+              {{ $historySearch !== '' ? 'Coba kata kunci nama barang, kode, atau keperluan lainnya.' : 'Pengajuan pada kategori ini akan muncul di halaman ini.' }}
+            </p>
             @if ($historyStatus === 'active')
               <a href="{{ route('user.catalog') }}" class="mt-4 inline-flex rounded-md bg-[#00c99c] px-4 py-2 text-xs font-semibold text-[#004c43] transition hover:bg-[#00b68d] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#008b7a] focus-visible:ring-offset-2">Lihat katalog barang</a>
             @endif

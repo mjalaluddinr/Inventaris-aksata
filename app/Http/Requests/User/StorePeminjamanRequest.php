@@ -3,6 +3,7 @@
 namespace App\Http\Requests\User;
 
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
 
 class StorePeminjamanRequest extends FormRequest
 {
@@ -17,7 +18,12 @@ class StorePeminjamanRequest extends FormRequest
         return [
             'items' => ['required', 'array', 'min:1', 'max:50'],
             'items.*' => ['required', 'array:barang_id,quantity'],
-            'items.*.barang_id' => ['required', 'uuid', 'distinct', 'exists:barang,barang_id'],
+            'items.*.barang_id' => [
+                'required',
+                'uuid',
+                'distinct',
+                Rule::exists('barang', 'barang_id')->where(fn ($query) => $query->whereNull('deleted_at')),
+            ],
             'items.*.quantity' => ['required', 'integer', 'min:1'],
             'keperluan' => ['required', 'string', 'max:255'],
             'jenis_peminjaman' => ['required', 'string', 'in:harian,praktik,mingguan,bulanan,semesteran,tahunan', 'max:30'],

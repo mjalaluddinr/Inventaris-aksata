@@ -134,7 +134,7 @@
       filterError: '',
       formBusy: false,
       csrf: '{{ csrf_token() }}',
-  
+
       init() {
           if (this.modalMode === 'edit' && this.openModal) {
               this.currentRuangan = {
@@ -162,7 +162,7 @@
               : this.feedbackMessage;
           window.showToast(message, this.feedbackType);
       },
-  
+
       createRuangan() {
           this.modalMode = 'create';
           this.currentRuangan = {
@@ -173,7 +173,7 @@
           this.openModal = true;
       },
       closeAccountModal() { this.openModal = false; },
-  
+
       editRuangan(ruangan) {
           this.modalMode = 'edit';
           this.currentRuangan = {
@@ -184,7 +184,7 @@
           };
           this.openModal = true;
       },
-  
+
       async filterRuangan(url = null) {
           window.clearTimeout(this.searchTimer);
           this.searchTimer = null;
@@ -266,7 +266,7 @@
           if (!form || !form.matches('[data-ruangan-delete-form]')) return;
           this.requestDelete(form);
       },
-  
+
       async submitRuangan(event) { await this.sendCrudRequest(event.target); },
       async sendCrudRequest(form) {
           this.formBusy = true;
@@ -291,7 +291,7 @@
               const validationMessage = responseDocument.querySelector('[data-ruangan-validation]')?.dataset.ruanganValidation;
               const successMessage = responseDocument.querySelector('[data-ruangan-success]')?.dataset.ruanganSuccess;
               const errorMessage = responseDocument.querySelector('[data-ruangan-error]')?.dataset.ruanganError;
-  
+
               if (validationMessage) {
                   this.openModal = false;
                   this.feedbackType = 'error';
@@ -325,7 +325,7 @@
               return false;
           } finally { this.formBusy = false; }
       },
-  
+
       requestDelete(form) {
           this.pendingDeleteForm = form;
           this.pendingDeleteNama = form.dataset.nama;
@@ -523,9 +523,16 @@
 
           <div class="px-5 py-4 space-y-4">
             <div>
-              <label class="mb-1 block text-xs font-medium text-slate-700">Nama Ruangan <span
-                  class="text-rose-500">*</span></label>
-              <input type="text" name="nama_ruangan" x-model="currentRuangan.nama_ruangan" required
+              <label for="ruangan-code" class="mb-1 block text-xs font-medium text-slate-700">Kode Ruangan <span
+                  class="ml-1 text-rose-500" aria-hidden="true">*</span></label>
+              <input id="ruangan-code" type="text" name="kode_ruangan" x-model="currentRuangan.kode_ruangan"
+                required maxlength="20" placeholder="Contoh: F1.3"
+                class="ruangan-form-field block w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 shadow-sm focus:border-[#08A9D6] focus:outline-none focus:ring-2 focus:ring-[#08A9D6]/20">
+            </div>
+            <div>
+              <label for="ruangan-name" class="mb-1 block text-xs font-medium text-slate-700">Nama Ruangan <span
+                  class="ml-1 text-rose-500" aria-hidden="true">*</span></label>
+              <input id="ruangan-name" type="text" name="nama_ruangan" x-model="currentRuangan.nama_ruangan" required
                 maxlength="100" placeholder="Contoh: Lab RPL D"
                 class="ruangan-form-field block w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 shadow-sm focus:border-[#08A9D6] focus:outline-none focus:ring-2 focus:ring-[#08A9D6]/20">
             </div>

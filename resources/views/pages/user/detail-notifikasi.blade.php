@@ -9,10 +9,12 @@
   header-description="Riwayat semua notifikasi Anda."
 >
     <main class="{{ $isAdminNotification ? '-mx-8 -mt-8 w-[calc(100%+4rem)] pb-8' : 'min-h-screen w-full bg-[#e9faf5] pb-12' }}">
-      <x-user.hero-section
-        title="Riwayat Notifikasi"
-        description="Pantau seluruh pembaruan aktivitas dan transaksi."
-      />
+      @unless ($isAdminNotification)
+        <x-user.hero-section
+          title="Riwayat Notifikasi"
+          description="Pantau seluruh pembaruan aktivitas dan transaksi."
+        />
+      @endunless
       <div class="px-4 pt-6 sm:px-8 lg:px-10">
         <section class="mx-auto w-full max-w-6xl overflow-hidden rounded-2xl border border-[#d4e7e2] bg-white shadow-[0_12px_32px_rgba(0,95,82,0.10)]">
           <header class="flex flex-col gap-2 border-b border-[#e4efec] px-5 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-6">

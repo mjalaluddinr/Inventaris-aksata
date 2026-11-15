@@ -41,6 +41,7 @@
       'peminjaman' => 'Peminjaman',
       'akun' => 'Akun',
       'log-import' => 'Log Import',
+      'detail-notifications' => 'Detail Notifications',
   ];
   $roomDetail = request()->routeIs('admin.ruangan.show') ? request()->route('ruangan') : null;
 @endphp

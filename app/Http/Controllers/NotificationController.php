@@ -7,6 +7,7 @@ use App\Services\RedisNotificationService;
 use Illuminate\Contracts\Cache\LockTimeoutException;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Carbon;
@@ -44,9 +45,13 @@ class NotificationController extends Controller
             ->header('Cache-Control', 'no-store, private');
     }
 
-    public function index(Request $request): View
+    public function index(Request $request): View|RedirectResponse
     {
         $user = $this->authorizedUser($request);
+        if ($user->role !== 'peminjam' && ! $request->routeIs('admin.notifications.detail')) {
+            return redirect()->route('admin.notifications.detail');
+        }
+
         $notificationService = app(RedisNotificationService::class);
 
         try {
@@ -63,7 +68,8 @@ class NotificationController extends Controller
         $notifications = collect($notificationsList)->map(function (array $notification): array {
             $notification['message'] = app(RedisNotificationService::class)
                 ->sanitizeNotificationMessage($notification['message']);
-            $notification['created_at'] = Carbon::parse($notification['created_at']);
+            $notification['created_at'] = Carbon::parse($notification['created_at'])
+                ->setTimezone('Asia/Jakarta');
 
             return $notification;
         });

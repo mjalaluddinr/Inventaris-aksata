@@ -152,22 +152,19 @@ class PeminjamanController extends Controller
             "Pengajuan peminjaman baru dari {$borrowerName} menunggu konfirmasi.",
         );
 
+        if ($request->expectsJson()) {
+            return response()->json([
+                'message' => 'Pengajuan peminjaman berhasil dikirim.',
+                'submitted_item_ids' => collect($validated['items'])->pluck('barang_id')->all(),
+            ], 201);
+        }
+
         $redirect = redirect()->route('user.history');
 
         if ($validated['clear_submitted_items'] ?? false) {
             $redirect->with('cart_items_submitted', collect($validated['items'])->pluck('barang_id')->all());
         } elseif (! ($validated['preserve_cart'] ?? false)) {
             $redirect->with('cart_cleared', true);
-        }
-
-        if ($request->expectsJson()) {
-            $request->session()->flash('success', 'Pengajuan peminjaman berhasil dikirim.');
-
-            return response()->json([
-                'message' => 'Pengajuan peminjaman berhasil dikirim.',
-                'redirect_url' => route('user.history', absolute: false),
-                'submitted_item_ids' => collect($validated['items'])->pluck('barang_id')->all(),
-            ], 201);
         }
 
         return $redirect->with('success', 'Pengajuan peminjaman berhasil dikirim.');

@@ -183,7 +183,7 @@ class ManagePeminjaman extends Controller
         ]);
     }
 
-    public function confirm(Request $request, Peminjaman $peminjaman): RedirectResponse
+    public function confirm(Request $request, Peminjaman $peminjaman): JsonResponse|RedirectResponse
     {
         $admin = $request->user();
         abort_unless($admin instanceof User, 403);
@@ -191,20 +191,25 @@ class ManagePeminjaman extends Controller
             'allocations' => ['sometimes', 'array'],
             'allocations.*' => ['required', 'array'],
             'allocations.*.*' => ['required', 'integer', 'min:0'],
+            'tab' => ['nullable', 'in:pending,borrowed,history'],
         ]);
+        $activeTab = $validated['tab'] ?? 'pending';
 
         $this->confirmLoan($peminjaman->peminjaman_id, $admin, $validated['allocations'] ?? [], true);
 
-        return redirect()
-            ->route('admin.peminjaman', ['tab' => 'pending'])
-            ->with('success', 'Peminjaman berhasil dikonfirmasi.');
+        return $this->respondToLoanAction(
+            $request,
+            $activeTab,
+            'Peminjaman berhasil dikonfirmasi.',
+        );
     }
 
-    public function reject(RejectPeminjamanRequest $request, Peminjaman $peminjaman): RedirectResponse
+    public function reject(RejectPeminjamanRequest $request, Peminjaman $peminjaman): JsonResponse|RedirectResponse
     {
         $admin = $request->user();
         abort_unless($admin instanceof User, 403);
         $reason = $request->validated('reason');
+        $activeTab = $request->validated('tab', 'pending');
 
         $loan = DB::transaction(function () use ($admin, $peminjaman, $reason): Peminjaman {
             $loan = Peminjaman::query()
@@ -234,19 +239,19 @@ class ManagePeminjaman extends Controller
             "Pengajuan peminjaman ditolak. Alasan: {$reason}",
         );
 
-        return redirect()
-            ->route('admin.peminjaman', ['tab' => 'pending'])
-            ->with(
-                'success',
-                'Pengajuan peminjaman ditolak dan stok dikembalikan.',
-            );
+        return $this->respondToLoanAction(
+            $request,
+            $activeTab,
+            'Pengajuan peminjaman ditolak dan stok dikembalikan.',
+        );
     }
 
-    public function returnItems(ReturnPeminjamanRequest $request, Peminjaman $peminjaman): RedirectResponse
+    public function returnItems(ReturnPeminjamanRequest $request, Peminjaman $peminjaman): JsonResponse|RedirectResponse
     {
         $admin = $request->user();
         abort_unless($admin instanceof User, 403);
         $validated = $request->validated();
+        $activeTab = $validated['tab'] ?? 'borrowed';
 
         DB::transaction(function () use ($admin, $peminjaman, $validated): void {
             $loan = Peminjaman::query()
@@ -316,9 +321,16 @@ class ManagePeminjaman extends Controller
         $hasRemainingItems = $peminjaman->detailPeminjamans()
             ->where('status', 'dipinjam')
             ->exists();
-        $this->notifications->notifyLoanProcessors(
-            'Barang peminjaman telah dicatat kembali.',
-        );
+        $borrower = $peminjaman->akun;
+        $borrowerName = trim(($borrower?->first_name ?? '').' '.($borrower?->last_name ?? ''))
+            ?: ($borrower?->username ?? 'peminjam');
+        $loanProcessorMessage = $hasRemainingItems
+            ? "Pengembalian barang dari {$borrowerName} telah dicatat sebagian. Masih ada barang yang belum dikembalikan."
+            : "Seluruh barang peminjaman dari {$borrowerName} telah dikembalikan dan dicatat.";
+        $borrowerNotification = $hasRemainingItems
+            ? 'Pengembalian sebagian barang pinjaman Anda telah dicatat. Masih ada barang yang harus dikembalikan.'
+            : 'Seluruh barang peminjaman Anda telah dikembalikan dan dicatat.';
+        $this->notifications->notifyLoanProcessors($loanProcessorMessage);
 
         if (! $hasRemainingItems) {
             $this->notifications->clearLoanReminderMarkers(
@@ -327,17 +339,30 @@ class ManagePeminjaman extends Controller
             );
         }
 
+        $this->notifyBorrower(
+            $peminjaman->akun_id,
+            $borrowerNotification,
+        );
+
         $returnMessage = $hasRemainingItems
             ? 'Peminjaman berhasil dikembalikan sebagian.'
             : 'Peminjaman berhasil dikembalikan sepenuhnya.';
-        $this->notifyBorrower(
-            $peminjaman->akun_id,
-            $returnMessage,
-        );
+
+        return $this->respondToLoanAction($request, $activeTab, $returnMessage);
+    }
+
+    private function respondToLoanAction(Request $request, string $activeTab, string $message): JsonResponse|RedirectResponse
+    {
+        if ($request->expectsJson()) {
+            return response()->json([
+                'message' => $message,
+                'tab' => $activeTab,
+            ]);
+        }
 
         return redirect()
-            ->route('admin.peminjaman', ['tab' => $hasRemainingItems ? 'borrowed' : 'history'])
-            ->with('success', $returnMessage);
+            ->route('admin.peminjaman', ['tab' => $activeTab])
+            ->with('success', $message);
     }
 
     public function export(Request $request): BinaryFileResponse
@@ -417,7 +442,7 @@ class ManagePeminjaman extends Controller
             DB::afterCommit(function () use ($loan): void {
                 $this->notifyBorrower(
                     $loan->akun_id,
-                    'Peminjaman telah disetujui.',
+                    'Pengajuan peminjaman Anda telah disetujui admin dan kini berstatus dipinjam.',
                 );
             });
         }, 3);

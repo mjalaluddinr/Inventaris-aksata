@@ -19,7 +19,13 @@ class LoginController extends Controller
 
     public function login(LoginRequest $request)
     {
-        $user = User::where('username', $request->username)->first();
+        $user = User::query()
+            ->where('username', $request->username)
+            ->get()
+            ->first(
+                // ASVS 2.2.1: Preserve exact username matching even with a case-insensitive database collation.
+                fn (User $candidate): bool => hash_equals($candidate->username, $request->username),
+            );
 
         if (! $user || ! Hash::check($request->password, $user->password_hash)) {
             return back()->withErrors(['username' => 'Username atau password salah.'])->withInput($request->only('username'));

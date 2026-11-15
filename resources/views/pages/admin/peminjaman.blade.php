@@ -282,8 +282,9 @@
                                     <iconify-icon icon="mdi:close" class="text-xl" aria-hidden="true"></iconify-icon>
                                   </button>
                                 </header>
-                                <form method="POST" action="{{ route('admin.peminjaman.confirm', $loan) }}">
+                                <form method="POST" action="{{ route('admin.peminjaman.confirm', $loan) }}" @submit.prevent="submitLoanAction($event)">
                                   @csrf
+                                  <input type="hidden" name="tab" value="{{ $activeTab }}">
                                   <div class="max-h-[55vh] space-y-3 overflow-y-auto p-5">
                                     @foreach ($loan->detailPeminjamans as $detail)
                                       @php
@@ -377,9 +378,10 @@
                                   </div>
                                   <footer class="flex justify-end gap-2 border-t border-slate-100 px-5 py-4">
                                     <button type="button" @click="confirmOpen = false" class="rounded-lg border border-slate-200 px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#008b7a]">Batal</button>
-                                    <button type="submit" class="inline-flex items-center gap-1.5 rounded-lg bg-[#00d69f] px-4 py-2 text-xs font-bold text-[#003f38] transition hover:bg-[#36e9b3] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#008b7a]">
-                                      <iconify-icon icon="mdi:check-circle-outline" aria-hidden="true"></iconify-icon>
-                                      Konfirmasi Peminjaman
+                                    <button type="submit" class="inline-flex items-center gap-1.5 rounded-lg bg-[#00d69f] px-4 py-2 text-xs font-bold text-[#003f38] transition hover:bg-[#36e9b3] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#008b7a] disabled:cursor-wait disabled:opacity-70">
+                                      <iconify-icon data-loan-action-spinner icon="mdi:loading" class="hidden animate-spin text-lg" aria-hidden="true"></iconify-icon>
+                                      <iconify-icon data-loan-action-icon icon="mdi:check-circle-outline" aria-hidden="true"></iconify-icon>
+                                      <span data-loan-action-label>Konfirmasi Peminjaman</span>
                                     </button>
                                   </footer>
                                 </form>
@@ -398,14 +400,19 @@
                                   <iconify-icon icon="mdi:close" class="text-xl" aria-hidden="true"></iconify-icon>
                                 </button>
                               </header>
-                              <form method="POST" action="{{ route('admin.peminjaman.reject', $loan) }}" class="p-5">
+                              <form method="POST" action="{{ route('admin.peminjaman.reject', $loan) }}" class="p-5" @submit.prevent="submitLoanAction($event)">
                                 @csrf
+                                <input type="hidden" name="tab" value="{{ $activeTab }}">
                                 <label for="reject-reason-{{ $loan->peminjaman_id }}" class="block text-xs font-semibold text-slate-700">Alasan penolakan</label>
                                 <textarea id="reject-reason-{{ $loan->peminjaman_id }}" name="reason" required maxlength="255" rows="3" placeholder="Tuliskan alasan penolakan..." class="mt-2 block w-full resize-y rounded-xl border border-slate-200 px-3 py-2.5 text-sm font-normal text-slate-800 placeholder:text-slate-400 focus:border-rose-500 focus:outline-none focus:ring-2 focus:ring-rose-500/20"></textarea>
                                 <p class="mt-2 text-xs text-slate-500">Stok yang sudah dipesan akan dikembalikan.</p>
                                 <footer class="mt-5 flex justify-end gap-2">
                                   <button type="button" @click="rejectOpen = false" class="rounded-lg border border-slate-200 px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-50">Batal</button>
-                                  <button type="submit" class="rounded-lg bg-rose-600 px-4 py-2 text-xs font-bold text-white transition hover:bg-rose-700">Tolak Pengajuan</button>
+                                  <button type="submit" class="inline-flex items-center gap-1.5 rounded-lg bg-rose-600 px-4 py-2 text-xs font-bold text-white transition hover:bg-rose-700 disabled:cursor-wait disabled:opacity-70">
+                                    <iconify-icon data-loan-action-spinner icon="mdi:loading" class="hidden animate-spin text-lg" aria-hidden="true"></iconify-icon>
+                                    <iconify-icon data-loan-action-icon icon="mdi:close-circle-outline" aria-hidden="true"></iconify-icon>
+                                    <span data-loan-action-label>Tolak Pengajuan</span>
+                                  </button>
                                 </footer>
                               </form>
                             </section>
@@ -427,8 +434,9 @@
                                   <iconify-icon icon="mdi:close" class="text-xl" aria-hidden="true"></iconify-icon>
                                 </button>
                               </header>
-                              <form method="POST" action="{{ route('admin.peminjaman.return', $loan) }}" class="p-5">
+                              <form method="POST" action="{{ route('admin.peminjaman.return', $loan) }}" class="p-5" @submit.prevent="submitLoanAction($event)">
                                 @csrf
+                                <input type="hidden" name="tab" value="{{ $activeTab }}">
                                 <div class="space-y-3">
                                   @foreach ($loan->detailPeminjamans as $detail)
                                     <div class="grid gap-3 border-b border-slate-100 pb-4 text-xs sm:grid-cols-[minmax(0,1fr)_7rem_10rem] sm:items-end">
@@ -458,7 +466,11 @@
                                 </label>
                                 <footer class="mt-5 flex justify-end gap-2">
                                   <button type="button" @click="returnOpen = false" class="rounded-lg border border-slate-200 px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-50">Batal</button>
-                                  <button type="submit" class="rounded-lg bg-[#00d69f] px-4 py-2 text-xs font-bold text-[#003f38] hover:bg-[#36e9b3]">Simpan Pengembalian</button>
+                                  <button type="submit" class="inline-flex items-center gap-1.5 rounded-lg bg-[#00d69f] px-4 py-2 text-xs font-bold text-[#003f38] transition hover:bg-[#36e9b3] disabled:cursor-wait disabled:opacity-70">
+                                    <iconify-icon data-loan-action-spinner icon="mdi:loading" class="hidden animate-spin text-lg" aria-hidden="true"></iconify-icon>
+                                    <iconify-icon data-loan-action-icon icon="mdi:check-circle-outline" aria-hidden="true"></iconify-icon>
+                                    <span data-loan-action-label>Simpan Pengembalian</span>
+                                  </button>
                                 </footer>
                               </form>
                             </section>

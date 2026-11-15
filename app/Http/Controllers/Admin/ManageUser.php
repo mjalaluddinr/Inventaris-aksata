@@ -11,6 +11,7 @@ use App\Models\LogInput;
 use App\Models\User;
 use App\Services\PasswordRecoveryRequests;
 use Exception;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -34,6 +35,51 @@ class ManageUser extends Controller
     private const MAX_IMPORT_COLUMNS = 32;
 
     private const MAX_IMPORT_SHEETS = 10;
+
+    public function importLogs(Request $request): View|string
+    {
+        // ASVS 2.2.1/2.2.2: Bound search input at the trusted request boundary.
+        $filters = $request->validate([
+            'search' => ['nullable', 'string', 'max:100'],
+            'q' => ['nullable', 'string', 'max:100'],
+        ]);
+        $search = trim($filters['search'] ?? $filters['q'] ?? '');
+        $driver = (new LogInput)->getConnection()->getDriverName();
+        $castType = $driver === 'mysql' ? 'CHAR' : 'TEXT';
+        $likeOperator = $driver === 'pgsql' ? 'ILIKE' : 'LIKE';
+
+        $logs = LogInput::query()
+            ->when($search !== '', function (Builder $query) use ($search, $castType, $likeOperator): void {
+                $pattern = '%'.$search.'%';
+                $textColumns = ['log_input_id', 'jenis_input', 'nama_file', 'status'];
+                $castColumns = [
+                    'total_baris',
+                    'baris_berhasil',
+                    'baris_gagal',
+                    'mulai_at',
+                    'selesai_at',
+                    'detail_error',
+                ];
+
+                // ASVS 1.2.4: Bind search values; SQL operators, casts, and column names are fixed allowlists.
+                $query->where(function (Builder $query) use ($pattern, $textColumns, $castColumns, $castType, $likeOperator): void {
+                    foreach ($textColumns as $column) {
+                        $query->orWhereRaw("{$column} {$likeOperator} ?", [$pattern]);
+                    }
+
+                    foreach ($castColumns as $column) {
+                        $query->orWhereRaw("CAST({$column} AS {$castType}) {$likeOperator} ?", [$pattern]);
+                    }
+                });
+            })
+            ->latest('mulai_at')
+            ->paginate(20)
+            ->withQueryString();
+
+        $renderedView = view('pages.admin.log_import', compact('logs', 'search'));
+
+        return $renderedView->fragmentIf($request->ajax(), 'import-results');
+    }
 
     public function index(Request $request, PasswordRecoveryRequests $recoveryRequests): Response
     {

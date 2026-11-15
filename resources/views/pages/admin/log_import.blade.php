@@ -15,10 +15,93 @@
     }
   </style>
 
-  <div class="log-import-surface relative -mx-8 -mb-8">
-    <div class="p-4 sm:p-8">
+  <div x-data="{
+      resultsUrl: @js(route('admin.log_import')),
+      filterRequest: null,
+      searchTimer: null,
+      filterLoading: false,
+      filterError: '',
+      async filterImportLogs(url = null) {
+          window.clearTimeout(this.searchTimer);
+          if (this.filterRequest) this.filterRequest.abort();
 
-      <div class="overflow-hidden rounded-xl border border-[#D3E3DF] bg-white shadow-sm">
+          const request = new AbortController();
+          this.filterRequest = request;
+          this.filterLoading = true;
+          this.filterError = '';
+
+          const requestUrl = new URL(url || this.resultsUrl, window.location.href);
+          if (!url) {
+              requestUrl.search = new URLSearchParams(new FormData(this.$refs.filterForm)).toString();
+          }
+
+          try {
+              const response = await fetch(requestUrl, {
+                  headers: { 'X-Requested-With': 'XMLHttpRequest', 'Accept': 'text/html' },
+                  signal: request.signal,
+              });
+              if (!response.ok || response.redirected) throw new Error('Log import tidak dapat dimuat.');
+
+              this.$refs.importResults.innerHTML = await response.text();
+              window.history.replaceState({}, '', requestUrl);
+          } catch (error) {
+              if (error.name !== 'AbortError') {
+                  this.filterError = error.message || 'Log import tidak dapat dimuat.';
+              }
+          } finally {
+              if (this.filterRequest === request) {
+                  this.filterLoading = false;
+                  this.filterRequest = null;
+              }
+          }
+      },
+      scheduleImportSearch() {
+          window.clearTimeout(this.searchTimer);
+          this.searchTimer = window.setTimeout(() => this.filterImportLogs(), 250);
+      },
+      handleImportPagination(event) {
+          const target = event.target instanceof Element ? event.target : null;
+          const link = target?.closest('a[data-import-pagination]');
+          if (!link || !this.$refs.importResults.contains(link)) return;
+          event.preventDefault();
+          this.filterImportLogs(link.href);
+      },
+  }" class="log-import-surface relative -mx-8 -mb-8">
+    <div class="space-y-4 p-4 sm:p-8">
+      <form method="GET" action="{{ route('admin.log_import') }}" x-ref="filterForm"
+        @submit.prevent="filterImportLogs()"
+        class="flex flex-col-reverse gap-2 sm:flex-row sm:items-center sm:justify-end">
+        <div class="w-full sm:max-w-xs">
+          <label for="import-log-search" class="sr-only">Cari semua data log import</label>
+          <div class="relative">
+            <input
+              id="import-log-search"
+              type="search"
+              name="search"
+              @input="scheduleImportSearch()"
+              value="{{ $search }}"
+              maxlength="100"
+              placeholder="Cari Log Import..."
+              class="w-full rounded-lg border border-[#B9DED4] bg-white py-2 pl-9 pr-3 text-sm text-slate-800 placeholder:text-slate-500 focus:border-[#008b7a] focus:outline-none focus:ring-2 focus:ring-[#008b7a]/20"
+            >
+            <span class="pointer-events-none absolute inset-y-0 left-3 flex items-center text-slate-400">
+              <iconify-icon icon="mdi:magnify" width="17" aria-hidden="true"></iconify-icon>
+            </span>
+          </div>
+        </div>
+      </form>
+      <span x-cloak x-show="filterLoading" role="status" class="sr-only">Memuat log import...</span>
+      <div x-cloak x-show="filterError"
+        class="flex items-center justify-between rounded-lg border border-rose-200 bg-white px-4 py-3 text-sm text-rose-800"
+        role="alert">
+        <span x-text="filterError"></span>
+        <button type="button" @click="filterImportLogs()"
+          class="font-semibold focus:outline-none focus:ring-2 focus:ring-rose-400">Coba lagi</button>
+      </div>
+      <div id="import-results" x-ref="importResults" @click="handleImportPagination($event)"
+        :aria-busy="filterLoading.toString()">
+        @fragment('import-results')
+        <div class="overflow-hidden rounded-xl border border-[#D3E3DF] bg-white shadow-sm">
         <div class="overflow-x-auto">
           <table class="min-w-full divide-y divide-[#DCE9E6]">
             <thead class="bg-[#F1F8F6]">
@@ -32,9 +115,6 @@
               </tr>
             </thead>
             <tbody class="divide-y divide-[#E7EFED] bg-white">
-              @php
-                $logs = \App\Models\LogInput::latest('mulai_at')->paginate(20);
-              @endphp
               @forelse($logs as $log)
                 <tr class="transition-colors hover:bg-[#F7FBFA]">
                   <td class="whitespace-nowrap px-4 py-3 text-sm text-slate-500">
@@ -84,7 +164,7 @@
               @empty
                 <tr>
                   <td colspan="6" class="px-6 py-12 text-center text-sm text-slate-500">
-                    Belum ada riwayat import.
+                    {{ $search !== '' ? 'Tidak ada log import yang cocok dengan pencarian.' : 'Belum ada riwayat import.' }}
                   </td>
                 </tr>
               @endforelse
@@ -92,14 +172,17 @@
           </table>
         </div>
         <div class="border-t border-[#E2ECE9] bg-[#F7FBFA] px-4 py-3">
-          <x-pagination :paginator="$logs" label="Navigasi halaman log import" />
+          <x-pagination :paginator="$logs" label="Navigasi halaman log import"
+            link-attribute="data-import-pagination" />
         </div>
+        </div>
+        @endfragment
       </div>
     </div>
   </div>
 
   {{-- Modal Detail Error --}}
-  <div id="logDetailModal" class="fixed inset-0 z-[120] hidden overflow-y-auto" aria-labelledby="modal-title"
+  <div id="logDetailModal" data-admin-persistent class="fixed inset-0 z-[120] hidden overflow-y-auto" aria-labelledby="modal-title"
     role="dialog" aria-modal="true">
     <div class="relative z-10 flex min-h-screen items-center justify-center p-4 text-center sm:p-6">
       <div class="log-import-modal-backdrop fixed inset-0 z-0 transition-opacity" aria-hidden="true"

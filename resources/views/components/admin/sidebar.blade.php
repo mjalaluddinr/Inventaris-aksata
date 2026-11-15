@@ -5,7 +5,7 @@
     document.documentElement.dataset.adminSidebarCollapsed = val ? 'false' : 'true';
 })"
   :class="[(open ? 'lg:w-64' : 'lg:w-20'), mobileSidebarOpen ? 'translate-x-0' : '']"
-  class="admin-sidebar fixed inset-y-0 left-0 z-50 flex h-dvh w-72 shrink-0 -translate-x-full flex-col shadow-xl transition-[width,transform] duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] lg:relative lg:inset-auto lg:z-20 lg:h-screen lg:translate-x-0"
+  class="admin-sidebar fixed inset-y-0 left-0 z-50 flex h-dvh w-72 shrink-0 -translate-x-full flex-col shadow-xl transition-none lg:relative lg:inset-auto lg:z-20 lg:h-screen lg:translate-x-0"
   style="background: linear-gradient(180deg, #14b8a6 0%, #0d9488 30%, #065f6e 60%, #00385A 100%);">
 
   <!-- Logo Section -->
@@ -43,7 +43,7 @@
   </div>
 
   <!-- Navigation -->
-  <nav class="flex-1 space-y-1 overflow-y-auto px-3 py-2">
+  <nav id="admin-navigation" class="flex-1 space-y-1 overflow-y-auto px-3 py-2">
     @php
       $currentRouteName = request()->route()?->getName();
       $menuItems = [
@@ -112,7 +112,8 @@
         class="admin-nav-link group relative flex items-center rounded-xl transition-[background-color,box-shadow,transform] duration-200 ease-out
               {{ $isActive ? 'bg-white text-[#00785F] shadow-md shadow-[#00385A]/10 ring-1 ring-white/70' : 'text-white hover:translate-x-1 hover:bg-white/12 hover:shadow-sm' }}"
         :class="(open || mobileSidebarOpen) ? 'gap-3 px-4 py-3' : 'justify-center px-0 py-3'"
-        style="--nav-index: {{ $loop->index }}" @click="if (window.innerWidth < 1024) mobileSidebarOpen = false">
+        style="--nav-index: {{ $loop->index }}; animation-delay: {{ $loop->index * 24 }}ms"
+        @click="if (window.innerWidth < 1024) mobileSidebarOpen = false">
 
         <span class="flex h-7 w-7 shrink-0 items-center justify-center overflow-visible">
           <iconify-icon icon="{{ $menu['icon'] }}"

@@ -70,6 +70,10 @@
 </head>
 
 <body class="font-sans antialiased bg-gray-100" data-admin-field-indicators>
+  <div id="admin-navigation-progress" class="admin-navigation-progress" data-loading="false" data-complete="false"
+    aria-hidden="true">
+    <span></span>
+  </div>
   <x-auth.session-notice />
   <div x-data="globalToast" x-cloak x-show="visible"
     x-transition:enter="transition ease-out duration-200"
@@ -114,6 +118,7 @@
   </div>
   <div x-data="{ mobileSidebarOpen: false }"
     @admin-sidebar-toggle="mobileSidebarOpen = !mobileSidebarOpen"
+    @admin-sidebar-close.window="mobileSidebarOpen = false"
     @keydown.escape.window="mobileSidebarOpen = false"
     @resize.window="if (window.innerWidth >= 1024) mobileSidebarOpen = false"
     class="flex h-screen overflow-hidden">
@@ -122,7 +127,7 @@
       class="fixed inset-0 z-40 bg-slate-950/45 lg:hidden"
       aria-hidden="true"></div>
     <x-admin.sidebar />
-    <main x-data="{ isScrolled: false }" @scroll.passive="isScrolled = $event.currentTarget.scrollTop > 10"
+    <main id="admin-main-content" x-data="{ isScrolled: false }" @scroll.passive="isScrolled = $event.currentTarget.scrollTop > 10"
       class="min-w-0 flex-1 overflow-y-auto px-8 pb-8 pt-0">
       <div class="admin-page-enter min-w-0">
         <x-admin.header :title="$headerTitle" :description="$headerDescription" />

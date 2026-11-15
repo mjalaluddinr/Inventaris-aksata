@@ -9,8 +9,10 @@ use App\Models\Kategori;
 use App\Models\Peminjaman;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Str;
 use Illuminate\View\View;
 
 class BerandaController extends Controller
@@ -49,6 +51,75 @@ class BerandaController extends Controller
         return $this->renderPage($request, 'history');
     }
 
+    public function detail(Request $request): View
+    {
+        $barangId = $request->query('barang');
+
+        // ASVS V2.2.1: Require a valid inventory UUID before querying the requested item.
+        abort_unless(is_string($barangId) && Str::isUuid($barangId), 404);
+
+        $barang = Barang::query()
+            ->with('kategori:kategori_id,nama_kategori')
+            ->whereKey($barangId)
+            ->firstOrFail([
+                'barang_id',
+                'kategori_id',
+                'nama_barang',
+                'image_path',
+                'satuan',
+                'stok_total',
+                'stok_tersedia',
+                'kondisi',
+                'spesifikasi',
+            ]);
+
+        $relatedProducts = Barang::query()
+            ->with('kategori:kategori_id,nama_kategori')
+            ->select([
+                'barang_id',
+                'kategori_id',
+                'nama_barang',
+                'image_path',
+                'satuan',
+                'stok_total',
+                'stok_tersedia',
+                'kondisi',
+                'spesifikasi',
+            ])
+            ->withCount('detailPeminjamans')
+            ->where('stok_tersedia', '>', 0)
+            ->where('barang_id', '!=', $barang->getKey())
+            ->orderByDesc('detail_peminjamans_count')
+            ->orderBy('nama_barang')
+            ->limit(3)
+            ->get();
+
+        return view('pages.user.detail-barang', compact('barang', 'relatedProducts'));
+    }
+
+    public function cartItems(Request $request): JsonResponse
+    {
+        // ASVS V2.2.1/2.2.2: Bound and validate browser-provided inventory identifiers at the server boundary.
+        $validated = $request->validate([
+            'ids' => ['required', 'array', 'min:1', 'max:50'],
+            'ids.*' => ['required', 'uuid'],
+        ]);
+
+        $items = Barang::query()
+            ->with('kategori:kategori_id,nama_kategori')
+            ->whereIn('barang_id', $validated['ids'])
+            ->get(['barang_id', 'nama_barang', 'kategori_id', 'stok_tersedia'])
+            ->map(static fn (Barang $barang): array => [
+                'id' => $barang->barang_id,
+                'name' => $barang->nama_barang,
+                'category' => $barang->kategori?->nama_kategori ?? 'Tanpa kategori',
+                'stock' => $barang->stok_tersedia,
+            ]);
+
+        // ASVS V14.3.2: Cart item state is user-specific and must not be cached.
+        return response()->json(['items' => $items])->header('Cache-Control', 'no-store');
+    }
+
     private function renderPage(Request $request, string $page): View
     {
         $user = $request->user();
@@ -60,10 +131,10 @@ class BerandaController extends Controller
         $loanStatusCounts = collect();
         $catalogItems = collect();
         $search = '';
+        $historySearch = '';
         $selectedCategory = '';
         $historyStatus = $request->query('status') === 'finished' ? 'finished' : 'active';
         $historyLoans = collect();
-
         if ($page === 'home') {
             $categories = Kategori::query()
                 ->withCount('barangs')
@@ -107,6 +178,10 @@ class BerandaController extends Controller
         }
 
         if ($page === 'history') {
+            $searchQuery = $request->query('q', '');
+            // ASVS V2.2.1: Accept only a bounded scalar search term.
+            $historySearch = is_string($searchQuery) ? mb_substr(trim($searchQuery), 0, 100) : '';
+
             $historyLoans = Peminjaman::query()
                 ->with(['detailPeminjamans.barang', 'diprosesAkun'])
                 ->where('akun_id', $user->getKey())
@@ -120,6 +195,14 @@ class BerandaController extends Controller
                         'detailPeminjamans',
                         fn (Builder $details): Builder => $details->whereIn('status', ['pending', 'dipinjam']),
                     ))
+                // ASVS V1.2.4: Keep search input as a bound query value.
+                ->when($historySearch !== '', fn (Builder $query): Builder => $query->where(
+                    fn (Builder $query): Builder => $query
+                        ->where('keperluan', 'like', '%'.$historySearch.'%')
+                        ->orWhereHas('detailPeminjamans.barang', fn (Builder $barang): Builder => $barang
+                            ->where('nama_barang', 'like', '%'.$historySearch.'%')
+                            ->orWhere('kode_barang', 'like', '%'.$historySearch.'%')),
+                ))
                 ->latest('tanggal_pengajuan')
                 ->paginate(8, ['*'], 'history_page')
                 ->withQueryString();
@@ -142,6 +225,7 @@ class BerandaController extends Controller
             'catalogItems',
             'search',
             'selectedCategory',
+            'historySearch',
             'historyStatus',
             'historyLoans',
         ));

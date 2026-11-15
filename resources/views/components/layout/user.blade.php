@@ -53,12 +53,12 @@
     @keyframes user-card-enter {
       from {
         opacity: 0;
-        transform: translateY(18px);
+        transform: translate3d(0, 12px, 0);
       }
 
       to {
         opacity: 1;
-        transform: translateY(0);
+        transform: translate3d(0, 0, 0);
       }
     }
 
@@ -73,8 +73,52 @@
     }
 
     .user-card-enter {
-      animation: user-card-enter 180ms both cubic-bezier(0.2, 0.7, 0.2, 1);
+      animation: user-card-enter 420ms both cubic-bezier(.16, 1, .3, 1);
       transition: box-shadow 220ms ease, filter 220ms ease;
+    }
+
+    .user-navigation-progress {
+      position: fixed;
+      z-index: 60;
+      inset: 0 0 auto;
+      height: 3px;
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity 140ms ease;
+    }
+
+    .user-navigation-progress[data-loading="true"] {
+      opacity: 1;
+    }
+
+    .user-navigation-progress > span {
+      display: block;
+      width: 100%;
+      height: 100%;
+      background: linear-gradient(90deg, #00b19c, #00e3a8);
+      box-shadow: 0 0 8px rgb(0 177 156 / 40%);
+      transform: scaleX(0);
+      transform-origin: left center;
+    }
+
+    .user-navigation-progress[data-loading="true"] > span {
+      animation: user-navigation-progress 500ms ease-in-out infinite alternate;
+    }
+
+    .user-navigation-progress[data-complete="true"] > span {
+      animation: none;
+      transform: scaleX(1);
+      transition: transform 120ms ease-out;
+    }
+
+    @keyframes user-navigation-progress {
+      from {
+        transform: scaleX(0.12);
+      }
+
+      to {
+        transform: scaleX(0.82);
+      }
     }
 
     .user-card-enter:hover {
@@ -118,11 +162,21 @@
         animation-iteration-count: 1 !important;
         transition-duration: 0.01ms !important;
       }
+
+      .user-navigation-progress[data-loading="true"] > span {
+        animation: none;
+        transform: scaleX(0.65);
+      }
+
     }
   </style>
 </head>
 
-<body x-data="userPortal()" x-init="initCart(); initCatalogAjax(); initHistoryAjax(); @if(session('success')) window.showToast(@js(session('success')), 'success'); @elseif(session('error')) window.showToast(@js(session('error')), 'error'); @endif @foreach($errors->all() as $error) window.showToast(@js($error), 'error'); @endforeach @if (session('cart_cleared')) clearCart() @elseif (session('cart_items_submitted')) removeSubmittedItems(@js(session('cart_items_submitted'))) @endif" class="min-h-screen bg-[#e9faf5] font-sans text-[#153c36] antialiased">
+<body x-data="userPortal()" x-init="initCart(); initCatalogAjax(); initHistoryAjax(); @if(session('success')) window.showToast(@js(session('success')), 'success'); @elseif(session('error')) window.showToast(@js(session('error')), 'error'); @endif @foreach($errors->all() as $error) window.showToast(@js($error), 'error'); @endforeach @if (session('cart_cleared')) clearCart() @elseif (session('cart_items_submitted')) removeSubmittedItems(@js(session('cart_items_submitted'))) @endif"
+  @user-page-updated.window="initHistoryAjax()"
+  @user-page-navigating.window="window.clearTimeout(catalogSearchTimer); catalogRequestController?.abort(); historyRequestController?.abort()"
+  class="min-h-screen bg-[#e9faf5] font-sans text-[#153c36] antialiased">
+  <div id="user-navigation-progress" class="user-navigation-progress" aria-hidden="true"><span></span></div>
   <x-auth.session-notice />
   <div x-data="globalToast" x-cloak x-show="visible"
     x-transition:enter="transition ease-out duration-200"
@@ -131,10 +185,10 @@
     x-transition:leave="transition ease-in duration-200"
     x-transition:leave-start="opacity-100"
     x-transition:leave-end="translate-x-4 opacity-0"
-    class="pointer-events-none fixed right-4 top-24 z-[120] w-[calc(100%-2rem)] max-w-md sm:right-6"
+    class="pointer-events-none fixed left-3 right-3 top-[5.5rem] z-[120] w-auto sm:left-auto sm:right-6 sm:top-24 sm:w-[calc(100%-3rem)] sm:max-w-md"
     :role="type === 'error' ? 'alert' : 'status'"
     :aria-live="type === 'error' ? 'assertive' : 'polite'" aria-atomic="true">
-    <div class="pointer-events-auto relative flex items-start gap-3 overflow-hidden rounded-xl border p-4 pb-5 text-white shadow-[0_16px_48px_rgba(2,25,41,0.24)]"
+    <div class="pointer-events-auto relative flex min-w-0 items-start gap-3 overflow-hidden rounded-xl border p-3 pb-5 text-white shadow-[0_16px_48px_rgba(2,25,41,0.24)] sm:p-4 sm:pb-5"
       :class="{
         'border-rose-700 bg-rose-600': type === 'error',
         'border-emerald-700 bg-emerald-600': type === 'success',
@@ -166,7 +220,10 @@
     </div>
   </div>
   <x-user.navbar />
-  {{ $slot }}
+  <div id="user-page-content" data-user-page-content
+    data-user-paths="{{ parse_url(route('user.beranda'), PHP_URL_PATH) }}|{{ parse_url(route('user.catalog'), PHP_URL_PATH) }}|{{ parse_url(route('user.apply'), PHP_URL_PATH) }}|{{ parse_url(route('user.history'), PHP_URL_PATH) }}|{{ parse_url(route('user.barang.detail'), PHP_URL_PATH) }}|{{ parse_url(route('notifications.detail'), PHP_URL_PATH) }}">
+    {{ $slot }}
+  </div>
   <x-user.keranjang />
   <div
     x-cloak
@@ -284,13 +341,16 @@
         loanQuantity: 1,
         loanSubmitting: false,
         isOpeningApply: false,
+        cartSyncPromise: null,
         notice: '',
         noticeTimer: null,
         cartStorageKey: 'inventrack-user-cart-v1',
         catalogRequestController: null,
+        catalogSearchTimer: null,
         historyPollTimer: null,
         historyRequestController: null,
         applyUrl: @js(route('user.apply')),
+        cartItemsUrl: @js(route('user.cart.items')),
         catalogPath: @js(parse_url(route('user.catalog'), PHP_URL_PATH)),
         historyPath: @js(parse_url(route('user.history'), PHP_URL_PATH)),
         async cancelLoan(event) {
@@ -350,13 +410,42 @@
           }
 
           this.loanSubmitting = true;
-          let redirecting = false;
-          const submittedItems = this.selectedCartItems;
           try {
+            const isCartSubmission = form.hasAttribute('data-cart-submission');
+            const quickLoanItemId = isCartSubmission ? null : this.selectedLoanItem?.id;
+            if (isCartSubmission) {
+              await this.refreshCartItems();
+              if (this.selectedCartItems.length === 0) {
+                this.showNotice('Pilih setidaknya satu barang yang masih tersedia untuk diajukan.');
+                return;
+              }
+            } else if (
+              !(await this.refreshSelectedLoanItem(quickLoanItemId))
+              || this.selectedLoanItem?.id !== quickLoanItemId
+            ) {
+              return;
+            }
+
+            const submittedItems = isCartSubmission
+              ? this.selectedCartItems
+              : (this.selectedLoanItem ? [this.selectedLoanItem] : []);
+            const formData = new FormData(form);
+            if (isCartSubmission) {
+              for (const fieldName of [...formData.keys()]) {
+                if (/^items\[\d+\]\[(barang_id|quantity)\]$/.test(fieldName)) {
+                  formData.delete(fieldName);
+                }
+              }
+              this.selectedCartItems.forEach((item, index) => {
+                formData.append(`items[${index}][barang_id]`, item.id);
+                formData.append(`items[${index}][quantity]`, String(item.quantity));
+              });
+            }
+
             // ASVS V2.2.2: AJAX improves feedback; server-side validation remains authoritative.
             const response = await fetch(formUrl, {
               method: 'POST',
-              body: new FormData(form),
+              body: formData,
               headers: {
                 'Accept': 'application/json',
                 'X-Requested-With': 'XMLHttpRequest',
@@ -380,12 +469,7 @@
               const invalidItemIndexes = Object.keys(payload.errors || {})
                 .flatMap(field => {
                   const match = field.match(/^items\.(\d+)\.barang_id$/);
-                  const messages = payload.errors[field];
-                  const isInvalidId = Array.isArray(messages) && messages.some(message => [
-                    'ID barang tidak valid. Muat ulang katalog dan pilih kembali barang tersebut.',
-                    'Barang yang dipilih sudah tidak tersedia di katalog. Hapus lalu pilih kembali dari katalog.',
-                  ].includes(message));
-                  return match && isInvalidId ? [Number(match[1])] : [];
+                  return match ? [Number(match[1])] : [];
                 });
               const invalidItems = [...new Map(invalidItemIndexes
                 .map(index => submittedItems[index])
@@ -394,6 +478,10 @@
 
               if (invalidItems.length > 0) {
                 invalidItems.forEach(item => this.removeFromCart(item.id));
+                if (this.selectedLoanItem && invalidItems.some(item => item.id === this.selectedLoanItem.id)) {
+                  this.selectedLoanItem = null;
+                  this.loanModalOpen = false;
+                }
                 const itemNames = invalidItems.map(item => item.name).join(', ');
                 this.showNotice(`${itemNames} sudah tidak tercatat di katalog dan dihapus dari pengajuan. Jika stok masih ada, pilih kembali barangnya dari katalog.`);
                 return;
@@ -406,27 +494,89 @@
               return;
             }
 
-            if (typeof payload.redirect_url !== 'string' || !Array.isArray(payload.submitted_item_ids)) {
+            if (typeof payload.message !== 'string' || !Array.isArray(payload.submitted_item_ids)) {
               throw new Error('Loan response did not contain the expected success data.');
             }
 
-            const destination = new URL(payload.redirect_url, window.location.href);
-            // ASVS V3.7.2: only follow a server-provided redirect on the current origin.
-            if (destination.origin !== window.location.origin) {
-              throw new Error('Loan response contained a cross-origin redirect.');
-            }
-
             this.removeSubmittedItems(payload.submitted_item_ids);
-            window.location.assign(destination.href);
-            redirecting = true;
+            this.loanModalOpen = false;
+            window.showToast(payload.message, 'success', 3500, 'Pengajuan berhasil');
           } catch (error) {
             console.error('Failed to submit borrower loan.', error);
             this.showNotice('Pengajuan gagal dikirim. Periksa koneksi lalu coba lagi.');
           } finally {
-            if (!redirecting) {
-              this.loanSubmitting = false;
-            }
+            this.loanSubmitting = false;
           }
+        },
+        async refreshSelectedLoanItem(itemId = this.selectedLoanItem?.id) {
+          const selectedItem = this.selectedLoanItem;
+          if (!selectedItem?.id || selectedItem.id !== itemId) {
+            this.showNotice('Pilih barang yang masih tersedia dari katalog.');
+            return false;
+          }
+
+          // ASVS 2.2.2: refresh client selections, while the server remains authoritative for loan validation.
+          const url = new URL(this.cartItemsUrl, window.location.href);
+          if (url.origin !== window.location.origin) {
+            throw new Error('Cart item endpoint must use the current origin.');
+          }
+          url.searchParams.append('ids[]', itemId);
+
+          const response = await fetch(url, {
+            headers: {
+              'Accept': 'application/json',
+              'X-Requested-With': 'XMLHttpRequest',
+            },
+            credentials: 'same-origin',
+            cache: 'no-store',
+          });
+          const contentType = response.headers.get('content-type') || '';
+          if (!response.ok || response.redirected || !contentType.includes('application/json')) {
+            throw new Error(`Selected item refresh failed with status ${response.status}.`);
+          }
+
+          const payload = await response.json();
+          if (!Array.isArray(payload.items)) {
+            throw new Error('Selected item refresh returned an invalid response.');
+          }
+
+          if (this.selectedLoanItem?.id !== itemId) {
+            return false;
+          }
+          const currentItem = payload.items.find(item => item?.id === itemId);
+          if (!currentItem) {
+            const deletedItemName = selectedItem.name;
+            this.removeFromCart(itemId);
+            this.selectedLoanItem = null;
+            this.loanModalOpen = false;
+            this.showNotice(`${deletedItemName} sudah dihapus dari katalog dan tidak dapat diajukan.`);
+            return false;
+          }
+          if (
+            typeof currentItem.name !== 'string'
+            || typeof currentItem.category !== 'string'
+            || !Number.isInteger(currentItem.stock)
+            || currentItem.stock < 0
+          ) {
+            throw new Error('Selected item refresh returned invalid item data.');
+          }
+
+          this.selectedLoanItem = { ...this.selectedLoanItem, ...currentItem };
+          if (currentItem.stock < 1) {
+            this.showNotice(`${currentItem.name} sedang tidak memiliki stok tersedia.`);
+            return false;
+          }
+
+          this.loanQuantity = Math.min(this.loanQuantity, currentItem.stock);
+          const cartItem = this.cart.find(item => item.id === currentItem.id);
+          if (cartItem) {
+            Object.assign(cartItem, currentItem, {
+              quantity: Math.min(cartItem.quantity, currentItem.stock),
+            });
+            this.persistCart();
+          }
+
+          return true;
         },
         syncCartStock(stockById) {
           const syncedCart = [];
@@ -489,6 +639,24 @@
 
             event.preventDefault();
             this.loadHistory(destination, { updateHistory: true, animate: true });
+          });
+          document.addEventListener('submit', event => {
+            const form = event.target;
+            const history = document.getElementById('history-content');
+            if (
+              !(form instanceof HTMLFormElement)
+              || !form.matches('form[data-history-search]')
+              || !history?.contains(form)
+            ) {
+              return;
+            }
+
+            event.preventDefault();
+            const destination = new URL(form.action, window.location.href);
+            destination.search = new URLSearchParams(new FormData(form)).toString();
+            if (destination.href !== window.location.href) {
+              this.loadHistory(destination, { updateHistory: true, animate: true, abortPrevious: true });
+            }
           });
           window.addEventListener('popstate', () => {
             const url = new URL(window.location.href);
@@ -624,6 +792,19 @@
             event.preventDefault();
             this.loadCatalog(link.href);
           });
+          document.addEventListener('input', event => {
+            const input = event.target instanceof HTMLInputElement ? event.target : null;
+            const form = input?.form;
+            if (!input || input.name !== 'q' || !form?.matches('form[data-catalog-filter]')) {
+              return;
+            }
+
+            window.clearTimeout(this.catalogSearchTimer);
+            this.catalogSearchTimer = window.setTimeout(() => {
+              this.catalogSearchTimer = null;
+              this.loadCatalog(this.catalogUrl(form), true, true);
+            }, 300);
+          });
           document.addEventListener('submit', event => {
             const form = event.target.closest('form[data-catalog-filter]');
             if (!form) {
@@ -631,14 +812,14 @@
             }
 
             event.preventDefault();
+            window.clearTimeout(this.catalogSearchTimer);
+            this.catalogSearchTimer = null;
             this.loadCatalog(this.catalogUrl(form));
           });
           window.addEventListener('popstate', () => {
             if (document.getElementById('catalog-content')) {
               if (new URL(window.location.href).pathname === this.catalogPath) {
                 this.loadCatalog(window.location.href, false);
-              } else {
-                window.location.reload();
               }
             }
           });
@@ -657,6 +838,8 @@
           return url;
         },
         async loadCatalog(destination, updateHistory = true, replaceHistory = false) {
+          window.clearTimeout(this.catalogSearchTimer);
+          this.catalogSearchTimer = null;
           const url = new URL(destination, window.location.href);
           const catalog = document.getElementById('catalog-content');
           if (!catalog) {
@@ -740,7 +923,9 @@
         initCart() {
           try {
             const savedCart = JSON.parse(localStorage.getItem(this.cartStorageKey) || '[]');
-            this.cart = Array.isArray(savedCart) ? savedCart.filter(item => item && typeof item.id === 'string' && Number.isInteger(item.quantity) && item.quantity > 0) : [];
+            this.cart = Array.isArray(savedCart)
+              ? savedCart.filter(item => item && typeof item.id === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(item.id) && Number.isInteger(item.quantity) && item.quantity > 0)
+              : [];
           } catch {
             this.cart = [];
           }
@@ -751,6 +936,112 @@
               : this.cart.map(item => item.id);
           } catch {
             this.selectedCartItemIds = this.cart.map(item => item.id);
+          }
+          if (document.querySelector('form[data-cart-submission]') && this.cart.length > 0) {
+            this.refreshCartItems().catch(error => {
+              console.error('Failed to refresh borrower cart items.', error);
+              this.showNotice('Keranjang belum dapat diperbarui. Periksa koneksi lalu coba lagi.');
+            });
+          }
+        },
+        openCart() {
+          this.cartOpen = true;
+          this.refreshCartItems().catch(error => {
+            console.error('Failed to refresh borrower cart items.', error);
+            this.showNotice('Keranjang belum dapat diperbarui. Periksa koneksi lalu coba lagi.');
+          });
+        },
+        async refreshCartItems() {
+          if (this.cartSyncPromise) {
+            return this.cartSyncPromise;
+          }
+          if (this.cart.length === 0) {
+            return;
+          }
+
+          const request = (async () => {
+            const itemsById = new Map();
+            const ids = [...new Set(this.cart.map(item => item.id))];
+            const endpoint = new URL(this.cartItemsUrl, window.location.href);
+            if (endpoint.origin !== window.location.origin) {
+              throw new Error('Cart item endpoint must use the current origin.');
+            }
+
+            for (let offset = 0; offset < ids.length; offset += 50) {
+              const url = new URL(endpoint);
+              ids.slice(offset, offset + 50).forEach(id => url.searchParams.append('ids[]', id));
+              const response = await fetch(url, {
+                headers: {
+                  'Accept': 'application/json',
+                  'X-Requested-With': 'XMLHttpRequest',
+                },
+                credentials: 'same-origin',
+                cache: 'no-store',
+              });
+              const contentType = response.headers.get('content-type') || '';
+              if (!response.ok || response.redirected || !contentType.includes('application/json')) {
+                throw new Error(`Cart item refresh failed with status ${response.status}.`);
+              }
+
+              const payload = await response.json();
+              if (!Array.isArray(payload.items)) {
+                throw new Error('Cart item refresh returned an invalid response.');
+              }
+              payload.items.forEach(item => {
+                if (
+                  !item
+                  || typeof item.id !== 'string'
+                  || typeof item.name !== 'string'
+                  || typeof item.category !== 'string'
+                  || !Number.isInteger(item.stock)
+                  || item.stock < 0
+                ) {
+                  throw new Error('Cart item refresh returned invalid item data.');
+                }
+                itemsById.set(item.id, item);
+              });
+            }
+
+            const deletedItems = [];
+            const refreshedCart = [];
+            const availableIds = new Set();
+            for (const savedItem of this.cart) {
+              const currentItem = itemsById.get(savedItem.id);
+              if (!currentItem) {
+                deletedItems.push(savedItem);
+                continue;
+              }
+
+              refreshedCart.push({
+                ...savedItem,
+                ...currentItem,
+                quantity: currentItem.stock > 0
+                  ? Math.min(savedItem.quantity, currentItem.stock)
+                  : savedItem.quantity,
+              });
+              if (currentItem.stock > 0) {
+                availableIds.add(savedItem.id);
+              }
+            }
+
+            this.cart = refreshedCart;
+            this.selectedCartItemIds = this.selectedCartItemIds.filter(id => availableIds.has(id));
+            this.persistCart();
+            this.persistCartSelection();
+
+            if (deletedItems.length > 0) {
+              const names = deletedItems.map(item => item.name).join(', ');
+              window.showToast(`${names} sudah dihapus dari katalog dan dikeluarkan dari keranjang.`, 'warning');
+            }
+          })();
+
+          this.cartSyncPromise = request;
+          try {
+            await request;
+          } finally {
+            if (this.cartSyncPromise === request) {
+              this.cartSyncPromise = null;
+            }
           }
         },
         persistCart() {
@@ -833,12 +1124,30 @@
           if (this.isOpeningApply) {
             return;
           }
-          if (this.selectedCartItems.length === 0) {
-            this.showNotice('Pilih setidaknya satu barang untuk diajukan.');
-            return;
-          }
           this.isOpeningApply = true;
-          window.location.assign(this.applyUrl);
+          this.refreshCartItems()
+            .then(() => {
+              if (this.selectedCartItems.length === 0) {
+                this.showNotice('Pilih setidaknya satu barang yang masih tersedia untuk diajukan.');
+                return;
+              }
+
+              const destination = new URL(this.applyUrl, window.location.href);
+              if (destination.origin !== window.location.origin) {
+                throw new Error('Loan application URL must use the current origin.');
+              }
+              this.cartOpen = false;
+              window.dispatchEvent(new CustomEvent('user:page-navigation-requested', {
+                detail: { url: destination.href },
+              }));
+            })
+            .catch(error => {
+              console.error('Failed to refresh borrower cart before applying.', error);
+              this.showNotice('Keranjang belum dapat diperbarui. Periksa koneksi lalu coba lagi.');
+            })
+            .finally(() => {
+              this.isOpeningApply = false;
+            });
         },
       };
     }

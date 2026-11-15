@@ -26,10 +26,11 @@
 >
   <nav class="flex w-full items-center justify-between gap-2 px-3 transition-[height] duration-300 sm:gap-5 sm:px-8 lg:px-10"
     :class="isScrolled ? 'h-20' : 'h-[88px]'">
-    <a href="{{ route('user.beranda') }}" class="flex min-w-0 shrink items-center gap-2 sm:gap-3" aria-label="InvenTrack, Sistem Inventaris Jurusan">
+    <a data-user-navigation-link href="{{ route('user.beranda') }}" class="flex min-w-0 shrink items-center gap-2 sm:gap-3" aria-label="InvenTrack, Sistem Inventaris Jurusan">
       <span class="flex shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-[#a7f3e8] to-[#00bfa5] shadow-inner transition-[width,height] duration-300"
-        :class="isScrolled ? 'h-12 w-12' : 'h-14 w-14'">
-        <img src="{{ asset('assets/icon.svg') }}" alt="" class="h-10 w-10 translate-x-0.5 object-contain" aria-hidden="true">
+        :class="isScrolled ? 'h-10 w-10' : 'h-14 w-14'">
+        <img src="{{ asset('assets/icon.svg') }}" alt="" class="translate-x-0.5 object-contain transition-[width,height] duration-300"
+          :class="isScrolled ? 'h-7 w-7' : 'h-10 w-10'" aria-hidden="true">
       </span>
       <span class="min-w-0 leading-tight">
         <span class="block truncate text-[11px] font-bold tracking-wide min-[380px]:text-xs sm:text-sm md:text-base">InvenTrack</span>
@@ -38,13 +39,13 @@
     </a>
 
     <div class="hidden items-center gap-1 text-sm font-semibold md:flex lg:gap-6 lg:text-base">
-      <a href="{{ route('user.beranda') }}" class="rounded-md px-2 py-2 transition hover:bg-white/10">Beranda</a>
-      <a href="{{ route('user.catalog') }}" class="rounded-md px-2 py-2 transition hover:bg-white/10">Katalog</a>
-      <a href="{{ route('user.history', ['status' => 'active']) }}" class="rounded-md px-2 py-2 transition hover:bg-white/10">Riwayat Saya</a>
+      <a data-user-navigation-link href="{{ route('user.beranda') }}" class="rounded-md px-2 py-2 transition hover:bg-white/10">Beranda</a>
+      <a data-user-navigation-link href="{{ route('user.catalog') }}" class="rounded-md px-2 py-2 transition hover:bg-white/10">Katalog</a>
+      <a data-user-navigation-link href="{{ route('user.history', ['status' => 'active']) }}" class="rounded-md px-2 py-2 transition hover:bg-white/10">Riwayat Saya</a>
     </div>
 
     <div class="flex shrink-0 items-center gap-1 min-[380px]:gap-1.5 sm:gap-3">
-      <button type="button" @click="cartOpen = true" class="relative flex h-10 w-10 items-center justify-center rounded-full bg-[#c6e7f2] text-[#064765] transition hover:bg-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white sm:h-12 sm:w-12" aria-label="Buka keranjang">
+      <button type="button" @click="openCart()" class="relative flex h-10 w-10 items-center justify-center rounded-full bg-[#c6e7f2] text-[#064765] transition hover:bg-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white sm:h-12 sm:w-12" aria-label="Buka keranjang">
         <iconify-icon icon="mdi:cart" class="text-xl sm:text-2xl" aria-hidden="true"></iconify-icon>
         <span x-show="itemCount > 0" x-text="itemCount" class="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-rose-500 px-1 text-[10px] font-bold text-white"></span>
       </button>
@@ -75,9 +76,9 @@
   </nav>
   <div id="user-mobile-menu" x-cloak x-show="mobileMenuOpen" x-transition.origin.top class="absolute inset-x-0 top-full border-b border-slate-200 bg-white/95 px-4 pb-4 pt-2 text-[#153c36] shadow-lg backdrop-blur-md md:hidden">
     <nav class="flex w-full flex-col gap-1" aria-label="Navigasi utama">
-      <a href="{{ route('user.beranda') }}" @click="mobileMenuOpen = false" class="rounded-lg px-4 py-3 text-sm font-semibold transition hover:bg-[#e6f8f3]">Beranda</a>
-      <a href="{{ route('user.catalog') }}" @click="mobileMenuOpen = false" class="rounded-lg px-4 py-3 text-sm font-semibold transition hover:bg-[#e6f8f3]">Katalog</a>
-      <a href="{{ route('user.history', ['status' => 'active']) }}" @click="mobileMenuOpen = false" class="rounded-lg px-4 py-3 text-sm font-semibold transition hover:bg-[#e6f8f3]">Riwayat Saya</a>
+      <a data-user-navigation-link href="{{ route('user.beranda') }}" @click="mobileMenuOpen = false" class="rounded-lg px-4 py-3 text-sm font-semibold transition hover:bg-[#e6f8f3]">Beranda</a>
+      <a data-user-navigation-link href="{{ route('user.catalog') }}" @click="mobileMenuOpen = false" class="rounded-lg px-4 py-3 text-sm font-semibold transition hover:bg-[#e6f8f3]">Katalog</a>
+      <a data-user-navigation-link href="{{ route('user.history', ['status' => 'active']) }}" @click="mobileMenuOpen = false" class="rounded-lg px-4 py-3 text-sm font-semibold transition hover:bg-[#e6f8f3]">Riwayat Saya</a>
     </nav>
   </div>
 </header>

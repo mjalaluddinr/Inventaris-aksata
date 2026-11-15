@@ -28,6 +28,7 @@ class ReturnPeminjamanRequest extends FormRequest
             'conditions' => ['required', 'array', 'min:1'],
             'conditions.*' => ['required', 'string', Rule::in(['baik', 'rusak_ringan', 'rusak_berat', 'hilang'])],
             'note' => ['nullable', 'string', 'max:255'],
+            'tab' => ['nullable', Rule::in(['pending', 'borrowed', 'history'])],
         ];
     }
 }

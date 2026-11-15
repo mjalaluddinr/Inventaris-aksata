@@ -38,7 +38,7 @@
         class="mt-3 inline-flex rounded-full border border-[#00a88f] px-3 py-1.5 text-[10px] font-semibold text-[#007f70] transition hover:bg-emerald-50">+
         Tambah barang lain</a>
     </div>
-    <form method="POST" action="{{ route('user.peminjaman.store', absolute: false) }}"
+    <form method="POST" action="{{ route('user.peminjaman.store', absolute: false) }}" data-cart-submission
       class="rounded-xl border border-[#d1e6e1] bg-white p-4 shadow-[0_2px_5px_rgba(20,55,48,0.12)] sm:p-5"
       @submit.prevent="submitLoanForm($event)"
       :aria-busy="loanSubmitting">

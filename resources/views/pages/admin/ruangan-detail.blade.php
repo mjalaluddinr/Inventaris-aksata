@@ -17,21 +17,21 @@
         </div>
       </div>
 
-      <div class="mb-6 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+      <div class="mb-8 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
         @foreach ($ruangan->lemaris as $lemari)
           <button type="button" @click="selectedCabinetId = @js($lemari->lemari_id)"
             :aria-pressed="(selectedCabinetId === @js($lemari->lemari_id)).toString()"
             :class="selectedCabinetId === @js($lemari->lemari_id)
                 ? 'border-[#00bfa5] ring-1 ring-[#00bfa5]'
                 : 'border-slate-200 hover:border-[#00bfa5]'"
-            class="flex min-h-20 items-center gap-3 rounded-2xl border bg-white p-3 text-left shadow-[0_2px_5px_rgba(15,55,48,0.12)] transition focus:outline-none focus-visible:ring-2 focus-visible:ring-[#00785F]">
-            <span class="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg bg-[#baf4e8] text-[#00785F]">
-              <iconify-icon icon="mdi:wardrobe-outline" width="30" aria-hidden="true"></iconify-icon>
+            class="flex min-h-28 items-center gap-4 rounded-2xl border bg-white p-4 text-left shadow-[0_2px_5px_rgba(15,55,48,0.12)] transition focus:outline-none focus-visible:ring-2 focus-visible:ring-[#00785F]">
+            <span class="flex h-14 w-14 shrink-0 items-center justify-center rounded-xl bg-[#baf4e8] text-[#00785F]">
+              <iconify-icon icon="mdi:wardrobe-outline" width="34" aria-hidden="true"></iconify-icon>
             </span>
             <span class="min-w-0">
-              <span class="block truncate text-base font-semibold text-[#064E3B]">{{ $lemari->nama_lemari }}</span>
-              <span class="mt-0.5 block text-xs text-slate-500">
-                {{ $lemari->lokasiBarangs->sum('stok_total') }} Barang
+              <span class="block truncate text-lg font-semibold text-[#064E3B]">{{ $lemari->nama_lemari }}</span>
+              <span class="mt-1 block text-sm text-slate-500">
+                {{ $lemari->lokasiBarangs->unique('barang_id')->count() }} Jenis Barang
               </span>
             </span>
           </button>
@@ -42,14 +42,14 @@
           :class="selectedCabinetId === 'lainnya'
               ? 'border-[#00bfa5] ring-1 ring-[#00bfa5]'
               : 'border-slate-200 hover:border-[#00bfa5]'"
-          class="flex min-h-20 items-center gap-3 rounded-2xl border bg-white p-3 text-left shadow-[0_2px_5px_rgba(15,55,48,0.12)] transition focus:outline-none focus-visible:ring-2 focus-visible:ring-[#00785F]">
-          <span class="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg bg-[#baf4e8] text-[#00785F]">
-            <iconify-icon icon="mdi:package-variant-closed" width="25" aria-hidden="true"></iconify-icon>
+          class="flex min-h-28 items-center gap-4 rounded-2xl border bg-white p-4 text-left shadow-[0_2px_5px_rgba(15,55,48,0.12)] transition focus:outline-none focus-visible:ring-2 focus-visible:ring-[#00785F]">
+          <span class="flex h-14 w-14 shrink-0 items-center justify-center rounded-xl bg-[#baf4e8] text-[#00785F]">
+            <iconify-icon icon="mdi:package-variant-closed" width="30" aria-hidden="true"></iconify-icon>
           </span>
           <span class="min-w-0">
-            <span class="block truncate text-base font-semibold text-[#064E3B]">Lain-Lain</span>
-            <span class="mt-0.5 block text-xs text-slate-500">
-              {{ $ruangan->lokasiBarangs->sum('stok_total') }} Barang
+            <span class="block truncate text-lg font-semibold text-[#064E3B]">Lain-Lain</span>
+            <span class="mt-1 block text-sm text-slate-500">
+              {{ $ruangan->lokasiBarangs->unique('barang_id')->count() }} Jenis Barang
             </span>
           </span>
         </button>

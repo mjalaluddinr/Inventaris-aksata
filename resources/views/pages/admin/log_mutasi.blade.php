@@ -114,6 +114,10 @@
             <tbody class="divide-y divide-[#E7EFED] bg-white">
               @forelse ($logs as $log)
                 <tr class="transition-colors hover:bg-[#F7FBFA]">
+                  @php
+                    $isLocationAdjustment = $log->tipe === 'penyesuaian'
+                        && str_starts_with($log->keterangan ?? '', 'Penempatan disesuaikan dari ');
+                  @endphp
                   <td class="whitespace-nowrap px-4 py-3 text-sm text-slate-500">
                     {{ $log->created_at?->translatedFormat('d M Y, H:i:s') ?? '—' }}
                   </td>
@@ -154,6 +158,8 @@
                           · {{ $log->lemariTujuan->nama_lemari }}
                         @endif
                       </span>
+                    @elseif ($isLocationAdjustment)
+                      <span>{{ $log->displayKeterangan() }}</span>
                     @else
                       <span>
                         {{ $log->ruangan?->nama_ruangan ?? ($log->ruangan_id === null ? 'Stok umum / lokasi belum dicatat' : 'Ruangan tidak tersedia') }}
@@ -204,7 +210,7 @@
                     @if ($log->detailPeminjaman?->peminjaman?->kode_peminjaman)
                       <span class="block text-slate-500">Pesanan: {{ $log->detailPeminjaman->peminjaman->kode_peminjaman }}</span>
                     @endif
-                    {{ $log->displayKeterangan() ?: '—' }}
+                    {{ $isLocationAdjustment ? 'Penempatan barang disesuaikan di lemari.' : ($log->displayKeterangan() ?: '—') }}
                   </td>
                 </tr>
               @empty

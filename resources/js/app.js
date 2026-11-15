@@ -308,6 +308,7 @@ Alpine.data('notificationDropdown', () => ({
         return new Intl.DateTimeFormat('id-ID', {
             dateStyle: 'medium',
             timeStyle: 'short',
+            timeZone: 'Asia/Jakarta',
         }).format(new Date(value));
     },
 }));
@@ -316,6 +317,7 @@ Alpine.data('loanQrScanner', () => ({
     loanListRequest: null,
     loanListLoading: false,
     loanListError: '',
+    loanActionSubmitting: false,
     loanListRefreshTimer: null,
     loanListVisibilityListener: null,
     scannerOpen: false,
@@ -442,6 +444,81 @@ Alpine.data('loanQrScanner', () => ({
             if (this.loanListRequest === request) {
                 this.loanListLoading = false;
                 this.loanListRequest = null;
+            }
+        }
+    },
+    async submitLoanAction(event) {
+        const form = event.target;
+        if (!(form instanceof HTMLFormElement) || this.loanActionSubmitting) {
+            return;
+        }
+
+        this.loanActionSubmitting = true;
+        const submitButton = form.querySelector('button[type="submit"]');
+        const loadingIcon = submitButton?.querySelector('[data-loan-action-spinner]');
+        const idleIcon = submitButton?.querySelector('[data-loan-action-icon]');
+        const buttonLabel = submitButton?.querySelector('[data-loan-action-label]');
+        const idleLabel = buttonLabel?.textContent;
+        if (submitButton) {
+            submitButton.disabled = true;
+            submitButton.setAttribute('aria-busy', 'true');
+        }
+        if (loadingIcon) {
+            loadingIcon.classList.remove('hidden');
+        }
+        if (idleIcon) {
+            idleIcon.classList.add('hidden');
+        }
+        if (buttonLabel) {
+            buttonLabel.textContent = 'Memproses...';
+        }
+
+        try {
+            const response = await fetch(form.action, {
+                method: 'POST',
+                headers: {
+                    'Accept': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest',
+                },
+                credentials: 'same-origin',
+                body: new FormData(form),
+            });
+            let result;
+            try {
+                result = await response.json();
+            } catch {
+                throw new Error('Respons peminjaman tidak dapat dibaca.');
+            }
+
+            if (!response.ok) {
+                const validationMessage = result?.errors
+                    ? Object.values(result.errors).flat().join(' ')
+                    : '';
+                throw new Error(validationMessage || result?.message || 'Peminjaman gagal diproses.');
+            }
+
+            if (typeof result?.message !== 'string' || typeof result?.tab !== 'string') {
+                throw new Error('Respons peminjaman tidak lengkap.');
+            }
+
+            window.showToast(result.message, 'success');
+            await this.loadLoanList(window.location.href);
+        } catch (error) {
+            window.showToast(error.message || 'Peminjaman gagal diproses. Coba lagi.', 'error');
+        } finally {
+            this.loanActionSubmitting = false;
+            if (submitButton?.isConnected) {
+                submitButton.disabled = false;
+                submitButton.removeAttribute('aria-busy');
+            }
+            if (loadingIcon?.isConnected) {
+                loadingIcon.classList.add('hidden');
+            }
+            if (idleIcon?.isConnected) {
+                idleIcon.classList.remove('hidden');
+            }
+            if (buttonLabel?.isConnected && idleLabel !== undefined) {
+                buttonLabel.textContent = idleLabel;
             }
         }
     },
@@ -752,7 +829,11 @@ const updateAdminFieldIndicator = (field) => {
             indicator = document.createElement('span');
             const firstControl = label.querySelector(adminFieldSelector);
             if (firstControl) {
-                label.insertBefore(indicator, firstControl);
+                let insertionPoint = firstControl;
+                while (insertionPoint.parentElement !== label) {
+                    insertionPoint = insertionPoint.parentElement;
+                }
+                label.insertBefore(indicator, insertionPoint);
             } else {
                 label.append(indicator);
             }
@@ -816,8 +897,480 @@ if (document.body.hasAttribute('data-admin-field-indicators')) {
     });
 }
 
+const isAdminPageUrl = (url) => url.pathname === '/admin' || url.pathname.startsWith('/admin/');
+const executedAdminPageScripts = new Set();
+
+const adminPageScriptKey = (script) => `${script.type}|${script.src || script.textContent}`;
+
+const rememberAdminPageScripts = (page) => {
+    page?.querySelectorAll('script').forEach((script) => {
+        executedAdminPageScripts.add(adminPageScriptKey(script));
+    });
+};
+
+const runAdminPageScripts = (page) => {
+    for (const script of page.querySelectorAll('script')) {
+        const key = adminPageScriptKey(script);
+        if (executedAdminPageScripts.has(key)) {
+            script.remove();
+            continue;
+        }
+
+        if (script.src) {
+            throw new Error('Admin page has an external script and requires a full navigation.');
+        }
+
+        const executableScript = document.createElement('script');
+        for (const attribute of script.attributes) {
+            executableScript.setAttribute(attribute.name, attribute.value);
+        }
+        executableScript.textContent = script.textContent;
+        script.replaceWith(executableScript);
+        executedAdminPageScripts.add(key);
+    }
+};
+
+const initAdminAjaxNavigation = () => {
+    const main = document.getElementById('admin-main-content');
+    const loadingIndicator = document.getElementById('admin-navigation-progress');
+    const currentPage = main?.querySelector('.admin-page-enter');
+    if (!main || !currentPage) {
+        return;
+    }
+
+    rememberAdminPageScripts(currentPage);
+    window.history.replaceState({
+        ...(window.history.state || {}),
+        adminNavigation: true,
+        adminScrollTop: main.scrollTop,
+    }, '', window.location.href);
+
+    let activeNavigation = null;
+    let loadingIndicatorTimeout = null;
+    let loadingIndicatorFrame = null;
+    let loadingProgress = 0;
+    const loadingBar = loadingIndicator?.querySelector('span');
+    const startLoadingIndicator = () => {
+        if (!loadingIndicator) {
+            return;
+        }
+
+        window.clearTimeout(loadingIndicatorTimeout);
+        if (loadingIndicatorFrame !== null) {
+            window.cancelAnimationFrame(loadingIndicatorFrame);
+        }
+        loadingProgress = 0;
+        const progressStartedAt = performance.now();
+        loadingIndicator.dataset.complete = 'false';
+        loadingIndicator.dataset.loading = 'true';
+        if (loadingBar) {
+            loadingBar.style.transform = 'scaleX(0)';
+        }
+        const advanceProgress = () => {
+            if (!activeNavigation) {
+                return;
+            }
+
+            const elapsed = performance.now() - progressStartedAt;
+            loadingProgress = 0.9 * (1 - Math.exp(-elapsed / 4000));
+            if (loadingBar) {
+                loadingBar.style.transform = `scaleX(${loadingProgress})`;
+            }
+            loadingIndicatorFrame = window.requestAnimationFrame(advanceProgress);
+        };
+        loadingIndicatorFrame = window.requestAnimationFrame(advanceProgress);
+    };
+    const finishLoadingIndicator = () => {
+        if (!loadingIndicator) {
+            return;
+        }
+
+        if (loadingIndicatorFrame !== null) {
+            window.cancelAnimationFrame(loadingIndicatorFrame);
+            loadingIndicatorFrame = null;
+        }
+        loadingProgress = 1;
+        if (loadingBar) {
+            loadingBar.style.transform = 'scaleX(1)';
+        }
+        loadingIndicator.dataset.complete = 'true';
+        loadingIndicatorTimeout = window.setTimeout(() => {
+            loadingIndicator.dataset.loading = 'false';
+            loadingIndicator.dataset.complete = 'false';
+            if (loadingBar) {
+                loadingBar.style.transform = '';
+            }
+        }, 180);
+    };
+    const navigate = async (destination, { pushHistory = false, scrollTop = 0 } = {}) => {
+        const request = new AbortController();
+        activeNavigation?.abort();
+        activeNavigation = request;
+        startLoadingIndicator();
+        main.setAttribute('aria-busy', 'true');
+
+        try {
+            const response = await fetch(destination, {
+                headers: {
+                    'Accept': 'text/html',
+                },
+                credentials: 'same-origin',
+                cache: 'no-store',
+                signal: request.signal,
+            });
+            const responseUrl = new URL(response.url, window.location.href);
+            const contentType = response.headers.get('content-type') || '';
+            // ASVS V4.1.1: accept only HTML navigation responses with a matching content type.
+            if (
+                !response.ok
+                || responseUrl.origin !== window.location.origin
+                || !isAdminPageUrl(responseUrl)
+                || !contentType.includes('text/html')
+            ) {
+                throw new Error(`Admin page navigation failed with status ${response.status}.`);
+            }
+
+            const responseDocument = new DOMParser().parseFromString(await response.text(), 'text/html');
+            const nextPage = responseDocument.querySelector('#admin-main-content .admin-page-enter');
+            const currentNavigation = document.getElementById('admin-navigation');
+            const nextNavigation = responseDocument.getElementById('admin-navigation');
+            if (!nextPage || !currentNavigation || !nextNavigation) {
+                throw new Error('Admin navigation response did not contain the expected page layout.');
+            }
+
+            nextPage.querySelectorAll('[data-admin-persistent][id]').forEach((element) => {
+                if (document.getElementById(element.id)) {
+                    element.remove();
+                }
+            });
+
+            const previousPage = main.querySelector('.admin-page-enter');
+            if (!previousPage) {
+                throw new Error('The current admin page is no longer available.');
+            }
+            previousPage.replaceWith(nextPage);
+            currentNavigation.replaceChildren(...Array.from(nextNavigation.childNodes));
+
+            runAdminPageScripts(nextPage);
+            window.Alpine.initTree(currentNavigation);
+            window.Alpine.initTree(nextPage);
+            document.title = responseDocument.title;
+            main.scrollTop = scrollTop;
+            updateAdminFieldIndicators();
+            window.dispatchEvent(new CustomEvent('admin-sidebar-close'));
+
+            if (pushHistory) {
+                window.history.pushState({
+                    adminNavigation: true,
+                    adminScrollTop: scrollTop,
+                }, '', responseUrl.href);
+            }
+        } catch (error) {
+            if (error.name !== 'AbortError') {
+                console.error('Failed to navigate between admin pages.', error);
+                window.location.assign(destination.href);
+            }
+        } finally {
+            if (activeNavigation === request) {
+                activeNavigation = null;
+                main.removeAttribute('aria-busy');
+                finishLoadingIndicator();
+            }
+        }
+    };
+
+    document.addEventListener('click', (event) => {
+        const link = event.target instanceof Element ? event.target.closest('a[href]') : null;
+        if (
+            !link
+            || event.defaultPrevented
+            || event.button !== 0
+            || event.metaKey
+            || event.ctrlKey
+            || event.shiftKey
+            || event.altKey
+            || link.target
+            || link.hasAttribute('download')
+            || link.closest('form')
+            || link.hasAttribute('data-admin-ajax-ignore')
+        ) {
+            return;
+        }
+
+        // ASVS V3.5.1/V8.3.1: intercept only same-origin admin GET navigation; server middleware still authorizes each request.
+        const destination = new URL(link.href, window.location.href);
+        if (
+            destination.origin !== window.location.origin
+            || !isAdminPageUrl(destination)
+            || (destination.pathname === window.location.pathname
+                && destination.search === window.location.search
+                && destination.hash !== '')
+            || /\/(?:export|print)(?:\/|$)/.test(destination.pathname)
+        ) {
+            return;
+        }
+
+        event.preventDefault();
+        window.history.replaceState({
+            ...(window.history.state || {}),
+            adminNavigation: true,
+            adminScrollTop: main.scrollTop,
+        }, '', window.location.href);
+        navigate(destination, { pushHistory: true });
+    });
+
+    window.addEventListener('user:page-navigation-requested', (event) => {
+        const requestedUrl = event.detail?.url;
+        if (typeof requestedUrl !== 'string') {
+            return;
+        }
+
+        let destination;
+        try {
+            destination = new URL(requestedUrl, window.location.href);
+        } catch (error) {
+            console.error('Rejected invalid borrower page navigation URL.', error);
+            return;
+        }
+
+        if (destination.origin !== window.location.origin || !userPagePaths.has(destination.pathname)) {
+            console.error('Rejected borrower page navigation outside the allowed portal paths.');
+            return;
+        }
+
+        navigate(destination, { pushHistory: true });
+    });
+
+    window.addEventListener('popstate', (event) => {
+        const destination = new URL(window.location.href);
+        if (!isAdminPageUrl(destination)) {
+            window.location.reload();
+            return;
+        }
+
+        navigate(destination, {
+            scrollTop: Number.isFinite(event.state?.adminScrollTop) ? event.state.adminScrollTop : 0,
+        });
+    });
+};
+
+const initUserAjaxNavigation = () => {
+    const pageContent = document.getElementById('user-page-content');
+    const loadingIndicator = document.getElementById('user-navigation-progress');
+    if (!pageContent || !loadingIndicator) {
+        return;
+    }
+
+    const userPagePaths = new Set((pageContent.dataset.userPaths || '').split('|').filter(Boolean));
+    const pageScriptNames = new Set(['home-reveals', 'catalog-reveals']);
+    const executedPageScripts = new Set(
+        Array.from(pageContent.querySelectorAll('script[data-user-page-script]'), (script) => script.dataset.userPageScript),
+    );
+    let activeNavigation = null;
+    let loadingIndicatorTimeout = null;
+    let currentPath = window.location.pathname;
+    let currentUrl = new URL(window.location.href);
+
+    const runUserPageScripts = (root) => {
+        for (const script of root.querySelectorAll('script[data-user-page-script]')) {
+            const scriptName = script.dataset.userPageScript;
+            if (!pageScriptNames.has(scriptName)) {
+                script.remove();
+                continue;
+            }
+            if (executedPageScripts.has(scriptName)) {
+                script.remove();
+                continue;
+            }
+
+            const executableScript = document.createElement('script');
+            for (const attribute of script.attributes) {
+                executableScript.setAttribute(attribute.name, attribute.value);
+            }
+            executableScript.textContent = script.textContent;
+            script.replaceWith(executableScript);
+            executedPageScripts.add(scriptName);
+        }
+    };
+
+    const finishLoadingIndicator = () => {
+        window.clearTimeout(loadingIndicatorTimeout);
+        loadingIndicator.dataset.complete = 'true';
+        loadingIndicator.dataset.loading = 'false';
+        loadingIndicatorTimeout = window.setTimeout(() => {
+            loadingIndicator.dataset.complete = 'false';
+        }, 180);
+    };
+
+    const navigate = async (destination, { pushHistory = false, scrollTop = 0 } = {}) => {
+        if (destination.origin !== window.location.origin || !userPagePaths.has(destination.pathname)) {
+            return;
+        }
+
+        activeNavigation?.abort();
+        const request = new AbortController();
+        activeNavigation = request;
+        window.clearTimeout(loadingIndicatorTimeout);
+        loadingIndicator.dataset.complete = 'false';
+        loadingIndicator.dataset.loading = 'true';
+        pageContent.setAttribute('aria-busy', 'true');
+        window.dispatchEvent(new CustomEvent('user:page-navigating'));
+
+        try {
+            // ASVS V1.2.2: fetch only explicitly allowed, same-origin borrower page URLs.
+            const response = await fetch(destination, {
+                headers: {
+                    'Accept': 'text/html',
+                    'X-Requested-With': 'XMLHttpRequest',
+                },
+                credentials: 'same-origin',
+                cache: 'no-store',
+                signal: request.signal,
+            });
+            const responseUrl = new URL(response.url, window.location.href);
+            const contentType = response.headers.get('content-type') || '';
+            if (
+                !response.ok
+                || responseUrl.origin !== window.location.origin
+                || !userPagePaths.has(responseUrl.pathname)
+                || !contentType.includes('text/html')
+            ) {
+                if (response.redirected && responseUrl.origin === window.location.origin) {
+                    window.location.assign(responseUrl.href);
+                    return;
+                }
+                throw new Error(`User page navigation failed with status ${response.status}.`);
+            }
+
+            const responseDocument = new DOMParser().parseFromString(await response.text(), 'text/html');
+            const nextPageContent = responseDocument.querySelector('#user-page-content[data-user-page-content]');
+            if (!nextPageContent) {
+                throw new Error('User page response did not contain the expected content.');
+            }
+
+            if (pushHistory) {
+                window.history.replaceState({
+                    ...(window.history.state || {}),
+                    userNavigation: true,
+                    userScrollY: window.scrollY,
+                }, '', window.location.href);
+            }
+
+            window.Alpine.destroyTree(pageContent);
+            pageContent.replaceChildren(...Array.from(nextPageContent.childNodes));
+            runUserPageScripts(pageContent);
+            window.Alpine.initTree(pageContent);
+            document.title = responseDocument.title;
+            currentPath = responseUrl.pathname;
+            currentUrl = new URL(responseUrl.href);
+
+            const catalog = pageContent.querySelector('#catalog-content');
+            if (catalog) {
+                window.dispatchEvent(new CustomEvent('catalog:updated', { detail: { root: catalog } }));
+            }
+            window.dispatchEvent(new CustomEvent('user:page-updated'));
+
+            if (pushHistory) {
+                window.history.pushState({ userNavigation: true, userScrollY: 0 }, '', responseUrl.href);
+                window.scrollTo(0, 0);
+            } else {
+                window.scrollTo(0, scrollTop);
+            }
+
+            const main = pageContent.querySelector('main');
+            if (main) {
+                main.tabIndex = -1;
+                main.focus({ preventScroll: true });
+                if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+                    main.animate([
+                        { opacity: 0, transform: 'translateY(4px)' },
+                        { opacity: 1, transform: 'translateY(0)' },
+                    ], { duration: 150, easing: 'ease-out' });
+                }
+            }
+        } catch (error) {
+            if (error.name !== 'AbortError') {
+                console.error('Failed to navigate between user pages.', error);
+                window.showToast('Halaman gagal dimuat. Periksa koneksi lalu coba lagi.', 'error');
+            }
+        } finally {
+            if (activeNavigation === request) {
+                activeNavigation = null;
+                pageContent.removeAttribute('aria-busy');
+                finishLoadingIndicator();
+            }
+        }
+    };
+
+    window.history.replaceState({
+        ...(window.history.state || {}),
+        userNavigation: true,
+        userScrollY: window.scrollY,
+    }, '', window.location.href);
+
+    document.addEventListener('click', (event) => {
+        const target = event.target instanceof Element ? event.target : null;
+        const link = target?.closest('a[href]');
+        if (
+            !link
+            || (!pageContent.contains(link) && !link.hasAttribute('data-user-navigation-link'))
+            || event.defaultPrevented
+            || event.button !== 0
+            || event.metaKey
+            || event.ctrlKey
+            || event.shiftKey
+            || event.altKey
+            || link.target
+            || link.hasAttribute('download')
+            || link.closest('form')
+        ) {
+            return;
+        }
+
+        const destination = new URL(link.href, window.location.href);
+        const samePage = destination.pathname === currentPath;
+        const handledByPage = link.matches('[data-catalog-ajax], [data-history-ajax]');
+        if (
+            destination.origin !== window.location.origin
+            || !userPagePaths.has(destination.pathname)
+            || (samePage && (
+                destination.search === window.location.search
+                || handledByPage
+            ))
+        ) {
+            return;
+        }
+
+        event.preventDefault();
+        navigate(destination, { pushHistory: true });
+    });
+
+    window.addEventListener('popstate', (event) => {
+        const destination = new URL(window.location.href);
+        if (!userPagePaths.has(destination.pathname)) {
+            window.location.reload();
+            return;
+        }
+        if (destination.pathname === currentPath) {
+            const pageHasOwnAjaxNavigation = pageContent.querySelector('#catalog-content, #history-content');
+            if (destination.search !== currentUrl.search && !pageHasOwnAjaxNavigation) {
+                navigate(destination, {
+                    scrollTop: Number.isFinite(event.state?.userScrollY) ? event.state.userScrollY : 0,
+                });
+            }
+            return;
+        }
+
+        navigate(destination, {
+            scrollTop: Number.isFinite(event.state?.userScrollY) ? event.state.userScrollY : 0,
+        });
+    });
+};
+
 Alpine.start();
 updateAdminFieldIndicators();
+initAdminAjaxNavigation();
+initUserAjaxNavigation();
 
 const renderLoanQr = async (element) => {
     if (element.dataset.loanQrRendered === 'true') {

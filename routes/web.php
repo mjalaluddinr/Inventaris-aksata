@@ -35,6 +35,8 @@ Route::post('/logout', [LoginController::class, 'logout'])->name('logout');
 Route::prefix('admin')->name('admin.')->middleware(['auth', 'permission:admin-panel'])->group(function () {
     Route::get('/', DashboardController::class)->name('dashboard');
     Route::redirect('/dashboard', '/admin', 302)->name('dashboard.legacy');
+    Route::get('/detail-notifications', [NotificationController::class, 'index'])
+        ->name('notifications.detail');
     Route::middleware('permission:inventory.view')->group(function () {
         Route::get('/barang', [ManageBarang::class, 'index'])->name('barang');
         Route::get('/kategori', [ManageKategori::class, 'index'])->name('kategori');
@@ -117,16 +119,16 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'permission:admin-pa
         });
     });
 
-    Route::get('/log-import', function () {
-        return view('pages.admin.log_import');
-    })->middleware('permission:accounts.manage-all')->name('log_import');
+    Route::get('/log-import', [ManageUser::class, 'importLogs'])
+        ->middleware('permission:accounts.manage-all')
+        ->name('log_import');
 
     Route::get('/log-mutasi', [LogMutasiController::class, 'index'])
         ->middleware('permission:accounts.manage-all')
         ->name('log_mutasi');
 
-    // ASVS V8.2/V8.3: only administrators may view stock history or register item usage.
-    Route::middleware('permission:accounts.manage-all')->group(function () {
+    // ASVS V8.2/V8.3: enforce item-usage permissions at the server-side inventory management boundary.
+    Route::middleware('permission:inventory.manage')->group(function () {
         Route::post('/barang/{barang}/pemakaian', [ManageBarang::class, 'recordUsage'])
             ->name('barang.pemakaian.store');
         Route::post('/barang/{barang}/pemakaian/{usage}/tarik', [ManageBarang::class, 'withdrawUsage'])
@@ -140,6 +142,8 @@ Route::prefix('user')->name('user.')->middleware(['auth', 'can:access-user-porta
     Route::get('/katalog', [BerandaController::class, 'catalog'])->name('catalog');
     Route::get('/ajukan-peminjaman', [BerandaController::class, 'apply'])->name('apply');
     Route::get('/riwayat', [BerandaController::class, 'history'])->name('history');
+    Route::get('/barang/detail', [BerandaController::class, 'detail'])->name('barang.detail');
+    Route::get('/cart/items', [BerandaController::class, 'cartItems'])->name('cart.items');
 
     Route::post('/peminjaman', [PeminjamanController::class, 'store'])
         ->middleware('throttle:10,1')

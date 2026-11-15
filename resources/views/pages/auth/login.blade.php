@@ -84,7 +84,7 @@
       position: relative;
       z-index: 2;
       max-width: clamp(20rem, 30vw, 26rem);
-      animation: login-content-arrive 900ms 120ms both cubic-bezier(0.2, 0.7, 0.2, 1);
+      animation: login-content-arrive 360ms both cubic-bezier(0.2, 0.7, 0.2, 1);
     }
 
     .login-hero-copy h1 {
@@ -103,7 +103,7 @@
     }
 
     .login-form-card {
-      animation: login-content-arrive 760ms 80ms both cubic-bezier(0.2, 0.7, 0.2, 1);
+      animation: login-content-arrive 320ms 40ms both cubic-bezier(0.2, 0.7, 0.2, 1);
     }
 
     .login-forgot-link {

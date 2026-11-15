@@ -49,7 +49,7 @@ class DetailPeminjaman extends Model
 
     public function barang(): BelongsTo
     {
-        return $this->belongsTo(Barang::class, 'barang_id', 'barang_id');
+        return $this->belongsTo(Barang::class, 'barang_id', 'barang_id')->withTrashed();
     }
 
     public function logMutasiBarangs(): HasMany

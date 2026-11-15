@@ -2,20 +2,12 @@
   @keyframes catalog-card-enter {
     from {
       opacity: 0;
-      filter: blur(2px);
-      transform: translate3d(0, 20px, 0) scale(.99);
+      transform: translate3d(0, 12px, 0);
     }
 
     to {
       opacity: 1;
-      filter: blur(0);
-      transform: translate3d(0, 0, 0) scale(1);
-    }
-  }
-
-  @keyframes catalog-image-shimmer {
-    to {
-      background-position: -200% 0;
+      transform: translate3d(0, 0, 0);
     }
   }
 
@@ -38,33 +30,36 @@
     }
   }
 
+  @keyframes catalog-image-shimmer {
+    to {
+      background-position: -200% 0;
+    }
+  }
+
   html.catalog-reveal-enabled .catalog-scroll-reveal:not(.catalog-revealed):not(.is-visible) {
     animation: none !important;
     opacity: 0;
-    filter: blur(2px);
-    transform: translate3d(0, 20px, 0) scale(.99);
+    transform: translate3d(0, 12px, 0);
   }
 
   .catalog-scroll-reveal.is-visible {
-    animation: catalog-card-enter 800ms both cubic-bezier(.16, 1, .3, 1);
-    animation-delay: var(--catalog-card-delay, 0ms);
-    backface-visibility: hidden;
+    animation: catalog-card-enter 420ms both cubic-bezier(.16, 1, .3, 1);
+    animation-delay: var(--product-card-delay, var(--catalog-card-delay, 0ms));
   }
 
   .catalog-scroll-reveal.catalog-revealed {
     opacity: 1;
-    filter: none;
     transform: none;
-  }
-
-  html.catalog-reveal-enabled .catalog-scroll-reveal.catalog-revealed {
-    animation: none !important;
   }
 
   .catalog-image-skeleton {
     background: linear-gradient(90deg, #dcefe9 25%, #f7fffc 50%, #dcefe9 75%);
     background-size: 200% 100%;
     animation: catalog-image-shimmer 1.2s ease-in-out infinite;
+  }
+
+  html.catalog-reveal-enabled .catalog-scroll-reveal.catalog-revealed {
+    animation: none !important;
   }
 
   @supports (view-transition-name: none) {
@@ -102,7 +97,7 @@
   }
 </style>
 
-<script>
+<script data-user-page-script="catalog-reveals">
   (() => {
     const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
 
@@ -142,12 +137,16 @@
       }
     });
 
-    document.addEventListener('DOMContentLoaded', () => {
+    const initCurrentCatalogReveals = () => {
       const catalog = document.getElementById('catalog-content');
       if (catalog) {
         window.initCatalogReveals(catalog);
       }
-    });
+    };
+
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', initCurrentCatalogReveals, { once: true });
+    }
   })();
 </script>
 
@@ -192,10 +191,16 @@
           <div class="grid min-w-0 grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
             @foreach ($catalogItems as $item)
               <article
-                class="catalog-scroll-reveal flex min-h-44 flex-col overflow-hidden rounded-xl border border-[#c7e4dc] border-t-[5px] border-t-[#00b19c] bg-white shadow-[0_2px_4px_rgba(20,55,48,0.14)]"
-                style="--catalog-card-delay: {{ min($loop->index * 100, 400) }}ms">
+                class="catalog-scroll-reveal group relative flex min-h-44 flex-col overflow-hidden rounded-xl border border-[#c7e4dc] border-t-[5px] border-t-[#00b19c] bg-white shadow-[0_2px_4px_rgba(20,55,48,0.14)]"
+                style="--catalog-card-delay: {{ min($loop->index * 40, 160) }}ms">
+                <a
+                  data-user-navigation-link
+                  href="{{ route('user.barang.detail', ['barang' => $item->barang_id]) }}"
+                  class="absolute inset-0 z-20 rounded-xl focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#008b7a]"
+                  aria-label="Lihat detail {{ $item->nama_barang }}"
+                ></a>
                 <div
-                  class="relative aspect-[16/10] w-full overflow-hidden bg-gradient-to-br from-[#dff7ef] to-[#f2fbf8]"
+                  class="pointer-events-none relative z-10 aspect-[16/10] w-full overflow-hidden bg-gradient-to-br from-[#dff7ef] to-[#f2fbf8]"
                   @if ($item->image_url)
                     x-data="{ imageLoaded: false, imageFailed: false }"
                     x-init="$nextTick(() => { if ($refs.catalogImage.complete) { imageLoaded = $refs.catalogImage.naturalWidth > 0; imageFailed = !imageLoaded; } })"
@@ -207,7 +212,7 @@
                     <img x-ref="catalogImage" src="{{ $item->image_url }}" alt="Foto {{ $item->nama_barang }}"
                       loading="lazy" decoding="async" :class="imageLoaded ? 'opacity-100' : 'opacity-0'"
                       x-on:load="imageLoaded = true" x-on:error="imageFailed = true"
-                      class="h-full w-full object-cover object-center transition-opacity duration-300">
+                      class="h-full w-full object-cover object-center transition-[opacity,transform] duration-300 group-hover:scale-[1.035] motion-reduce:transition-none">
                     <div x-cloak x-show="imageFailed"
                       class="flex h-full items-center justify-center text-[#538b7d]" role="img"
                       aria-label="Foto {{ $item->nama_barang }} belum tersedia">
@@ -220,7 +225,7 @@
                     </div>
                   @endif
                 </div>
-                <div class="flex flex-1 flex-col p-3.5">
+                <div class="pointer-events-none relative z-30 flex flex-1 flex-col p-3.5">
                   <div class="flex items-center justify-between gap-2">
                     <span class="max-w-[65%] truncate rounded-full bg-slate-100 px-2 py-1 text-[10px] font-medium text-slate-700">{{ $item->kategori?->nama_kategori ?? 'Tanpa kategori' }}</span>
                     <span class="rounded-full bg-[#d5f7ec] px-2.5 py-1 text-[10px] font-semibold text-[#16745e]">Tersedia</span>
@@ -228,9 +233,10 @@
                   <h2 class="mt-2 truncate text-sm font-bold text-slate-900" title="{{ $item->nama_barang }}">{{ $item->nama_barang }}</h2>
                   <p class="mt-2 flex items-baseline gap-1.5"><strong class="text-xl font-extrabold text-[#006f62]">{{ number_format($item->stok_tersedia) }}</strong><span class="text-xs text-slate-500">/ {{ number_format($item->stok_total) }} tersedia</span></p>
                   <div class="mt-1.5 h-1.5 overflow-hidden rounded-full bg-slate-100" role="progressbar" aria-label="Stok tersedia {{ $item->nama_barang }}" aria-valuenow="{{ $item->stok_tersedia }}" aria-valuemin="0" aria-valuemax="{{ max($item->stok_total, 1) }}"><span class="block h-full rounded-full bg-[#00b19c]" style="width: {{ min(100, (int) round($item->stok_tersedia / max($item->stok_total, 1) * 100)) }}%"></span></div>
+                  {{-- ASVS V1.2.3: @js safely serializes database values into Alpine expressions. --}}
                   <div class="mt-auto flex items-center justify-between gap-2 pt-3">
-                    <button type="button" @click="addToCart({ id: @js($item->barang_id), name: @js($item->nama_barang), stock: {{ (int) $item->stok_tersedia }}, category: @js($item->kategori?->nama_kategori ?? 'Tanpa kategori') })" class="inline-flex flex-1 items-center justify-center gap-1 whitespace-nowrap rounded-full bg-[#00d69f] px-2.5 py-2 text-xs font-bold text-[#003f38] transition hover:bg-[#36e9b3] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#008b7a] focus-visible:ring-offset-2"><iconify-icon icon="mdi:cart-plus" aria-hidden="true"></iconify-icon>Keranjang</button>
-                    <button type="button" @click="openLoanModal({ id: @js($item->barang_id), name: @js($item->nama_barang), stock: {{ (int) $item->stok_tersedia }}, category: @js($item->kategori?->nama_kategori ?? 'Tanpa kategori') })" class="flex-1 whitespace-nowrap rounded-full border border-slate-300 px-2 py-2 text-xs font-semibold text-slate-800 transition hover:border-[#00a88f] hover:text-[#007f70] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#008b7a] focus-visible:ring-offset-2">Pinjam Sekarang</button>
+                    <button type="button" @click="addToCart({ id: @js($item->barang_id), name: @js($item->nama_barang), stock: {{ (int) $item->stok_tersedia }}, category: @js($item->kategori?->nama_kategori ?? 'Tanpa kategori') })" class="pointer-events-auto inline-flex flex-1 items-center justify-center gap-1 whitespace-nowrap rounded-full bg-[#00d69f] px-2.5 py-2 text-xs font-bold text-[#003f38] transition hover:bg-[#36e9b3] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#008b7a] focus-visible:ring-offset-2"><iconify-icon icon="mdi:cart-plus" aria-hidden="true"></iconify-icon>Keranjang</button>
+                    <button type="button" @click="openLoanModal({ id: @js($item->barang_id), name: @js($item->nama_barang), stock: {{ (int) $item->stok_tersedia }}, category: @js($item->kategori?->nama_kategori ?? 'Tanpa kategori') })" class="pointer-events-auto flex-1 whitespace-nowrap rounded-full border border-slate-300 px-2 py-2 text-xs font-semibold text-slate-800 transition hover:border-[#00a88f] hover:text-[#007f70] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#008b7a] focus-visible:ring-offset-2">Pinjam Sekarang</button>
                   </div>
                 </div>
               </article>

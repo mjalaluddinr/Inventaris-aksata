@@ -95,11 +95,9 @@ class User extends Authenticatable
 
     private function hasHakAkses(string $hak): bool
     {
-        if ($this->relationLoaded('privileges')) {
-            return $this->getRelation('privileges')->contains('hak_akses', $hak);
-        }
+        $this->loadMissing('privileges');
 
-        return $this->privileges()->where('hak_akses', $hak)->exists();
+        return $this->getRelation('privileges')->contains('hak_akses', $hak);
     }
 
     public function canMelihat(): bool

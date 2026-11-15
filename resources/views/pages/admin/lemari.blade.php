@@ -500,6 +500,14 @@
               </select>
             </div>
             <div>
+              <label class="mb-1 block text-xs font-medium text-slate-700">Kode Lemari <span
+                  class="text-rose-500">*</span></label>
+              <input type="text" name="kode_lemari" x-model="currentLemari.kode_lemari" required maxlength="20"
+                placeholder="Contoh: LMR-001" aria-describedby="lemari-code-hint"
+                class="rak-form-field block w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 shadow-sm focus:border-[#08A9D6] focus:outline-none focus:ring-2 focus:ring-[#08A9D6]/20">
+              <p id="lemari-code-hint" class="mt-1 text-xs text-slate-500">Kode harus unik dalam ruangan yang dipilih.</p>
+            </div>
+            <div>
               <label class="mb-1 block text-xs font-medium text-slate-700">Nama Lemari <span
                   class="text-rose-500">*</span></label>
               <input type="text" name="nama_lemari" x-model="currentLemari.nama_lemari" required maxlength="100"

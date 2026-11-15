@@ -20,6 +20,7 @@ use App\Models\User;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection as EloquentCollection;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Query\Builder as QueryBuilder;
 use Illuminate\Http\File;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -106,14 +107,67 @@ class ManageBarang extends Controller
             'mutation_page' => ['nullable', 'integer', 'min:1'],
             'usage_page' => ['nullable', 'integer', 'min:1'],
         ]);
+        $canManageInventory = $request->user()?->canManageInventory() ?? false;
+        $canManageAllAccounts = $request->user()?->canManageAllAccounts() ?? false;
+
+        if ($canManageInventory && ! $canManageAllAccounts) {
+            $filters['panel'] = 'usage';
+        }
+
+        $search = trim($filters['search'] ?? '');
+        $searchTerms = preg_split('/[\s\/]+/', $search, -1, PREG_SPLIT_NO_EMPTY) ?: [];
+        $numericCastType = (new Barang)->getConnection()->getDriverName() === 'mysql' ? 'CHAR' : 'TEXT';
 
         $applyBarangFilters = static fn (Builder $query): Builder => $query
-            ->when($filters['search'] ?? null, function ($query, string $search): void {
-                $query->where(function ($query) use ($search): void {
-                    $query->where('kode_barang', 'like', '%'.$search.'%')
-                        ->orWhere('nama_barang', 'like', '%'.$search.'%')
-                        ->orWhere('spesifikasi', 'like', '%'.$search.'%');
-                });
+            // ASVS 2.2.1 / 1.2.4: Search validated terms with bindings across fixed item and location fields.
+            ->when($searchTerms !== [], function (Builder $query) use ($searchTerms, $numericCastType): void {
+                foreach ($searchTerms as $term) {
+                    $pattern = '%'.$term.'%';
+                    $query->where(function (Builder $query) use ($pattern, $numericCastType): void {
+                        $query->where('kode_barang', 'like', $pattern)
+                            ->orWhere('nama_barang', 'like', $pattern)
+                            ->orWhere('satuan', 'like', $pattern)
+                            ->orWhere('kondisi', 'like', $pattern)
+                            ->orWhere('kelayakan', 'like', $pattern)
+                            ->orWhere('spesifikasi', 'like', $pattern)
+                            ->orWhereRaw("CAST(stok_total AS {$numericCastType}) LIKE ?", [$pattern])
+                            ->orWhereRaw("CAST(stok_tersedia AS {$numericCastType}) LIKE ?", [$pattern])
+                            ->orWhereHas('kategori', function (Builder $kategori) use ($pattern): void {
+                                $kategori->where(function (Builder $kategoriSearch) use ($pattern): void {
+                                    $kategoriSearch->where('nama_kategori', 'like', $pattern)
+                                        ->orWhere('keterangan', 'like', $pattern);
+                                });
+                            })
+                            ->orWhereHas('lokasiBarangs', function (Builder $lokasi) use ($pattern, $numericCastType): void {
+                                $lokasi->where(function (Builder $locationSearch) use ($pattern, $numericCastType): void {
+                                    $locationSearch
+                                        ->whereRaw("CAST(stok_total AS {$numericCastType}) LIKE ?", [$pattern])
+                                        ->orWhereRaw("CAST(stok_tersedia AS {$numericCastType}) LIKE ?", [$pattern])
+                                        ->orWhereHas('ruangan', function (Builder $ruangan) use ($pattern): void {
+                                            $ruangan->where(function (Builder $roomSearch) use ($pattern): void {
+                                                $roomSearch->where('kode_ruangan', 'like', $pattern)
+                                                    ->orWhere('nama_ruangan', 'like', $pattern)
+                                                    ->orWhere('keterangan', 'like', $pattern);
+                                            });
+                                        })
+                                        ->orWhereHas('lemari', function (Builder $lemari) use ($pattern): void {
+                                            $lemari->where(function (Builder $cabinetSearch) use ($pattern): void {
+                                                $cabinetSearch->where('kode_lemari', 'like', $pattern)
+                                                    ->orWhere('nama_lemari', 'like', $pattern)
+                                                    ->orWhere('keterangan', 'like', $pattern);
+                                            });
+                                        })
+                                        ->orWhereHas('toolbox', function (Builder $toolbox) use ($pattern): void {
+                                            $toolbox->where(function (Builder $toolboxSearch) use ($pattern): void {
+                                                $toolboxSearch->where('kode_toolbox', 'like', $pattern)
+                                                    ->orWhere('nama_toolbox', 'like', $pattern)
+                                                    ->orWhere('keterangan', 'like', $pattern);
+                                            });
+                                        });
+                                });
+                            });
+                    });
+                }
             })
             ->when($filters['kategori_id'] ?? null, fn ($query, string $id) => $query->where('kategori_id', $id))
             ->when($filters['ruangan_id'] ?? null, function ($query, string $id): void {
@@ -150,34 +204,45 @@ class ManageBarang extends Controller
         $lemaris = Lemari::query()->orderBy('nama_lemari')->get(['lemari_id', 'ruangan_id', 'nama_lemari']);
         $toolboxes = Toolbox::query()->orderBy('nama_toolbox')->get(['toolbox_id', 'kode_toolbox', 'nama_toolbox']);
         $selectedBarang = null;
-        $adminAccounts = collect();
+        $usageAccounts = collect();
         $mutationLogs = collect();
         $activeUsages = collect();
         $usageLocations = collect();
         $usageBarangs = collect();
 
-        if ($request->user()?->canManageAllAccounts()) {
+        if ($canManageInventory) {
             $usageBarangs = $barangs->getCollection();
             $selectedBarang = $usageBarangs->firstWhere('barang_id', $filters['barang_id'] ?? null)
                 ?? $usageBarangs->first();
 
             if ($selectedBarang instanceof Barang) {
-                $adminAccounts = User::query()
-                    ->where('role', 'admin')
+                $usageAccounts = User::query()
                     ->where('is_active', true)
+                    ->where(function (Builder $query): void {
+                        $query->where('role', 'admin')
+                            ->orWhere(function (Builder $query): void {
+                                $query->where('role', 'laboran')
+                                    ->whereHas('privileges', fn (Builder $query) => $query
+                                        ->where('hak_akses', 'manajemen'));
+                            });
+                    })
                     ->orderBy('first_name')
                     ->orderBy('last_name')
-                    ->get(['akun_id', 'first_name', 'last_name', 'username']);
-                $mutationLogs = $selectedBarang->logMutasiBarangs()
-                    ->with(['ruangan', 'lemariAsal', 'lemariTujuan', 'akun', 'olehAkun', 'barangDipakai.ruangan'])
-                    ->orderByDesc('created_at')
-                    ->orderByDesc('log_mutasi_barang_id')
-                    ->paginate(5, ['*'], 'mutation_page')
-                    ->appends($request->except('mutation_page'))
-                    ->appends([
-                        'barang_id' => $selectedBarang->barang_id,
-                        'panel' => 'history',
-                    ]);
+                    ->get(['akun_id', 'first_name', 'last_name', 'username', 'role']);
+
+                if ($canManageAllAccounts) {
+                    $mutationLogs = $selectedBarang->logMutasiBarangs()
+                        ->with(['ruangan', 'lemariAsal', 'lemariTujuan', 'akun', 'olehAkun', 'barangDipakai.ruangan'])
+                        ->orderByDesc('created_at')
+                        ->orderByDesc('log_mutasi_barang_id')
+                        ->paginate(5, ['*'], 'mutation_page')
+                        ->appends($request->except('mutation_page'))
+                        ->appends([
+                            'barang_id' => $selectedBarang->barang_id,
+                            'panel' => 'history',
+                        ]);
+                }
+
                 $activeUsages = BarangDipakai::query()
                     ->where('status', 'aktif')
                     ->whereHas('barang')
@@ -198,7 +263,6 @@ class ManageBarang extends Controller
         /** @var View $renderedView */
         $renderedView = view('pages.admin.barang', compact(
             'activeUsages',
-            'adminAccounts',
             'barangs',
             'filters',
             'kategoris',
@@ -208,6 +272,7 @@ class ManageBarang extends Controller
             'selectedBarang',
             'toolboxes',
             'usageBarangs',
+            'usageAccounts',
             'usageLocations',
         ));
 
@@ -224,7 +289,7 @@ class ManageBarang extends Controller
 
     public function recordUsage(Request $request, Barang $barang): RedirectResponse|JsonResponse
     {
-        // ASVS 2.2.2: Validate the usage destination independently from the storage location.
+        // ASVS 2.2.1/2.2.2/8.2.1: Validate the usage destination, selected account, and local date at the trusted boundary.
         $attributes = $request->validate([
             'jumlah' => ['required', 'integer', 'min:1'],
             'ruangan_id' => [
@@ -233,14 +298,31 @@ class ManageBarang extends Controller
                 Rule::exists('ruangan', 'ruangan_id')->whereNull('deleted_at'),
             ],
             'akun_id' => [
+                // ASVS 8.3.1: Do not rely on the client to restrict eligible usage accounts.
                 'required',
                 'uuid',
-                Rule::exists('akun', 'akun_id')->where(fn ($query) => $query
-                    ->where('role', 'admin')
-                    ->where('is_active', true)
-                    ->whereNull('deleted_at')),
+                Rule::exists('akun', 'akun_id')->where(function (QueryBuilder $query): void {
+                    $query->where('is_active', true)
+                        ->whereNull('deleted_at')
+                        ->where(function (QueryBuilder $query): void {
+                            $query->where('role', 'admin')
+                                ->orWhere(function (QueryBuilder $query): void {
+                                    $query->where('role', 'laboran')
+                                        ->whereExists(function (QueryBuilder $query): void {
+                                            $query->selectRaw('1')
+                                                ->from('privilege')
+                                                ->whereColumn('privilege.akun_id', 'akun.akun_id')
+                                                ->where('privilege.hak_akses', 'manajemen');
+                                        });
+                                });
+                        });
+                }),
             ],
-            'tanggal_pasang' => ['required', 'date', 'before_or_equal:today'],
+            'tanggal_pasang' => [
+                'required',
+                'date',
+                'before_or_equal:'.today('Asia/Jakarta')->toDateString(),
+            ],
             'keterangan' => ['nullable', 'string', 'max:255'],
         ]);
         $actor = $request->user();
@@ -251,16 +333,23 @@ class ManageBarang extends Controller
                 ->whereKey($barang->getKey())
                 ->lockForUpdate()
                 ->firstOrFail();
-            $adminAccount = User::query()
+            $usageAccount = User::query()
                 ->whereKey($attributes['akun_id'])
-                ->where('role', 'admin')
                 ->where('is_active', true)
+                ->where(function (Builder $query): void {
+                    $query->where('role', 'admin')
+                        ->orWhere(function (Builder $query): void {
+                            $query->where('role', 'laboran')
+                                ->whereHas('privileges', fn (Builder $query) => $query
+                                    ->where('hak_akses', 'manajemen'));
+                        });
+                })
                 ->lockForUpdate()
                 ->first();
 
-            if (! $adminAccount instanceof User) {
+            if (! $usageAccount instanceof User) {
                 throw ValidationException::withMessages([
-                    'akun_id' => 'Akun yang memakai barang harus merupakan admin aktif.',
+                    'akun_id' => 'Akun yang memakai barang harus admin aktif atau laboran aktif dengan hak manajemen.',
                 ]);
             }
 
@@ -320,7 +409,7 @@ class ManageBarang extends Controller
             $usage = BarangDipakai::query()->create([
                 'barang_id' => $lockedBarang->barang_id,
                 'ruangan_id' => $attributes['ruangan_id'],
-                'akun_id' => $adminAccount->akun_id,
+                'akun_id' => $usageAccount->akun_id,
                 'jumlah' => $quantity,
                 'keterangan' => $attributes['keterangan'] ?? null,
                 'status' => 'aktif',
@@ -332,7 +421,7 @@ class ManageBarang extends Controller
                     'barang_id' => $lockedBarang->barang_id,
                     'ruangan_id' => $allocation['ruangan_id'],
                     'lemari_asal_id' => $allocation['lemari_id'],
-                    'akun_id' => $adminAccount->akun_id,
+                    'akun_id' => $usageAccount->akun_id,
                     'oleh_akun_id' => $actor->akun_id,
                     'barang_dipakai_id' => $usage->barang_dipakai_id,
                     'tipe' => 'dipakai',
@@ -681,16 +770,32 @@ class ManageBarang extends Controller
 
         // 1. Deteksi otomatis baris header Excel
         $mapping = null;
+        $bestMissingColumns = [];
+        $bestHeaderScore = -1;
         $headerRowIndex = -1;
         for ($index = 0; $index < min(50, count($rows)); $index++) {
-            $mapping = $this->detectImportColumns($rows[$index]);
-            if ($mapping !== null) {
+            $candidateMapping = $this->detectImportColumns($rows[$index]);
+            if ($candidateMapping === null || $candidateMapping === []) {
+                continue;
+            }
+
+            $missingColumns = $this->missingImportColumns($candidateMapping);
+            if ($missingColumns === []) {
+                $mapping = $candidateMapping;
                 $headerRowIndex = $index;
                 break;
+            }
+
+            if (count($candidateMapping) > $bestHeaderScore) {
+                $bestHeaderScore = count($candidateMapping);
+                $bestMissingColumns = $missingColumns;
             }
         }
 
         if ($mapping === null) {
+            $missingColumns = $bestMissingColumns !== []
+                ? $bestMissingColumns
+                : $this->missingImportColumns([]);
             $this->completeImport(
                 $log,
                 $fileName,
@@ -698,7 +803,9 @@ class ManageBarang extends Controller
                 0,
                 0,
                 [],
-                'Kolom wajib tidak ditemukan. Gunakan susunan kolom yang ditampilkan pada formulir impor.',
+                'Kolom wajib belum tersedia: '.implode(', ', $missingColumns)
+                    .'. Untuk lemari baru, sertakan kolom Ruangan, Nama Lemari, dan Kode Lemari. '
+                    .'Lemari yang sudah terdaftar dapat dicocokkan dari Nama Lemari yang unik.',
             );
 
             return;
@@ -824,6 +931,8 @@ class ManageBarang extends Controller
                 $lemariByRoomAndCode[$codeKey] = $lemari;
             }
         }
+        $lemariByName = $this->referenceIndex($lemariRecords, 'nama_lemari');
+        $ruanganById = $ruanganRecords->keyBy('ruangan_id');
 
         $usedCodes = array_fill_keys(
             Barang::withTrashed()
@@ -926,7 +1035,7 @@ class ManageBarang extends Controller
                 0,
                 0,
                 [],
-                'Gagal mengekstrak file ZIP gambar. Periksa isi arsip.',
+                'Gagal memproses gambar ZIP. Pastikan arsip valid dan berisi gambar JPG, PNG, atau WEBP yang sesuai batas ukuran.',
             );
 
             return;
@@ -969,6 +1078,36 @@ class ManageBarang extends Controller
                 $cabinetName = $mappedRow['lemari'] ?? null;
                 $cabinetCode = $mappedRow['kode_lemari'] ?? null;
                 $cabinetDescription = $mappedRow['keterangan_lemari'] ?? null;
+                $existingCabinet = null;
+                if ($cabinetName !== null) {
+                    $normalizedCabinetName = Str::lower(trim($cabinetName));
+                    if ($roomName === null) {
+                        $existingCabinet = $lemariByName[$normalizedCabinetName] ?? null;
+                        if ($existingCabinet instanceof Lemari) {
+                            $existingRoom = $ruanganById->get($existingCabinet->ruangan_id);
+                            if ($existingRoom instanceof Ruangan) {
+                                $roomName = $existingRoom->nama_ruangan;
+                                $roomCode = $existingRoom->kode_ruangan;
+                            } else {
+                                $existingCabinet = null;
+                            }
+                        }
+                    }
+
+                    if ($existingCabinet === null && $roomName !== null) {
+                        $normalizedRoomName = Str::lower(trim($roomName));
+                        $existingRoom = $ruanganByName[$normalizedRoomName] ?? null;
+                        if (! $existingRoom instanceof Ruangan && $roomCode !== null) {
+                            $existingRoom = $ruanganByCode[Str::lower(trim($roomCode))] ?? null;
+                        }
+                        if ($existingRoom instanceof Ruangan) {
+                            $existingCabinet = $lemariByRoomAndName[
+                                $existingRoom->ruangan_id.'|'.$normalizedCabinetName
+                            ] ?? null;
+                        }
+                    }
+                }
+                $isNewCabinet = $cabinetName !== null && ! ($existingCabinet instanceof Lemari);
                 $sourceCode = $mappedRow['kode_barang'] ?? null;
                 if ($sourceCode !== null && is_numeric($sourceCode)) {
                     $sourceCode = null;
@@ -1032,7 +1171,12 @@ class ManageBarang extends Controller
                     'kode_ruangan' => ['nullable', 'string', 'max:20'],
                     'ruangan' => ['required', 'string', 'max:100'],
                     'keterangan_ruangan' => ['nullable', 'string', 'max:255'],
-                    'kode_lemari' => ['nullable', 'string', 'max:20'],
+                    'kode_lemari' => [
+                        Rule::requiredIf($isNewCabinet),
+                        'nullable',
+                        'string',
+                        'max:20',
+                    ],
                     'lemari' => [
                         Rule::requiredIf($cabinetCode !== null || $cabinetDescription !== null),
                         'nullable',
@@ -1043,8 +1187,10 @@ class ManageBarang extends Controller
                 ], [
                     'kondisi.required' => 'Kondisi barang wajib diisi atau tidak dikenali.',
                     'kondisi.in' => 'Kondisi barang harus Baru atau Lama.',
-                    'ruangan.required' => 'Ruangan wajib diisi pada setiap baris.',
-                    'lemari.required' => 'Nama lemari wajib diisi jika kode atau keterangannya dimasukkan.',
+                    'nama_barang.required' => 'Nama Barang wajib diisi.',
+                    'ruangan.required' => 'Ruangan wajib diisi untuk lemari baru atau jika nama lemari tidak dapat dicocokkan.',
+                    'kode_lemari.required' => 'Kode Lemari wajib diisi untuk lemari baru.',
+                    'lemari.required' => 'Nama Lemari wajib diisi jika kode atau keterangannya dimasukkan.',
                 ]);
 
                 if ($validator->fails()) {
@@ -1228,14 +1374,28 @@ class ManageBarang extends Controller
                             "Barang diimpor dari {$fileName}.",
                         );
                     });
-                } catch (\Throwable $ex) {
+                } catch (ValidationException $exception) {
                     if (isset($imagePathStored) && is_string($imagePathStored)) {
                         $this->deleteStoredImage($imagePathStored);
                     }
 
                     $failedRows++;
                     $rowErrors[] = $rowErrorContext + [
-                        'message' => 'Baris gagal diproses. Periksa data dan pastikan kode barang belum digunakan.',
+                        'message' => $exception->validator->errors()->first(),
+                    ];
+
+                    continue;
+                } catch (\Throwable $exception) {
+                    if (isset($imagePathStored) && is_string($imagePathStored)) {
+                        $this->deleteStoredImage($imagePathStored);
+                    }
+
+                    // ASVS V16.5.1: Report unexpected failures without exposing internal details in import results.
+                    report($exception);
+
+                    $failedRows++;
+                    $rowErrors[] = $rowErrorContext + [
+                        'message' => 'Baris gagal disimpan karena terjadi kesalahan internal. Coba lagi atau hubungi administrator.',
                     ];
 
                     continue;
@@ -1330,7 +1490,7 @@ class ManageBarang extends Controller
         ]);
     }
 
-    public function store(StoreRequest $request): RedirectResponse
+    public function store(StoreRequest $request): RedirectResponse|JsonResponse
     {
         $actor = $request->user();
         abort_unless($actor instanceof User, 403);
@@ -1379,8 +1539,15 @@ class ManageBarang extends Controller
             throw $exception;
         }
 
+        $message = "Barang {$barang->nama_barang} berhasil ditambahkan.";
+
+        if ($request->expectsJson()) {
+            // ASVS V4.1.1: Return a JSON body with the matching Content-Type for AJAX clients.
+            return response()->json(['message' => $message], 201);
+        }
+
         return redirect()->route('admin.barang')
-            ->with('success', "Barang {$barang->nama_barang} berhasil ditambahkan.")
+            ->with('success', $message)
             ->with('barang_feedback_name', $barang->nama_barang)
             ->with('barang_feedback_action', 'ditambahkan');
     }
@@ -1704,6 +1871,16 @@ class ManageBarang extends Controller
                     $cabinetNames,
                     $toolboxNames,
                 );
+                // ASVS 2.2.3: Distinguish toolbox placement changes from transfers between cabinets.
+                $isToolboxPlacementAdjustment = $sourceLocation !== null
+                    && $sourceRoomId === $destination['ruangan_id']
+                    && $sourceCabinetId !== null
+                    && $sourceCabinetId === $destination['lemari_id']
+                    && $sourceLocation->toolbox_id !== $destination['toolbox_id'];
+                $mutationType = $isToolboxPlacementAdjustment ? 'penyesuaian' : 'dipindahkan';
+                $mutationDescription = $isToolboxPlacementAdjustment
+                    ? "Penempatan disesuaikan dari {$sourceLabel} ke {$destinationLabel}."
+                    : "Stok dipindahkan dari {$sourceLabel} ke {$destinationLabel}.";
 
                 LogMutasiBarang::query()->create([
                     'barang_id' => $barang->barang_id,
@@ -1712,11 +1889,11 @@ class ManageBarang extends Controller
                     'lemari_tujuan_id' => $destination['lemari_id'],
                     'akun_id' => null,
                     'oleh_akun_id' => $operator->akun_id,
-                    'tipe' => 'dipindahkan',
+                    'tipe' => $mutationType,
                     'jumlah' => $quantity,
                     'stok_sebelum' => $source['remaining'],
                     'stok_sesudah' => $source['remaining'] - $quantity,
-                    'keterangan' => "Stok dipindahkan dari {$sourceLabel} ke {$destinationLabel}.",
+                    'keterangan' => $mutationDescription,
                     'created_at' => now(),
                 ]);
 
@@ -1830,7 +2007,11 @@ class ManageBarang extends Controller
         $roomName = $roomNames->get($roomId, 'Ruangan tidak tersedia');
         $cabinetName = $cabinetId === null ? null : $cabinetNames->get($cabinetId, 'Lemari tidak tersedia');
         $toolboxName = $toolboxId === null ? null : $toolboxNames->get($toolboxId, 'Wadah tidak tersedia');
-        $locationNames = array_filter([$roomName, $cabinetName, $toolboxName]);
+        $locationNames = array_filter([
+            $roomName,
+            $cabinetName,
+            $toolboxName === null ? 'Di luar toolbox' : 'Di dalam '.$toolboxName,
+        ]);
 
         return implode(' · ', $locationNames);
     }
@@ -2069,23 +2250,26 @@ class ManageBarang extends Controller
                     throw new \RuntimeException("File gambar ZIP tidak dapat disimpan sementara: {$entryName}");
                 }
 
-                // ASVS 2.2.1: Verify extracted file content and image dimensions before public storage.
+                // ASVS 5.2.2: Validate image bytes and use the detected format before public storage.
                 $imageInfo = @getimagesize($imagePath);
-                $expectedMime = match ($extension) {
-                    'jpg', 'jpeg' => 'image/jpeg',
-                    'png' => 'image/png',
-                    'webp' => 'image/webp',
-                };
+                $imageExtension = is_array($imageInfo)
+                    ? match ($imageInfo['mime'] ?? null) {
+                        'image/jpeg' => 'jpg',
+                        'image/png' => 'png',
+                        'image/webp' => 'webp',
+                        default => null,
+                    }
+                : null;
                 if (
                     ! is_array($imageInfo)
-                    || ($imageInfo['mime'] ?? null) !== $expectedMime
+                    || $imageExtension === null
                     || (($imageInfo[0] ?? 0) * ($imageInfo[1] ?? 0)) > self::MAX_IMPORT_IMAGE_PIXELS
                 ) {
                     $localDisk->delete($relativeImagePath);
                     throw new \RuntimeException('File ZIP berisi gambar yang tidak valid atau terlalu besar.');
                 }
 
-                $image = ['path' => $imagePath, 'ext' => $extension];
+                $image = ['path' => $imagePath, 'ext' => $imageExtension];
                 $extractedImages[$normalizedImageName] = $image;
                 $extractedImages[$normalizedBaseName] ??= $image;
             }
@@ -2122,25 +2306,32 @@ class ManageBarang extends Controller
                 $mapping[$field] = $index;
             }
         }
-        $requiredFields = array_diff(
-            array_keys(self::IMPORT_COLUMNS),
-            [
-                'nomor_barang',
-                'kode_barang',
-                'kode_ruangan',
-                'kode_lemari',
-                'lemari',
-                'stok_tersedia',
-                'kelayakan',
-                'spesifikasi',
-                'image',
-                'keterangan_kategori',
-                'keterangan_ruangan',
-                'keterangan_lemari',
-            ],
-        );
 
-        return array_diff($requiredFields, array_keys($mapping)) === [] ? $mapping : null;
+        return $mapping;
+    }
+
+    private function missingImportColumns(array $mapping): array
+    {
+        $requiredColumns = [
+            'kategori' => 'Kategori',
+            'nama_barang' => 'Nama Barang',
+            'satuan' => 'Satuan',
+            'stok_total' => 'Jumlah Total',
+            'kondisi' => 'Kondisi',
+        ];
+        $missingColumns = [];
+
+        foreach ($requiredColumns as $field => $label) {
+            if (! array_key_exists($field, $mapping)) {
+                $missingColumns[] = $label;
+            }
+        }
+
+        if (! array_key_exists('ruangan', $mapping) && ! array_key_exists('lemari', $mapping)) {
+            $missingColumns[] = 'Ruangan atau Nama Lemari';
+        }
+
+        return $missingColumns;
     }
 
     private function hasBoundedWorksheetInfo(array $worksheets): bool
@@ -2321,15 +2512,15 @@ class ManageBarang extends Controller
 
         $lemari = $cabinetByName ?? $cabinetByCode;
         if (! $lemari instanceof Lemari) {
+            if ($code === null) {
+                throw ValidationException::withMessages([
+                    'kode_lemari' => 'Kode Lemari wajib diisi untuk lemari baru.',
+                ]);
+            }
+
             $lemari = Lemari::create([
                 'ruangan_id' => $ruangan->ruangan_id,
-                'kode_lemari' => trim((string) ($code ?? $this->nextLocationCode(
-                    'LMR',
-                    Lemari::withTrashed()
-                        ->lockForUpdate()
-                        ->pluck('kode_lemari')
-                        ->all(),
-                ))),
+                'kode_lemari' => trim($code),
                 'nama_lemari' => trim($name),
                 'keterangan' => $description,
             ]);
