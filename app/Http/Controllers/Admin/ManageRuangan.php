@@ -41,7 +41,7 @@ class ManageRuangan extends Controller
         return $renderedView->fragmentIf($request->ajax(), 'ruangan-results');
     }
 
-    public function show(Ruangan $ruangan): View
+    public function show(Request $request, Ruangan $ruangan): View
     {
         $ruangan->load([
             'lemaris' => fn ($query) => $query
@@ -57,7 +57,7 @@ class ManageRuangan extends Controller
                             'stok_tersedia',
                         ])
                         ->whereHas('barang')
-                        ->with('barang:barang_id,nama_barang,kode_barang,satuan'),
+                        ->with('barang:barang_id,nama_barang,kode_barang,satuan,spesifikasi'),
                 ]),
             'lokasiBarangs' => fn ($query) => $query
                 ->whereNull('lemari_id')
@@ -70,10 +70,27 @@ class ManageRuangan extends Controller
                     'stok_total',
                     'stok_tersedia',
                 ])
-                ->with('barang:barang_id,nama_barang,kode_barang,satuan'),
+                ->with('barang:barang_id,nama_barang,kode_barang,satuan,spesifikasi'),
+            'barangDipakais' => fn ($query) => $query
+                ->where('status', 'aktif')
+                ->whereHas('barang')
+                ->with([
+                    'barang:barang_id,nama_barang,kode_barang,satuan,spesifikasi',
+                ])
+                ->orderByDesc('tanggal_pasang')
+                ->orderByDesc('barang_dipakai_id'),
         ]);
+        $otherBarangCount = $ruangan->lokasiBarangs->pluck('barang_id')
+            ->merge($ruangan->barangDipakais->pluck('barang_id'))
+            ->unique()
+            ->count();
+        $canManageInventory = $request->user()?->canManageInventory() ?? false;
 
-        return view('pages.admin.ruangan-detail', compact('ruangan'));
+        return view('pages.admin.ruangan-detail', compact(
+            'canManageInventory',
+            'otherBarangCount',
+            'ruangan',
+        ));
     }
 
     public function store(StoreRequest $request)

@@ -95,7 +95,6 @@
         .home-pressable {
           transition: none;
         }
-
       }
     </style>
     <script data-user-page-script="home-reveals">
@@ -129,9 +128,14 @@
             item.addEventListener('animationend', () => {
               item.classList.remove('is-visible');
               item.classList.add('home-revealed');
-            }, { once: true });
+            }, {
+              once: true
+            });
           });
-        }, { threshold: 0.04, rootMargin: '0px 0px 72px 0px' });
+        }, {
+          threshold: 0.04,
+          rootMargin: '0px 0px 72px 0px'
+        });
 
         revealItems.forEach((item) => {
           if (item.classList.contains('home-revealed') || item.classList.contains('is-visible')) {
@@ -149,7 +153,9 @@
 
       window.addEventListener('user:page-updated', initHomeReveals);
       if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', initHomeReveals, { once: true });
+        document.addEventListener('DOMContentLoaded', initHomeReveals, {
+          once: true
+        });
       }
     </script>
     <main id="beranda" class="pb-14">
@@ -197,23 +203,27 @@
               <span
                 class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#00d69f] font-bold text-[#004d43]">{{ $step['number'] }}</span>
               <div class="min-w-0">
-                <h3 class="font-semibold text-slate-900 transition-colors duration-200 group-hover:text-[#008b7a]">{{ $step['title'] }}</h3>
-                <p class="mt-0.5 text-xs leading-relaxed text-slate-500 transition-colors duration-200 group-hover:text-[#007f70]">{{ $step['description'] }}</p>
+                <h3 class="font-semibold text-slate-900 transition-colors duration-200 group-hover:text-[#008b7a]">
+                  {{ $step['title'] }}</h3>
+                <p
+                  class="mt-0.5 text-xs leading-relaxed text-slate-500 transition-colors duration-200 group-hover:text-[#007f70]">
+                  {{ $step['description'] }}</p>
               </div>
             </article>
           @endforeach
         </div>
       </section>
 
-      <section id="riwayat"
-        class="grid w-full grid-cols-2 gap-3 px-5 py-6 sm:grid-cols-4 sm:gap-4 sm:px-10 lg:px-16"
+      <section id="riwayat" class="grid w-full grid-cols-2 gap-3 px-5 py-6 sm:grid-cols-4 sm:gap-4 sm:px-10 lg:px-16"
         aria-label="Ringkasan peminjaman">
         @foreach ([['count' => $loanCounts['dipinjam'], 'label' => 'Sedang dipinjam', 'color' => '#0bb6a6'], ['count' => $loanCounts['pending'], 'label' => 'Menunggu konfirmasi', 'color' => '#087f65'], ['count' => $loanCounts['dikembalikan'], 'label' => 'Riwayat selesai', 'color' => '#5975d5'], ['count' => $loanCounts['closed'], 'label' => 'Ditolak / dibatalkan', 'color' => '#66716f']] as $summary)
           <article
             class="user-card-enter home-scroll-reveal group flex min-h-24 min-w-0 flex-col justify-center rounded-2xl border-l-4 bg-white px-3 py-4 shadow-[0_3px_5px_rgba(20,55,48,0.18)] sm:border-l-[7px] sm:px-6"
             style="border-color: {{ $summary['color'] }}; --home-card-delay: {{ min($loop->index * 40, 160) }}ms">
-            <strong class="text-2xl font-bold leading-none transition-colors duration-200 group-hover:text-[#008b7a] sm:text-3xl">{{ number_format($summary['count']) }}</strong>
-            <span class="mt-1.5 break-words text-xs leading-4 text-slate-500 transition-colors duration-200 group-hover:text-[#007f70] sm:text-sm">{{ $summary['label'] }}</span>
+            <strong
+              class="text-2xl font-bold leading-none transition-colors duration-200 group-hover:text-[#008b7a] sm:text-3xl">{{ number_format($summary['count']) }}</strong>
+            <span
+              class="mt-1.5 break-words text-xs leading-4 text-slate-500 transition-colors duration-200 group-hover:text-[#007f70] sm:text-sm">{{ $summary['label'] }}</span>
           </article>
         @endforeach
       </section>
@@ -235,9 +245,12 @@
                         class="block text-4xl font-bold leading-none text-[#00866f]">{{ number_format($category->barangs_count) }}</strong>
                       <span
                         class="mt-2 block truncate text-2xl font-bold text-slate-950 transition-colors duration-200 group-hover:text-[#008b7a] group-focus-visible:text-[#008b7a] motion-reduce:transition-none">{{ $category->nama_kategori }}</span>
-                      <span class="inline-flex items-center gap-1 text-sm text-slate-500 transition-colors duration-200 group-hover:text-[#007f70] group-focus-visible:text-[#007f70] motion-reduce:transition-none">
+                      <span
+                        class="inline-flex items-center gap-1 text-sm text-slate-500 transition-colors duration-200 group-hover:text-[#007f70] group-focus-visible:text-[#007f70] motion-reduce:transition-none">
                         Lihat semua
-                        <iconify-icon icon="mdi:arrow-right" class="-translate-x-1 opacity-0 transition-[transform,opacity] duration-200 group-hover:translate-x-0 group-hover:opacity-100 group-focus-visible:translate-x-0 group-focus-visible:opacity-100 motion-reduce:transition-none" aria-hidden="true"></iconify-icon>
+                        <iconify-icon icon="mdi:arrow-right"
+                          class="-translate-x-1 opacity-0 transition-[transform,opacity] duration-200 group-hover:translate-x-0 group-hover:opacity-100 group-focus-visible:translate-x-0 group-focus-visible:opacity-100 motion-reduce:transition-none"
+                          aria-hidden="true"></iconify-icon>
                       </span>
                     </a>
                   @endforeach
@@ -261,9 +274,12 @@
                             class="block text-4xl font-bold leading-none text-[#00866f]">{{ number_format($category->barangs_count) }}</strong>
                           <span
                             class="mt-2 block truncate text-2xl font-bold text-slate-950 transition-colors duration-200 group-hover:text-[#008b7a] group-focus-visible:text-[#008b7a] motion-reduce:transition-none">{{ $category->nama_kategori }}</span>
-                          <span class="inline-flex items-center gap-1 text-sm text-slate-500 transition-colors duration-200 group-hover:text-[#007f70] group-focus-visible:text-[#007f70] motion-reduce:transition-none">
+                          <span
+                            class="inline-flex items-center gap-1 text-sm text-slate-500 transition-colors duration-200 group-hover:text-[#007f70] group-focus-visible:text-[#007f70] motion-reduce:transition-none">
                             Lihat semua
-                            <iconify-icon icon="mdi:arrow-right" class="-translate-x-1 opacity-0 transition-[transform,opacity] duration-200 group-hover:translate-x-0 group-hover:opacity-100 group-focus-visible:translate-x-0 group-focus-visible:opacity-100 motion-reduce:transition-none" aria-hidden="true"></iconify-icon>
+                            <iconify-icon icon="mdi:arrow-right"
+                              class="-translate-x-1 opacity-0 transition-[transform,opacity] duration-200 group-hover:translate-x-0 group-hover:opacity-100 group-focus-visible:translate-x-0 group-focus-visible:opacity-100 motion-reduce:transition-none"
+                              aria-hidden="true"></iconify-icon>
                           </span>
                         </a>
                       @endforeach
@@ -281,9 +297,12 @@
                       class="block text-4xl font-bold leading-none text-[#00866f]">{{ number_format($category->barangs_count) }}</strong>
                     <span
                       class="mt-2 block truncate text-2xl font-bold text-slate-950 transition-colors duration-200 group-hover:text-[#008b7a] group-focus-visible:text-[#008b7a] motion-reduce:transition-none">{{ $category->nama_kategori }}</span>
-                    <span class="inline-flex items-center gap-1 text-sm text-slate-500 transition-colors duration-200 group-hover:text-[#007f70] group-focus-visible:text-[#007f70] motion-reduce:transition-none">
+                    <span
+                      class="inline-flex items-center gap-1 text-sm text-slate-500 transition-colors duration-200 group-hover:text-[#007f70] group-focus-visible:text-[#007f70] motion-reduce:transition-none">
                       Lihat semua
-                      <iconify-icon icon="mdi:arrow-right" class="-translate-x-1 opacity-0 transition-[transform,opacity] duration-200 group-hover:translate-x-0 group-hover:opacity-100 group-focus-visible:translate-x-0 group-focus-visible:opacity-100 motion-reduce:transition-none" aria-hidden="true"></iconify-icon>
+                      <iconify-icon icon="mdi:arrow-right"
+                        class="-translate-x-1 opacity-0 transition-[transform,opacity] duration-200 group-hover:translate-x-0 group-hover:opacity-100 group-focus-visible:translate-x-0 group-focus-visible:opacity-100 motion-reduce:transition-none"
+                        aria-hidden="true"></iconify-icon>
                     </span>
                   </a>
                 @endforeach
@@ -304,27 +323,21 @@
             @foreach ($featuredItems as $item)
               <article
                 class="user-card-enter home-scroll-reveal home-card-interaction group relative flex min-h-44 flex-col overflow-hidden rounded-xl border border-[#c7e4dc] border-t-[5px] border-t-[#00b19c] bg-white shadow-[0_2px_4px_rgba(20,55,48,0.14)]"
-                style="--home-card-delay: {{ min($loop->index * 40, 160) }}ms"
-              >
-                <a
-                  data-user-navigation-link
-                  href="{{ route('user.barang.detail', ['barang' => $item->barang_id]) }}"
+                data-stock-card="{{ $item->barang_id }}" data-stock-available="{{ (int) $item->stok_tersedia }}"
+                data-stock-total="{{ (int) $item->stok_total }}"
+                style="--home-card-delay: {{ min($loop->index * 40, 160) }}ms">
+                <a data-user-navigation-link href="{{ route('user.barang.detail', ['barang' => $item->barang_id]) }}"
                   class="absolute inset-0 z-20 rounded-xl focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#008b7a]"
-                  aria-label="Lihat detail {{ $item->nama_barang }}"
-                ></a>
+                  aria-label="Lihat detail {{ $item->nama_barang }}"></a>
                 <div
                   class="pointer-events-none relative z-10 aspect-[16/10] w-full overflow-hidden bg-gradient-to-br from-[#dff7ef] to-[#f2fbf8]"
-                  @if ($item->image_url)
-                    x-data="{ imageLoaded: false, imageFailed: false }"
-                    x-init="$nextTick(() => { if ($refs.productImage.complete) { imageLoaded = $refs.productImage.naturalWidth > 0; imageFailed = !imageLoaded; } })"
-                  @endif
-                >
+                  @if ($item->image_url) x-data="{ imageLoaded: false, imageFailed: false }"
+                    x-init="$nextTick(() => { if ($refs.productImage.complete) { imageLoaded = $refs.productImage.naturalWidth > 0; imageFailed = !imageLoaded; } })" @endif>
                   @if ($item->image_url)
                     <div x-cloak x-show="!imageLoaded && !imageFailed" class="home-image-skeleton absolute inset-0"
                       aria-hidden="true"></div>
                     <img x-ref="productImage" src="{{ $item->image_url }}" alt="Foto {{ $item->nama_barang }}"
-                      loading="lazy" decoding="async"
-                      :class="imageLoaded ? 'opacity-100' : 'opacity-0'"
+                      loading="lazy" decoding="async" :class="imageLoaded ? 'opacity-100' : 'opacity-0'"
                       x-on:load="imageLoaded = true" x-on:error="imageFailed = true"
                       class="h-full w-full object-cover object-center transition-[opacity,transform] duration-300 group-hover:scale-[1.035] motion-reduce:transition-none">
                     <div x-cloak x-show="imageFailed" class="flex h-full items-center justify-center text-[#538b7d]"
@@ -342,30 +355,32 @@
                   <div class="flex items-center justify-between gap-2">
                     <span
                       class="max-w-[65%] truncate rounded-full bg-slate-100 px-2 py-1 text-[10px] font-medium text-slate-700 transition-colors duration-200 group-hover:text-[#007f70]">{{ $item->kategori?->nama_kategori ?? 'Tanpa kategori' }}</span>
-                    <span
+                    <span data-stock-label
                       class="rounded-full bg-[#d5f7ec] px-2.5 py-1 text-[10px] font-semibold text-[#16745e]">Tersedia</span>
                   </div>
-                  <h3 class="mt-2 truncate text-sm font-bold text-slate-900 transition-colors duration-200 group-hover:text-[#008b7a]" title="{{ $item->nama_barang }}">
+                  <h3
+                    class="mt-2 truncate text-sm font-bold text-slate-900 transition-colors duration-200 group-hover:text-[#008b7a]"
+                    title="{{ $item->nama_barang }}">
                     {{ $item->nama_barang }}</h3>
-                  <p class="mt-2 flex items-baseline gap-1.5"><strong
+                  <p class="mt-2 flex items-baseline gap-1.5"><strong data-stock-count
                       class="text-xl font-extrabold text-[#006f62] transition-colors duration-200 group-hover:text-[#008b7a]">{{ number_format($item->stok_tersedia) }}</strong><span
                       class="text-xs text-slate-500">/ {{ number_format($item->stok_total) }} tersedia</span></p>
                   <div class="mt-1.5 h-1.5 overflow-hidden rounded-full bg-slate-100" role="progressbar"
                     aria-label="Stok tersedia {{ $item->nama_barang }}" aria-valuenow="{{ $item->stok_tersedia }}"
-                    aria-valuemin="0" aria-valuemax="{{ max($item->stok_total, 1) }}">
-                    <span class="block h-full rounded-full bg-[#00b19c]"
+                    data-stock-progress aria-valuemin="0" aria-valuemax="{{ max($item->stok_total, 1) }}">
+                    <span data-stock-fill class="block h-full rounded-full bg-[#00b19c]"
                       style="width: {{ min(100, (int) round(($item->stok_tersedia / max($item->stok_total, 1)) * 100)) }}%"></span>
                   </div>
                   {{-- ASVS V1.2.3: @js safely serializes database values into Alpine expressions. --}}
                   <div class="mt-auto flex items-center justify-between gap-2 pt-3">
-                    <button type="button"
-                      @click="addToCart({ id: @js($item->barang_id), name: @js($item->nama_barang), stock: {{ (int) $item->stok_tersedia }}, category: @js($item->kategori?->nama_kategori ?? 'Tanpa kategori') })"
-                      class="home-pressable pointer-events-auto inline-flex flex-1 items-center justify-center gap-1 whitespace-nowrap rounded-full bg-[#00d69f] px-2.5 py-2 text-xs font-bold text-[#003f38] transition hover:bg-[#36e9b3] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#008b7a] focus-visible:ring-offset-2">
+                    <button type="button" data-stock-action data-stock-available="{{ (int) $item->stok_tersedia }}"
+                      @click="addToCart({ id: @js($item->barang_id), name: @js($item->nama_barang), stock: Number($el.dataset.stockAvailable), category: @js($item->kategori?->nama_kategori ?? 'Tanpa kategori') })"
+                      class="home-pressable pointer-events-auto inline-flex flex-1 items-center justify-center gap-1 whitespace-nowrap rounded-full bg-[#00d69f] px-2.5 py-2 text-xs font-bold text-[#003f38] transition hover:bg-[#36e9b3] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#008b7a] focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50">
                       <iconify-icon icon="mdi:cart-plus" aria-hidden="true"></iconify-icon>
                       Keranjang</button>
-                    <button type="button"
-                      @click="openLoanModal({ id: @js($item->barang_id), name: @js($item->nama_barang), stock: {{ (int) $item->stok_tersedia }}, category: @js($item->kategori?->nama_kategori ?? 'Tanpa kategori') })"
-                      class="home-pressable pointer-events-auto flex-1 whitespace-nowrap rounded-full border border-slate-300 px-2 py-2 text-xs font-semibold text-slate-800 transition hover:border-[#00a88f] hover:text-[#007f70] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#008b7a] focus-visible:ring-offset-2">Pinjam
+                    <button type="button" data-stock-action data-stock-available="{{ (int) $item->stok_tersedia }}"
+                      @click="openLoanModal({ id: @js($item->barang_id), name: @js($item->nama_barang), stock: Number($el.dataset.stockAvailable), category: @js($item->kategori?->nama_kategori ?? 'Tanpa kategori') })"
+                      class="home-pressable pointer-events-auto flex-1 whitespace-nowrap rounded-full border border-slate-300 px-2 py-2 text-xs font-semibold text-slate-800 transition hover:border-[#00a88f] hover:text-[#007f70] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#008b7a] focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50">Pinjam
                       Sekarang</button>
                   </div>
                 </div>

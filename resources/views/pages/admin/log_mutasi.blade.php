@@ -1,5 +1,5 @@
-<x-layout.admin title="Log Mutasi - InvenTrack" header-title="Log Mutasi"
-  header-description="Lihat riwayat perubahan stok barang inventaris.">
+<x-layout.admin title="Log Mutasi - InvenTrack" headerTitle="Log Mutasi"
+  headerDescription="Pantau riwayat barang masuk, peminjaman, pengembalian, dan perubahan stok.">
   <style>
     .log-mutasi-surface {
       box-sizing: border-box;
@@ -101,14 +101,14 @@
           <table class="min-w-max w-full divide-y divide-[#DCE9E6]">
             <thead class="bg-[#F1F8F6]">
               <tr>
-                <th scope="col" class="whitespace-nowrap px-4 py-3 text-left text-xs font-semibold text-slate-600">Waktu</th>
+                <th scope="col" class="whitespace-nowrap px-4 py-3 text-left text-xs font-semibold text-slate-600">Waktu Mutasi</th>
                 <th scope="col" class="whitespace-nowrap px-4 py-3 text-left text-xs font-semibold text-slate-600">Jenis Mutasi</th>
                 <th scope="col" class="whitespace-nowrap px-4 py-3 text-left text-xs font-semibold text-slate-600">Barang</th>
-                <th scope="col" class="whitespace-nowrap px-4 py-3 text-right text-xs font-semibold text-slate-600">Jumlah</th>
-                <th scope="col" class="whitespace-nowrap px-4 py-3 text-left text-xs font-semibold text-slate-600">Lokasi</th>
-                <th scope="col" class="whitespace-nowrap px-4 py-3 text-left text-xs font-semibold text-slate-600">Perubahan Stok</th>
-                <th scope="col" class="whitespace-nowrap px-4 py-3 text-left text-xs font-semibold text-slate-600">User / Petugas</th>
-                <th scope="col" class="whitespace-nowrap px-4 py-3 text-left text-xs font-semibold text-slate-600">Keterangan</th>
+                <th scope="col" class="whitespace-nowrap px-4 py-3 text-right text-xs font-semibold text-slate-600">Jumlah Mutasi</th>
+                <th scope="col" class="whitespace-nowrap px-4 py-3 text-left text-xs font-semibold text-slate-600">Lokasi Mutasi</th>
+                <th scope="col" class="whitespace-nowrap px-4 py-3 text-left text-xs font-semibold text-slate-600">Stok Sebelum → Sesudah</th>
+                <th scope="col" class="whitespace-nowrap px-4 py-3 text-left text-xs font-semibold text-slate-600">Pengguna / Petugas</th>
+                <th scope="col" class="whitespace-nowrap px-4 py-3 text-left text-xs font-semibold text-slate-600">Keterangan Mutasi</th>
               </tr>
             </thead>
             <tbody class="divide-y divide-[#E7EFED] bg-white">
@@ -117,6 +117,7 @@
                   @php
                     $isLocationAdjustment = $log->tipe === 'penyesuaian'
                         && str_starts_with($log->keterangan ?? '', 'Penempatan disesuaikan dari ');
+                    $mutationUnit = $log->barang?->satuan;
                   @endphp
                   <td class="whitespace-nowrap px-4 py-3 text-sm text-slate-500">
                     {{ $log->created_at?->translatedFormat('d M Y, H:i:s') ?? '—' }}
@@ -135,7 +136,7 @@
                     @endif
                   </td>
                   <td class="whitespace-nowrap px-4 py-3 text-right text-sm font-semibold text-slate-700">
-                    {{ number_format($log->jumlah, 0, ',', '.') }}
+                    {{ number_format($log->jumlah, 0, ',', '.') }}{{ $mutationUnit ? ' '.$mutationUnit : '' }}
                   </td>
                   <td class="whitespace-nowrap px-4 py-3 text-xs text-slate-700">
                     @if ($log->tipe === 'dipindahkan')
@@ -175,9 +176,13 @@
                     @endif
                   </td>
                   <td class="whitespace-nowrap px-4 py-3 text-sm text-slate-700">
-                    <span class="text-slate-500">{{ number_format($log->stok_sebelum, 0, ',', '.') }}</span>
+                    <span class="text-slate-500">
+                      {{ number_format($log->stok_sebelum, 0, ',', '.') }}{{ $mutationUnit ? ' '.$mutationUnit : '' }}
+                    </span>
                     <iconify-icon icon="mdi:arrow-right" class="mx-1 text-slate-400" aria-hidden="true"></iconify-icon>
-                    <span class="font-semibold">{{ number_format($log->stok_sesudah, 0, ',', '.') }}</span>
+                    <span class="font-semibold">
+                      {{ number_format($log->stok_sesudah, 0, ',', '.') }}{{ $mutationUnit ? ' '.$mutationUnit : '' }}
+                    </span>
                     <span class="block text-xs text-slate-500">
                       {{ $log->ruangan_id === null ? 'Stok umum / lokasi belum dicatat' : 'Stok lokasi' }}
                     </span>

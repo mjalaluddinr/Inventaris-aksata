@@ -172,7 +172,7 @@
   </style>
 </head>
 
-<body x-data="userPortal()" x-init="initCart(); initCatalogAjax(); initHistoryAjax(); @if(session('success')) window.showToast(@js(session('success')), 'success'); @elseif(session('error')) window.showToast(@js(session('error')), 'error'); @endif @foreach($errors->all() as $error) window.showToast(@js($error), 'error'); @endforeach @if (session('cart_cleared')) clearCart() @elseif (session('cart_items_submitted')) removeSubmittedItems(@js(session('cart_items_submitted'))) @endif"
+<body x-data="userPortal()" x-init="initCart(); initCatalogAjax(); initHistoryAjax(); initStockRealtime(); @if(session('success')) window.showToast(@js(session('success')), 'success'); @elseif(session('error')) window.showToast(@js(session('error')), 'error'); @endif @foreach($errors->all() as $error) window.showToast(@js($error), 'error'); @endforeach @if (session('cart_cleared')) clearCart() @elseif (session('cart_items_submitted')) removeSubmittedItems(@js(session('cart_items_submitted'))) @endif"
   @user-page-updated.window="initHistoryAjax()"
   @user-page-navigating.window="window.clearTimeout(catalogSearchTimer); catalogRequestController?.abort(); historyRequestController?.abort()"
   class="min-h-screen bg-[#e9faf5] font-sans text-[#153c36] antialiased">
@@ -349,6 +349,11 @@
         catalogSearchTimer: null,
         historyPollTimer: null,
         historyRequestController: null,
+        stockPollTimer: null,
+        stockRequestController: null,
+        stockVisibilityListener: null,
+        stockPageUpdatedListener: null,
+        stockRefreshFailed: false,
         applyUrl: @js(route('user.apply')),
         cartItemsUrl: @js(route('user.cart.items')),
         catalogPath: @js(parse_url(route('user.catalog'), PHP_URL_PATH)),
@@ -461,6 +466,7 @@
             const payload = await response.json();
             if (response.status === 409 && payload.stock && typeof payload.stock === 'object' && !Array.isArray(payload.stock)) {
               this.syncCartStock(payload.stock);
+              this.refreshPageStocks();
               this.showNotice(payload.message || 'Stok barang berubah. Periksa jumlah dan kirim ulang pengajuan.');
               return;
             }
@@ -500,6 +506,7 @@
 
             this.removeSubmittedItems(payload.submitted_item_ids);
             this.loanModalOpen = false;
+            this.refreshPageStocks();
             window.showToast(payload.message, 'success', 3500, 'Pengajuan berhasil');
           } catch (error) {
             console.error('Failed to submit borrower loan.', error);
@@ -605,6 +612,154 @@
             this.loanQuantity = this.selectedLoanItem.stock > 0
               ? Math.min(this.loanQuantity, this.selectedLoanItem.stock)
               : 1;
+          }
+        },
+        initStockRealtime() {
+          if (this.stockPollTimer !== null) {
+            return;
+          }
+
+          this.stockVisibilityListener = () => {
+            if (document.visibilityState === 'visible') {
+              this.refreshPageStocks();
+            }
+          };
+          document.addEventListener('visibilitychange', this.stockVisibilityListener);
+          this.stockPageUpdatedListener = () => this.refreshPageStocks();
+          window.addEventListener('user:page-updated', this.stockPageUpdatedListener);
+          window.addEventListener('catalog:updated', this.stockPageUpdatedListener);
+          this.stockPollTimer = window.setInterval(() => {
+            if (document.visibilityState === 'visible') {
+              this.refreshPageStocks();
+            }
+          }, 5000);
+          this.refreshPageStocks();
+        },
+        setStockRefreshStatus(message, isError = false) {
+          document.querySelectorAll('[data-stock-refresh-status]').forEach(status => {
+            status.textContent = message;
+            status.classList.remove('text-slate-500', 'text-emerald-700', 'text-amber-800');
+            status.classList.add(isError ? 'text-amber-800' : 'text-emerald-700');
+          });
+        },
+        reportStockRefreshError(error) {
+          if (!this.stockRefreshFailed) {
+            console.error('Failed to refresh user-facing inventory stock.', error);
+          }
+          this.stockRefreshFailed = true;
+          this.setStockRefreshStatus('Stok belum berhasil diperbarui. Akan dicoba lagi.', true);
+        },
+        updateStockCard(card, stock) {
+          const total = Number(card.dataset.stockTotal);
+          const progressMaximum = Number.isInteger(total) && total > 0 ? total : 0;
+          const progressPercent = progressMaximum > 0
+            ? Math.min(100, Math.round((stock / progressMaximum) * 100))
+            : 0;
+          const stockCount = card.querySelector('[data-stock-count]');
+          const stockLabel = card.querySelector('[data-stock-label]');
+          const stockProgress = card.querySelector('[data-stock-progress]');
+          const stockFill = card.querySelector('[data-stock-fill]');
+          const isAvailable = stock > 0;
+
+          card.dataset.stockAvailable = String(stock);
+          if (stockCount) {
+            stockCount.textContent = new Intl.NumberFormat('id-ID').format(stock);
+          }
+          if (stockLabel) {
+            stockLabel.textContent = isAvailable ? 'Tersedia' : 'Stok habis';
+            stockLabel.classList.toggle('bg-[#d5f7ec]', isAvailable);
+            stockLabel.classList.toggle('text-[#16745e]', isAvailable);
+            stockLabel.classList.toggle('bg-amber-100', !isAvailable);
+            stockLabel.classList.toggle('text-amber-800', !isAvailable);
+          }
+          if (stockProgress) {
+            stockProgress.setAttribute('aria-valuenow', String(stock));
+          }
+          if (stockFill) {
+            stockFill.style.width = `${progressPercent}%`;
+          }
+          card.querySelectorAll('[data-stock-action]').forEach(button => {
+            button.dataset.stockAvailable = String(stock);
+            button.disabled = !isAvailable;
+            button.setAttribute('aria-disabled', String(!isAvailable));
+          });
+        },
+        async refreshPageStocks() {
+          const cards = Array.from(document.querySelectorAll('[data-stock-card]'));
+          const itemIds = [...new Set(cards.map(card => card.dataset.stockCard).filter(Boolean))];
+          if (itemIds.length === 0 || this.stockRequestController) {
+            return;
+          }
+
+          const endpoint = new URL(this.cartItemsUrl, window.location.href);
+          if (endpoint.origin !== window.location.origin) {
+            this.reportStockRefreshError(new Error('Stock endpoint must use the current origin.'));
+            return;
+          }
+          itemIds.forEach(itemId => endpoint.searchParams.append('ids[]', itemId));
+
+          const controller = new AbortController();
+          this.stockRequestController = controller;
+          try {
+            // ASVS V2.2.2: the authenticated stock endpoint validates IDs and remains the source of truth.
+            const response = await fetch(endpoint, {
+              headers: {
+                'Accept': 'application/json',
+                'X-Requested-With': 'XMLHttpRequest',
+              },
+              credentials: 'same-origin',
+              cache: 'no-store',
+              signal: controller.signal,
+            });
+            const responseUrl = new URL(response.url, window.location.href);
+            if (
+              !response.ok
+              || response.redirected
+              || responseUrl.origin !== window.location.origin
+              || responseUrl.pathname !== endpoint.pathname
+              || !response.headers.get('content-type')?.includes('application/json')
+            ) {
+              throw new Error(`Stock refresh failed with status ${response.status}.`);
+            }
+
+            const payload = await response.json();
+            if (!Array.isArray(payload.items)) {
+              throw new Error('Stock refresh returned an invalid response.');
+            }
+
+            const requestedIds = new Set(itemIds);
+            const stockById = new Map();
+            payload.items.forEach(item => {
+              if (
+                !item
+                || typeof item.id !== 'string'
+                || !requestedIds.has(item.id)
+                || !Number.isInteger(item.stock)
+                || item.stock < 0
+              ) {
+                throw new Error('Stock refresh returned invalid item data.');
+              }
+              stockById.set(item.id, item.stock);
+            });
+
+            const currentStockById = {};
+            cards.forEach(card => {
+              const itemId = card.dataset.stockCard;
+              const stock = stockById.get(itemId) ?? 0;
+              currentStockById[itemId] = stock;
+              this.updateStockCard(card, stock);
+            });
+            this.syncCartStock(currentStockById);
+            this.stockRefreshFailed = false;
+            this.setStockRefreshStatus('Stok diperbarui otomatis.', false);
+          } catch (error) {
+            if (error.name !== 'AbortError') {
+              this.reportStockRefreshError(error);
+            }
+          } finally {
+            if (this.stockRequestController === controller) {
+              this.stockRequestController = null;
+            }
           }
         },
         initHistoryAjax() {
@@ -1048,6 +1203,11 @@
           localStorage.setItem(this.cartStorageKey, JSON.stringify(this.cart));
         },
         addToCart(item) {
+          if (!Number.isInteger(item.stock) || item.stock < 1) {
+            this.showNotice(`${item.name} sedang tidak memiliki stok tersedia.`);
+            return;
+          }
+
           const existingItem = this.cart.find(cartItem => cartItem.id === item.id);
           if (existingItem) {
             if (existingItem.quantity >= item.stock) {
@@ -1066,6 +1226,11 @@
           window.showToast(`${item.name} ditambahkan ke keranjang.`, 'success', 2500, 'Ditambahkan ke keranjang');
         },
         openLoanModal(item) {
+          if (!Number.isInteger(item.stock) || item.stock < 1) {
+            this.showNotice(`${item.name} sedang tidak memiliki stok tersedia.`);
+            return;
+          }
+
           this.selectedLoanItem = item;
           this.loanQuantity = 1;
           this.loanModalOpen = true;

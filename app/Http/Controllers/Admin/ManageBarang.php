@@ -79,6 +79,7 @@ class ManageBarang extends Controller
 
     public function index(Request $request): View|string
     {
+        $requestedBarangId = $request->query('barang_id');
         $filters = $request->validate([
             'search' => ['nullable', 'string', 'max:100'],
             'kategori_id' => [
@@ -98,15 +99,19 @@ class ManageBarang extends Controller
             ],
             'kondisi' => ['nullable', Rule::in(['baru', 'lama'])],
             'kelayakan' => ['nullable', Rule::in(['layak', 'tidak_layak'])],
-            'barang_id' => [
-                'nullable',
-                'uuid',
-                Rule::exists('barang', 'barang_id')->whereNull('deleted_at'),
-            ],
             'panel' => ['nullable', Rule::in(['history', 'usage'])],
             'mutation_page' => ['nullable', 'integer', 'min:1'],
             'usage_page' => ['nullable', 'integer', 'min:1'],
         ]);
+        // ASVS 2.2.1: Validate the optional selection without redirecting on stale or malformed IDs.
+        if (
+            is_string($requestedBarangId) &&
+            Str::isUuid($requestedBarangId) &&
+            Barang::query()->whereKey($requestedBarangId)->exists()
+        ) {
+            $filters['barang_id'] = $requestedBarangId;
+        }
+
         $canManageInventory = $request->user()?->canManageInventory() ?? false;
         $canManageAllAccounts = $request->user()?->canManageAllAccounts() ?? false;
 
@@ -596,10 +601,8 @@ class ManageBarang extends Controller
             ]);
         }
 
-        return redirect()->route('admin.barang', [
-            'barang_id' => $barang->barang_id,
-            'panel' => 'history',
-        ])->with('success', "Barang {$barang->nama_barang} berhasil ditarik kembali.");
+        return redirect()->route('admin.ruangan.show', $usage->ruangan_id)
+            ->with('success', "Barang {$barang->nama_barang} berhasil ditarik kembali.");
     }
 
     public function import(ImportRequest $request): JsonResponse

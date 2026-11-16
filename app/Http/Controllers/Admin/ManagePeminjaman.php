@@ -36,10 +36,13 @@ class ManagePeminjaman extends Controller
     public function index(Request $request): View|string
     {
         $reportYears = $this->reportYears();
+        $yearRules = $reportYears === []
+            ? ['nullable', 'integer', 'min:2000', 'max:2100']
+            : ['nullable', 'integer', Rule::in($reportYears)];
 
         $filters = $request->validate([
             'tab' => ['nullable', 'in:pending,borrowed,history'],
-            'year' => ['nullable', 'integer', Rule::in($reportYears)],
+            'year' => $yearRules,
         ]);
         $activeTab = $filters['tab'] ?? 'pending';
         $year = (int) ($filters['year'] ?? ($reportYears[0] ?? now()->year));
@@ -271,23 +274,17 @@ class ManagePeminjaman extends Controller
                 ]);
             }
 
-            // ASVS 2.2.1/2.2.2: validate each submitted quantity against the locked, current loan balance.
-            $hasReturnedItems = false;
+            // ASVS 2.2.1/2.2.2 and 2.3.3: require the complete locked loan balance to be returned atomically.
             foreach ($details as $detail) {
                 $quantity = (int) $validated['quantities'][$detail->detail_peminjaman_id];
                 $remainingQuantity = $detail->jumlah_pinjam - $detail->jumlah_kembali;
 
-                if ($quantity > $remainingQuantity) {
+                if ($quantity !== $remainingQuantity) {
                     throw ValidationException::withMessages([
-                        'quantities' => 'Jumlah pengembalian melebihi sisa barang yang dipinjam.',
+                        'quantities' => 'Semua barang pada pengajuan ini harus dikembalikan sekaligus.',
                     ]);
                 }
 
-                if ($quantity === 0) {
-                    continue;
-                }
-
-                $hasReturnedItems = true;
                 $condition = $validated['conditions'][$detail->detail_peminjaman_id];
                 $this->restoreReservation(
                     $loan,
@@ -307,48 +304,32 @@ class ManagePeminjaman extends Controller
                 $detail->save();
             }
 
-            if (! $hasReturnedItems) {
-                throw ValidationException::withMessages([
-                    'quantities' => 'Masukkan jumlah barang yang akan dikembalikan.',
-                ]);
-            }
-
             $loan->diproses_akun_id = $admin->akun_id;
             $loan->clearCancellationRequest();
             $loan->save();
         }, 3);
 
-        $hasRemainingItems = $peminjaman->detailPeminjamans()
-            ->where('status', 'dipinjam')
-            ->exists();
         $borrower = $peminjaman->akun;
         $borrowerName = trim(($borrower?->first_name ?? '').' '.($borrower?->last_name ?? ''))
             ?: ($borrower?->username ?? 'peminjam');
-        $loanProcessorMessage = $hasRemainingItems
-            ? "Pengembalian barang dari {$borrowerName} telah dicatat sebagian. Masih ada barang yang belum dikembalikan."
-            : "Seluruh barang peminjaman dari {$borrowerName} telah dikembalikan dan dicatat.";
-        $borrowerNotification = $hasRemainingItems
-            ? 'Pengembalian sebagian barang pinjaman Anda telah dicatat. Masih ada barang yang harus dikembalikan.'
-            : 'Seluruh barang peminjaman Anda telah dikembalikan dan dicatat.';
-        $this->notifications->notifyLoanProcessors($loanProcessorMessage);
-
-        if (! $hasRemainingItems) {
-            $this->notifications->clearLoanReminderMarkers(
-                $peminjaman->peminjaman_id,
-                $peminjaman->akun_id,
-            );
-        }
+        $this->notifications->notifyLoanProcessors(
+            "Seluruh barang peminjaman dari {$borrowerName} telah dikembalikan dan dicatat.",
+        );
+        $this->notifications->clearLoanReminderMarkers(
+            $peminjaman->peminjaman_id,
+            $peminjaman->akun_id,
+        );
 
         $this->notifyBorrower(
             $peminjaman->akun_id,
-            $borrowerNotification,
+            'Seluruh barang peminjaman Anda telah dikembalikan dan dicatat.',
         );
 
-        $returnMessage = $hasRemainingItems
-            ? 'Peminjaman berhasil dikembalikan sebagian.'
-            : 'Peminjaman berhasil dikembalikan sepenuhnya.';
-
-        return $this->respondToLoanAction($request, $activeTab, $returnMessage);
+        return $this->respondToLoanAction(
+            $request,
+            $activeTab,
+            'Peminjaman berhasil dikembalikan sepenuhnya.',
+        );
     }
 
     private function respondToLoanAction(Request $request, string $activeTab, string $message): JsonResponse|RedirectResponse

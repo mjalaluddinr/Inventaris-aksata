@@ -170,12 +170,16 @@
                   });
               }
               window.history.replaceState({}, '', requestUrl);
-              await this.reloadUsagePanel();
+              void this.reloadUsagePanel();
+              return true;
           } catch (error) {
-              if (error.name !== 'AbortError') {
-                  this.filterError = error.message || 'Daftar barang tidak dapat dimuat.';
-                  this.$refs.barangResults.querySelectorAll('[data-barang-row]').forEach(row => row.hidden = false);
+              if (error.name === 'AbortError') {
+                  return null;
               }
+
+              this.filterError = error.message || 'Daftar barang tidak dapat dimuat.';
+              this.$refs.barangResults.querySelectorAll('[data-barang-row]').forEach(row => row.hidden = false);
+              return false;
           } finally {
               if (this.filterRequest === request) {
                   this.filterLoading = false;
@@ -239,6 +243,8 @@
               }
               if (this.selectedBarangId) {
                   url.searchParams.set('barang_id', this.selectedBarangId);
+              } else {
+                  url.searchParams.delete('barang_id');
               }
               url.searchParams.set('panel', this.usageActivePanel);
               url.searchParams.set('fragment', 'barang-usage-panel');
@@ -661,6 +667,13 @@
           if (!this.pendingDeleteForm || this.deleteLoading) return;
 
           this.deleteLoading = true;
+          let deleteResponseReceived = false;
+          let listRefreshUrl = null;
+          const deletedRow = this.pendingDeleteForm.closest('[data-barang-row]');
+          const currentUrl = new URL(window.location.href);
+          if (deletedRow?.dataset.barangId === currentUrl.searchParams.get('barang_id')) {
+              currentUrl.searchParams.delete('barang_id');
+          }
 
           try {
               const response = await fetch(this.pendingDeleteForm.action, {
@@ -671,6 +684,12 @@
                   },
                   body: new FormData(this.pendingDeleteForm)
               });
+              deleteResponseReceived = true;
+              if (response.redirected || response.status === 401 || response.status === 419) {
+                  window.showToast('Sesi atau token keamanan tidak valid. Muat ulang halaman sebelum mencoba lagi.', 'error');
+                  return;
+              }
+
               let result;
               try {
                   result = await response.json();
@@ -690,8 +709,6 @@
 
               window.showToast(result?.message || 'Barang berhasil dihapus.', 'success');
 
-              const deletedRow = this.pendingDeleteForm.closest('[data-barang-row]');
-              const currentUrl = new URL(window.location.href);
               const deletedLastRow = deletedRow &&
                   this.$refs.barangResults.querySelectorAll('[data-barang-row]').length === 1;
               if (deletedRow) deletedRow.remove();
@@ -701,12 +718,22 @@
               this.deleteModalOpen = false;
               this.pendingDeleteForm = null;
               this.pendingDeleteName = '';
-              await this.filterBarang(currentUrl.href);
+              listRefreshUrl = currentUrl.href;
           } catch (error) {
-              window.showToast(error.message || 'Barang gagal dihapus. Periksa koneksi lalu coba lagi.', 'error');
+              if (error instanceof TypeError && !deleteResponseReceived) {
+                  window.showToast('Koneksi terputus. Memeriksa kembali status barang...', 'error');
+                  listRefreshUrl = currentUrl.href;
+              } else {
+                  window.showToast(error.message || 'Barang gagal dihapus. Periksa koneksi lalu coba lagi.', 'error');
+              }
           } finally {
               this.deleteLoading = false;
               this.cancelDelete();
+          }
+
+          if (listRefreshUrl) {
+              // ASVS 16.5.2: a list refresh failure must not block further inventory actions.
+              await this.filterBarang(listRefreshUrl);
           }
       },
       closeModal() {

@@ -479,12 +479,16 @@ class ManageUser extends Controller
                     }
 
                     $validator = Validator::make($data, [
+                        'first_name' => ['required', 'string', 'max:100'],
+                        'last_name' => ['required', 'string', 'max:100'],
                         'username' => ['required', 'string', 'max:50', Rule::unique('akun', 'username')->whereNull('deleted_at')],
                         'password' => 'required|string|min:6',
                         'role' => 'required|in:admin,laboran,peminjam',
                         'privileges' => ['nullable', 'array'],
                         'privileges.*' => ['string', Rule::in(['melihat', 'meminjamkan', 'manajemen'])],
                     ], [
+                        'first_name.required' => 'Nama depan wajib diisi.',
+                        'last_name.required' => 'Nama belakang wajib diisi.',
                         'username.required' => 'Username wajib diisi.',
                         'username.unique' => 'Username sudah digunakan.',
                         'password.required' => 'Password wajib diisi.',
