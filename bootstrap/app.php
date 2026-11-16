@@ -18,10 +18,13 @@ return Application::configure(basePath: dirname(__DIR__))
             'permission' => EnsureUserHasPermission::class,
         ]);
 
-        // ASVS 4.1.3: Trust only the forwarded protocol header from the local tunnel proxy.
+        $isVercel = filter_var(env('VERCEL', false), FILTER_VALIDATE_BOOLEAN);
+
         $middleware->trustProxies(
-            at: ['127.0.0.1', '::1'],
-            headers: Request::HEADER_X_FORWARDED_PROTO,
+            at: $isVercel ? '*' : ['127.0.0.1', '::1'],
+            headers: Request::HEADER_X_FORWARDED_FOR
+                | Request::HEADER_X_FORWARDED_HOST
+                | Request::HEADER_X_FORWARDED_PROTO,
         );
     })
     ->withExceptions(function (Exceptions $exceptions): void {
