@@ -5,7 +5,7 @@
     "regions": [
         "sin1"
     ],
-    "buildCommand": "npm install && npm run build && composer install --no-dev --optimize-autoloader",
+    "buildCommand": "npm install && npm run build",
     "functions": {
         "api/index.php": {
             "runtime": "vercel-php@0.8.0"
